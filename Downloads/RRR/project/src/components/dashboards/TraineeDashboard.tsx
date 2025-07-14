@@ -88,7 +88,7 @@ const sidebarStructure = [
   {
     id: 'myTrainees',
     icon: Users,
-    label: 'My Trainees',
+    label: 'Trainee Directory',
     children: [] // No dropdown
   },
   {
@@ -104,7 +104,7 @@ const sidebarStructure = [
   }
 ];
 
-export const TeacherDashboard: React.FC = () => {
+export const TraineeDashboard: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [activeMain, setActiveMain] = useState('dashboard');
@@ -113,8 +113,6 @@ export const TeacherDashboard: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // --- Trainee Data State ---
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [traineeLoading, setTraineeLoading] = useState(false);
   const [traineeError, setTraineeError] = useState<string | null>(null);
@@ -161,7 +159,7 @@ export const TeacherDashboard: React.FC = () => {
         <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center">
           <BookOpen className="w-6 h-6 text-white" />
         </div>
-        <h1 className="text-xl font-bold text-white tracking-tight">Teacher Dashboard</h1>
+        <h1 className="text-xl font-bold text-white tracking-tight">Trainee Dashboard</h1>
       </div>
       <nav className="flex-1 space-y-1">
         {sidebarStructure.map((item) => (
@@ -218,112 +216,119 @@ export const TeacherDashboard: React.FC = () => {
   const inProgressCount = courses.filter(c => c.progress && c.progress > 0 && c.progress < 100).length;
   const upcomingSessions = courses.filter(c => c.startdate && c.startdate * 1000 > now);
 
-  const renderAdvancedDashboard = () => (
-    <div className="p-6 space-y-10">
-      {/* Welcome Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-blue-700 via-purple-600 to-indigo-600 rounded-3xl p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6"
-      >
-        <div>
-          <h1 className="text-4xl font-extrabold mb-2 tracking-tight flex items-center gap-2">
-            Welcome back, {user?.firstname || 'Educator'}! <span className="animate-bounce">👋</span>
-          </h1>
-          <p className="text-blue-100 text-lg mb-4">Ready to continue your learning journey?</p>
-          <div className="flex flex-wrap items-center gap-4 text-base">
-            <span className="flex items-center gap-2 bg-white bg-opacity-10 px-3 py-1 rounded-full">
-              <Target className="w-5 h-5" /> Learning Goal: <span className="font-bold">80% completion rate</span>
-            </span>
-            <span className="flex items-center gap-2 bg-white bg-opacity-10 px-3 py-1 rounded-full">
-              <Star className="w-5 h-5" /> Current Level: <span className="font-bold">Advanced</span>
-            </span>
+  const renderAdvancedDashboard = () => {
+    // Calculate progress
+    const totalCourses = courses.length;
+    const completedCourses = courses.filter(c => c.progress === 100).length;
+    const inProgressCourses = courses.filter(c => c.progress && c.progress > 0 && c.progress < 100).length;
+    const progressPercent = totalCourses > 0 ? Math.round((completedCourses / totalCourses) * 100) : 0;
+    return (
+      <div className="p-6 space-y-10">
+        {/* Personalized Learning Pathway */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <BookOpen className="w-7 h-7 text-blue-500" /> Personalized Learning Pathway
+          </h2>
+          {courses.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {courses.map((course) => (
+                <motion.div key={course.id} whileHover={{ y: -5, scale: 1.01 }} className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl p-6 text-white shadow-lg flex flex-col justify-between min-h-[180px]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs font-semibold uppercase tracking-wide">{course.type || 'Course'}</span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold mb-1 line-clamp-1">{course.fullname}</h3>
+                    <p className="text-sm text-blue-100 mb-2 line-clamp-2">{course.summary ? course.summary.replace(/<[^>]*>/g, '').substring(0, 100) + '...' : 'No description available'}</p>
+                  </div>
+                  <div className="flex items-center justify-between mt-4">
+                    <span className="text-xs">Progress</span>
+                    <span className="text-xs font-bold">{course.progress ?? 0}%</span>
+                  </div>
+                  <div className="w-full bg-white bg-opacity-30 rounded-full h-2 mt-1">
+                    <div className="bg-green-400 h-2 rounded-full" style={{ width: `${course.progress ?? 0}%` }}></div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12">
+              <BookOpen className="w-16 h-16 text-gray-300 mb-4" />
+              <div className="text-gray-500 text-lg">No courses assigned yet</div>
+            </div>
+          )}
+        </div>
+        {/* Visual Progress Tracker */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 flex flex-col md:flex-row items-center gap-8">
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><BarChart3 className="w-6 h-6 text-green-500" /> Visual Progress Tracker</h2>
+            <div className="relative w-32 h-32 mb-4">
+              <svg className="w-full h-full" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45" stroke="#e5e7eb" strokeWidth="10" fill="none" />
+                <circle cx="50" cy="50" r="45" stroke="#10b981" strokeWidth="10" fill="none" strokeDasharray="282.6" strokeDashoffset={`${282.6 - (progressPercent / 100) * 282.6}`} strokeLinecap="round" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-3xl font-bold text-green-600">{progressPercent}%</span>
+              </div>
+            </div>
+            <div className="text-gray-600">{completedCourses} of {totalCourses} courses completed</div>
           </div>
         </div>
-        <div className="hidden md:block">
-          <div className="w-36 h-36 bg-white bg-opacity-20 rounded-full flex items-center justify-center shadow-lg">
-            <BookOpen className="w-20 h-20 text-white" />
+        {/* Smart Course Recommendations */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Star className="w-6 h-6 text-yellow-500" /> Smart Course Recommendations</h2>
+          <div className="flex flex-col items-center justify-center py-8">
+            <Star className="w-16 h-16 text-yellow-300 mb-4 animate-pulse" />
+            <div className="text-gray-500 text-lg">AI-driven recommendations coming soon</div>
           </div>
-        </div>
-      </motion.div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        <motion.div whileHover={{ y: -5, scale: 1.03 }} className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-blue-500 flex flex-col items-center transition-all">
-          <BookOpen className="w-8 h-8 text-blue-500 mb-2" />
-          <div className="text-3xl font-bold text-gray-900">{courses.length}</div>
-          <div className="text-gray-600 font-medium mt-1">Enrolled Courses</div>
-          <div className="text-xs text-green-600 mt-2">+2 this month</div>
         </motion.div>
-        <motion.div whileHover={{ y: -5, scale: 1.03 }} className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-green-500 flex flex-col items-center transition-all">
-          <Award className="w-8 h-8 text-green-500 mb-2" />
-          <div className="text-3xl font-bold text-gray-900">{completedCount}</div>
-          <div className="text-gray-600 font-medium mt-1">Completed</div>
-          <div className="text-xs text-green-600 mt-2">+3 this month</div>
+        {/* Alerts & Notifications */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Bell className="w-6 h-6 text-blue-500" /> Alerts & Notifications</h2>
+          <div className="flex flex-col items-center justify-center py-8">
+            <Bell className="w-16 h-16 text-blue-200 mb-4 animate-pulse" />
+            <div className="text-gray-500 text-lg">No notifications.</div>
+          </div>
         </motion.div>
-        <motion.div whileHover={{ y: -5, scale: 1.03 }} className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-orange-500 flex flex-col items-center transition-all">
-          <BarChart3 className="w-8 h-8 text-orange-500 mb-2" />
-          <div className="text-3xl font-bold text-gray-900">{inProgressCount}</div>
-          <div className="text-gray-600 font-medium mt-1">In Progress</div>
-          <div className="text-xs text-green-600 mt-2">On track</div>
+        {/* Peer Community Access */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Users className="w-6 h-6 text-purple-500" /> Peer Community Access</h2>
+          <div className="flex flex-col items-center justify-center py-8">
+            <Users className="w-16 h-16 text-purple-200 mb-4 animate-pulse" />
+            <div className="text-gray-500 text-lg">Communities feature coming soon</div>
+          </div>
         </motion.div>
-        <motion.div whileHover={{ y: -5, scale: 1.03 }} className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-purple-500 flex flex-col items-center transition-all">
-          <Users className="w-8 h-8 text-purple-500 mb-2" />
-          <div className="text-3xl font-bold text-gray-900">{upcomingSessions.length}</div>
-          <div className="text-gray-600 font-medium mt-1">Upcoming Sessions</div>
-          <div className="text-xs text-green-600 mt-2">This week</div>
+        {/* Shared Resources */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Folder className="w-6 h-6 text-blue-400" /> Shared Resources</h2>
+          <div className="flex flex-col items-center justify-center py-8">
+            <Folder className="w-16 h-16 text-blue-100 mb-4 animate-pulse" />
+            <div className="text-gray-500 text-lg">Resource library coming soon</div>
+          </div>
+        </motion.div>
+        {/* Achievements & XP */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Award className="w-6 h-6 text-yellow-500" /> Achievements & XP</h2>
+          <div className="flex flex-col items-center justify-center py-8">
+            <Award className="w-16 h-16 text-yellow-200 mb-4 animate-pulse" />
+            <div className="text-gray-500 text-lg">Gamification features coming soon</div>
+          </div>
         </motion.div>
       </div>
+    );
+  };
 
-      {/* My Learning */}
-      <div className="bg-white rounded-2xl shadow-lg p-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">myLearning</h2>
-          <button className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">View All <ChevronRight className="w-4 h-4" /></button>
-        </div>
-        {courses.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {courses.map((course) => (
-              <motion.div key={course.id} whileHover={{ y: -5, scale: 1.01 }} className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl p-6 text-white shadow-lg flex flex-col justify-between min-h-[220px]">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs font-semibold uppercase tracking-wide">{course.type || 'Course'}</span>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-1 line-clamp-1">{course.fullname}</h3>
-                  <p className="text-sm text-blue-100 mb-2 line-clamp-2">{course.summary ? course.summary.replace(/<[^>]*>/g, '').substring(0, 100) + '...' : 'No description available'}</p>
-                </div>
-                <div className="flex items-center justify-between mt-4">
-                  <span className="text-xs">Progress</span>
-                  <span className="text-xs font-bold">{course.progress ?? 0}%</span>
-                </div>
-                <div className="w-full bg-white bg-opacity-30 rounded-full h-2 mt-1">
-                  <div className="bg-green-400 h-2 rounded-full" style={{ width: `${course.progress ?? 0}%` }}></div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-12">
-            <BookOpen className="w-16 h-16 text-gray-300 mb-4" />
-            <div className="text-gray-500 text-lg">No courses enrolled yet</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // Trainee Dashboard: filter users with 'trainee' role
+  // Trainee Directory: filter users with 'trainee' role
   const traineesOnly = allUsers.filter(user => String(user.role) === 'trainee');
   // Search filter
   const filteredTrainees = traineesOnly.filter(user =>
     user.fullname?.toLowerCase().includes(search.toLowerCase()) ||
     user.email?.toLowerCase().includes(search.toLowerCase())
   );
-  const renderMyTraineesSection = () => (
+  const renderTraineeDirectorySection = () => (
     <div className="p-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <Users className="w-7 h-7 text-blue-400" /> Trainee Dashboard <span className="ml-2 text-blue-400 text-lg">({filteredTrainees.length})</span>
+          <Users className="w-7 h-7 text-blue-400" /> Trainee Directory <span className="ml-2 text-blue-400 text-lg">({filteredTrainees.length})</span>
         </h2>
         <input
           type="text"
@@ -459,9 +464,9 @@ export const TeacherDashboard: React.FC = () => {
           return null;
       }
     }
-    // My Trainees
+    // Trainee Directory
     if (activeMain === 'myTrainees') {
-      return renderMyTraineesSection();
+      return renderTraineeDirectorySection();
     }
     // Settings & Support
     if (activeMain === 'settings') {
@@ -489,4 +494,4 @@ export const TeacherDashboard: React.FC = () => {
       </main>
     </div>
   );
-};
+}; 
