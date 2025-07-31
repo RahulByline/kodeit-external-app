@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, 
   BookOpen, 
+  FileText, 
+  BarChart3, 
   TrendingUp, 
   Award, 
   Target,
@@ -9,59 +10,59 @@ import {
   Download,
   Share2,
   Loader2,
-  BarChart3,
-  GraduationCap,
-  Clock
+  Calendar,
+  Clock,
+  GraduationCap
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 
 interface Stats {
-  totalTeachers: number;
-  totalStudents: number;
-  activeCourses: number;
+  enrolledCourses: number;
+  completedAssignments: number;
   pendingAssignments: number;
+  averageGrade: number;
 }
 
-interface TeacherPerformance {
+interface CourseProgress {
   subject: string;
-  improvement: number;
+  progress: number;
 }
 
-interface StudentEnrollment {
+interface GradeBreakdown {
   grade: string;
   count: number;
   percentage: number;
 }
 
-const SchoolAdminDashboard: React.FC = () => {
+const StudentDashboard: React.FC = () => {
   const [stats, setStats] = useState<Stats>({
-    totalTeachers: 0,
-    totalStudents: 0,
-    activeCourses: 0,
-    pendingAssignments: 0
+    enrolledCourses: 0,
+    completedAssignments: 0,
+    pendingAssignments: 0,
+    averageGrade: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const teacherPerformance: TeacherPerformance[] = [
-    { subject: 'Mathematics', improvement: 22 },
-    { subject: 'Languages', improvement: 18 },
-    { subject: 'Sciences', improvement: 15 },
-    { subject: 'Humanities', improvement: 12 }
+  const courseProgress: CourseProgress[] = [
+    { subject: 'Mathematics', progress: 85 },
+    { subject: 'Physics', progress: 72 },
+    { subject: 'Chemistry', progress: 78 },
+    { subject: 'Biology', progress: 91 }
   ];
 
-  const studentEnrollment: StudentEnrollment[] = [
-    { grade: 'Grade 9', count: 120, percentage: 35 },
-    { grade: 'Grade 10', count: 98, percentage: 28 },
-    { grade: 'Grade 11', count: 85, percentage: 25 },
-    { grade: 'Grade 12', count: 39, percentage: 12 }
+  const gradeBreakdown: GradeBreakdown[] = [
+    { grade: 'A (90-100)', count: 8, percentage: 40 },
+    { grade: 'B (80-89)', count: 6, percentage: 30 },
+    { grade: 'C (70-79)', count: 4, percentage: 20 },
+    { grade: 'D (60-69)', count: 2, percentage: 10 }
   ];
 
   useEffect(() => {
-    fetchSchoolData();
+    fetchStudentData();
   }, []);
 
-  const fetchSchoolData = async () => {
+  const fetchStudentData = async () => {
     try {
       setLoading(true);
       setError('');
@@ -70,13 +71,13 @@ const SchoolAdminDashboard: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       setStats({
-        totalTeachers: 24,
-        totalStudents: 342,
-        activeCourses: 18,
-        pendingAssignments: 12
+        enrolledCourses: 5,
+        completedAssignments: 12,
+        pendingAssignments: 3,
+        averageGrade: 87
       });
     } catch (error) {
-      console.error('Error fetching school data:', error);
+      console.error('Error fetching student data:', error);
       setError('Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -85,7 +86,7 @@ const SchoolAdminDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="school_admin" userName="School Administrator">
+      <DashboardLayout userRole="student" userName="Alex">
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <Loader2 className="animate-spin h-6 w-6 text-blue-600" />
@@ -98,11 +99,11 @@ const SchoolAdminDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <DashboardLayout userRole="school_admin" userName="School Administrator">
+      <DashboardLayout userRole="student" userName="Alex">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800">{error}</p>
           <button 
-            onClick={fetchSchoolData}
+            onClick={fetchStudentData}
             className="mt-2 text-red-600 hover:text-red-800 underline"
           >
             Try again
@@ -113,13 +114,13 @@ const SchoolAdminDashboard: React.FC = () => {
   }
 
   return (
-    <DashboardLayout userRole="school_admin" userName="School Administrator">
+    <DashboardLayout userRole="student" userName="Alex">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">School Management Dashboard</h1>
-            <p className="text-gray-600 mt-1">Comprehensive analytics for School Administration</p>
+            <h1 className="text-2xl font-bold text-gray-900">Student Dashboard</h1>
+            <p className="text-gray-600 mt-1">Comprehensive analytics for Academic Performance</p>
           </div>
           
           {/* Dashboard Controls */}
@@ -142,16 +143,16 @@ const SchoolAdminDashboard: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-500 text-sm font-medium">Total Teachers</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.totalTeachers}</h3>
+                <p className="text-gray-500 text-sm font-medium">Enrolled Courses</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.enrolledCourses}</h3>
                 <div className="flex items-center mt-2">
                   <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="text-green-600 text-sm font-medium">+2.4%</span>
+                  <span className="text-green-600 text-sm font-medium">+1.0%</span>
                   <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
                 </div>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
-                <Users className="w-6 h-6 text-blue-600" />
+                <BookOpen className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </div>
@@ -159,33 +160,16 @@ const SchoolAdminDashboard: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-500 text-sm font-medium">Total Students</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.totalStudents}</h3>
+                <p className="text-gray-500 text-sm font-medium">Completed Assignments</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.completedAssignments}</h3>
                 <div className="flex items-center mt-2">
                   <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="text-green-600 text-sm font-medium">+5.2%</span>
-                  <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
-                </div>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <GraduationCap className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Active Courses</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.activeCourses}</h3>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="text-green-600 text-sm font-medium">+1.7%</span>
+                  <span className="text-green-600 text-sm font-medium">+12.4%</span>
                   <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
                 </div>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
-                <BookOpen className="w-6 h-6 text-green-600" />
+                <FileText className="w-6 h-6 text-green-600" />
               </div>
             </div>
           </div>
@@ -196,9 +180,7 @@ const SchoolAdminDashboard: React.FC = () => {
                 <p className="text-gray-500 text-sm font-medium">Pending Assignments</p>
                 <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.pendingAssignments}</h3>
                 <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-red-500 mr-1" />
-                  <span className="text-red-600 text-sm font-medium">+3.2%</span>
-                  <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                  <span className="text-red-600 text-sm font-medium">Due soon</span>
                 </div>
               </div>
               <div className="p-3 bg-yellow-100 rounded-lg">
@@ -206,14 +188,31 @@ const SchoolAdminDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-gray-500 text-sm font-medium">Average Grade</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.averageGrade}%</h3>
+                <div className="flex items-center mt-2">
+                  <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                  <span className="text-green-600 text-sm font-medium">+2.3%</span>
+                  <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                </div>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <BarChart3 className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Teacher Performance Improvement */}
+          {/* Course Progress Analysis */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Teacher Performance Improvement</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Course Progress Analysis</h2>
             </div>
             
             {/* Filter Buttons */}
@@ -222,10 +221,10 @@ const SchoolAdminDashboard: React.FC = () => {
                 By Subject
               </button>
               <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-                By Department
+                By Semester
               </button>
               <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-                By Experience
+                By Assignment
               </button>
             </div>
 
@@ -233,37 +232,41 @@ const SchoolAdminDashboard: React.FC = () => {
             <div className="bg-blue-50 rounded-lg p-8 text-center mb-6">
               <BarChart3 className="w-12 h-12 text-blue-400 mx-auto mb-4" />
               <p className="text-blue-700 text-sm">
-                Performance improvement chart showing 16% average increase in teacher effectiveness scores after training completion
+                Progress analysis chart showing 81% average completion rate across all enrolled courses
               </p>
             </div>
 
             {/* Subject Breakdown */}
             <div className="space-y-3">
-              {teacherPerformance.map((item, index) => (
+              {courseProgress.map((item, index) => (
                 <div key={index} className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-700">{item.subject}</span>
-                  <span className="text-sm font-semibold text-green-600">+{item.improvement}%</span>
+                  <span className="text-sm font-semibold text-green-600">{item.progress}%</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Student Enrollment Analysis */}
+          {/* Grade Distribution Analysis */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Student Enrollment Analysis</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Grade Distribution Analysis</h2>
             </div>
 
             <div className="space-y-4">
-              {studentEnrollment.map((item, index) => (
+              {gradeBreakdown.map((item, index) => (
                 <div key={index}>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-medium text-gray-700">{item.grade}</span>
-                    <span className="text-sm font-semibold text-gray-900">{item.count} students</span>
+                    <span className="text-sm font-semibold text-gray-900">{item.count} assignments</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
-                      className="bg-purple-600 h-2 rounded-full" 
+                      className={`h-2 rounded-full ${
+                        item.grade.includes('A') ? 'bg-green-600' :
+                        item.grade.includes('B') ? 'bg-blue-600' :
+                        item.grade.includes('C') ? 'bg-yellow-600' : 'bg-red-600'
+                      }`}
                       style={{ width: `${item.percentage}%` }}
                     ></div>
                   </div>
@@ -274,12 +277,12 @@ const SchoolAdminDashboard: React.FC = () => {
             {/* Totals */}
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Total Students</span>
-                <span className="text-sm font-bold text-gray-900">{stats.totalStudents}</span>
+                <span className="text-sm font-medium text-gray-700">Total Assignments</span>
+                <span className="text-sm font-bold text-gray-900">20</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Average Class Size</span>
-                <span className="text-sm font-bold text-purple-600">28 students</span>
+                <span className="text-sm font-medium text-gray-700">GPA</span>
+                <span className="text-sm font-bold text-green-600">3.4</span>
               </div>
             </div>
           </div>
@@ -289,4 +292,4 @@ const SchoolAdminDashboard: React.FC = () => {
   );
 };
 
-export default SchoolAdminDashboard;
+export default StudentDashboard; 

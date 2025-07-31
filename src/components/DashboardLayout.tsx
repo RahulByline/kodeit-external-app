@@ -1,0 +1,289 @@
+import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  GraduationCap,
+  BarChart3,
+  Settings,
+  Bell,
+  Search,
+  Plus,
+  ChevronDown,
+  User,
+  MessageSquare,
+  FileText,
+  Calendar,
+  School,
+  Target,
+  TrendingUp,
+  Award,
+  Clock
+} from 'lucide-react';
+import logo from '../assets/logo.png';
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+  userRole: 'admin' | 'school_admin' | 'teacher' | 'student';
+  userName: string;
+}
+
+const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, userName }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getNavigationItems = () => {
+    const baseItems = [
+      {
+        title: 'DASHBOARD',
+        items: [
+          { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
+          { name: 'Community', icon: Users, path: `/dashboard/${userRole}/community` },
+          { name: 'Enrollments', icon: GraduationCap, path: `/dashboard/${userRole}/enrollments` },
+        ]
+      }
+    ];
+
+    if (userRole === 'admin') {
+      return [
+        ...baseItems,
+        {
+          title: 'TEACHERS',
+          items: [
+            { name: 'Teachers', icon: Users, path: '/dashboard/admin/teachers' },
+            { name: 'Master Trainers', icon: Award, path: '/dashboard/admin/master-trainers' },
+          ]
+        },
+        {
+          title: 'COURSES & PROGRAMS',
+          items: [
+            { name: 'Courses & Programs', icon: BookOpen, path: '/dashboard/admin/courses' },
+            { name: 'Certifications', icon: GraduationCap, path: '/dashboard/admin/certifications' },
+            { name: 'Assessments', icon: FileText, path: '/dashboard/admin/assessments' },
+            { name: 'Schools', icon: School, path: '/dashboard/admin/schools' },
+          ]
+        },
+        {
+          title: 'INSIGHTS',
+          items: [
+            { name: 'Analytics', icon: BarChart3, path: '/dashboard/admin/analytics' },
+            { name: 'Predictive Models', icon: TrendingUp, path: '/dashboard/admin/predictive' },
+            { name: 'ROI Analysis', icon: Target, path: '/dashboard/admin/roi' },
+            { name: 'Reports', icon: FileText, path: '/dashboard/admin/reports' },
+          ]
+        },
+        {
+          title: 'SETTINGS',
+          items: [
+            { name: 'System Settings', icon: Settings, path: '/dashboard/admin/settings' },
+            { name: 'User Management', icon: Users, path: '/dashboard/admin/users' },
+          ]
+        }
+      ];
+    }
+
+    if (userRole === 'school_admin') {
+      return [
+        ...baseItems,
+        {
+          title: 'TEACHERS',
+          items: [
+            { name: 'Teachers', icon: Users, path: '/dashboard/school-admin/teachers' },
+            { name: 'Master Trainers', icon: Award, path: '/dashboard/school-admin/master-trainers' },
+          ]
+        },
+        {
+          title: 'COURSES & PROGRAMS',
+          items: [
+            { name: 'Courses & Programs', icon: BookOpen, path: '/dashboard/school-admin/courses' },
+            { name: 'Certifications', icon: GraduationCap, path: '/dashboard/school-admin/certifications' },
+            { name: 'Assessments', icon: FileText, path: '/dashboard/school-admin/assessments' },
+          ]
+        },
+        {
+          title: 'INSIGHTS',
+          items: [
+            { name: 'Analytics', icon: BarChart3, path: '/dashboard/school-admin/analytics' },
+            { name: 'Reports', icon: FileText, path: '/dashboard/school-admin/reports' },
+          ]
+        },
+        {
+          title: 'SETTINGS',
+          items: [
+            { name: 'School Settings', icon: Settings, path: '/dashboard/school-admin/settings' },
+            { name: 'User Management', icon: Users, path: '/dashboard/school-admin/users' },
+          ]
+        }
+      ];
+    }
+
+    if (userRole === 'teacher') {
+      return [
+        ...baseItems,
+        {
+          title: 'COURSES',
+          items: [
+            { name: 'My Courses', icon: BookOpen, path: '/dashboard/teacher/courses' },
+            { name: 'Assignments', icon: FileText, path: '/dashboard/teacher/assignments' },
+            { name: 'Assessments', icon: FileText, path: '/dashboard/teacher/assessments' },
+          ]
+        },
+        {
+          title: 'STUDENTS',
+          items: [
+            { name: 'My Students', icon: Users, path: '/dashboard/teacher/students' },
+            { name: 'Performance', icon: BarChart3, path: '/dashboard/teacher/performance' },
+          ]
+        },
+        {
+          title: 'INSIGHTS',
+          items: [
+            { name: 'Analytics', icon: BarChart3, path: '/dashboard/teacher/analytics' },
+            { name: 'Reports', icon: FileText, path: '/dashboard/teacher/reports' },
+          ]
+        },
+        {
+          title: 'SETTINGS',
+          items: [
+            { name: 'Profile Settings', icon: Settings, path: '/dashboard/teacher/settings' },
+            { name: 'Calendar', icon: Calendar, path: '/dashboard/teacher/calendar' },
+          ]
+        }
+      ];
+    }
+
+    if (userRole === 'student') {
+      return [
+        ...baseItems,
+        {
+          title: 'COURSES',
+          items: [
+            { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+            { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
+            { name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' },
+          ]
+        },
+        {
+          title: 'PROGRESS',
+          items: [
+            { name: 'My Grades', icon: BarChart3, path: '/dashboard/student/grades' },
+            { name: 'Progress Tracking', icon: TrendingUp, path: '/dashboard/student/progress' },
+          ]
+        },
+        {
+          title: 'RESOURCES',
+          items: [
+            { name: 'Calendar', icon: Calendar, path: '/dashboard/student/calendar' },
+            { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
+          ]
+        },
+        {
+          title: 'SETTINGS',
+          items: [
+            { name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' },
+          ]
+        }
+      ];
+    }
+
+    return baseItems;
+  };
+
+  const navigationItems = getNavigationItems();
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className="w-64 bg-white shadow-lg">
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <img src={logo} alt="kodeit" className="w-8 h-8" />
+            <span className="text-lg font-semibold text-gray-800">kodeit</span>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="p-4 space-y-6">
+          {navigationItems.map((section, sectionIndex) => (
+            <div key={sectionIndex}>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                {section.title}
+              </h3>
+              <ul className="space-y-1">
+                {section.items.map((item, itemIndex) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <li key={itemIndex}>
+                      <button
+                        onClick={() => navigate(item.path)}
+                        className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{item.name}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Bar */}
+        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search courses, teachers, or resources..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <button className="relative p-2 text-gray-600 hover:text-gray-900">
+                <Bell className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  3
+                </span>
+              </button>
+
+              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                <Plus className="w-4 h-4" />
+                <span>New Report</span>
+              </button>
+
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-gray-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">{userName}</span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-auto bg-gray-50 p-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardLayout; 

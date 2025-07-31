@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 
 const dashboardRoles = [
   {
-    id: "super-admin",
-    title: "Super Admin",
+    id: "admin",
+    title: "Admin",
     description: "Complete system administration and comprehensive analytics dashboard",
     icon: Shield,
     iconColor: "text-red-400",
@@ -33,46 +33,32 @@ const dashboardRoles = [
     gradient: "from-purple-500/20 to-purple-600/10"
   },
   {
-    id: "trainer",
-    title: "Trainer", 
-    description: "Manage training sessions, track performance, and engage with trainees",
+    id: "teacher",
+    title: "Teacher", 
+    description: "Manage courses, track student progress, and create assignments",
     icon: Users,
     iconColor: "text-green-400",
     iconBg: "bg-green-500/20",
     features: [
-      "Session Management",
-      "Performance Analytics",
-      "Feedback Tools"
+      "Course Management",
+      "Student Analytics",
+      "Assignment Tools"
     ],
     gradient: "from-green-500/20 to-green-600/10"
   },
   {
-    id: "trainee-teacher",
-    title: "Trainee Teacher",
-    description: "Access personalized learning pathways and track your professional development",
+    id: "student",
+    title: "Student",
+    description: "Access your courses, track progress, and submit assignments",
     icon: GraduationCap,
     iconColor: "text-blue-400", 
     iconBg: "bg-blue-500/20",
     features: [
-      "Personal Dashboard",
-      "Course Progress",
-      "Certificates"
+      "Course Access",
+      "Progress Tracking",
+      "Assignment Submission"
     ],
     gradient: "from-blue-500/20 to-blue-600/10"
-  },
-  {
-    id: "cluster-lead",
-    title: "Cluster Lead",
-    description: "Oversee multiple schools and coordinate regional training initiatives",
-    icon: GitBranch,
-    iconColor: "text-orange-400",
-    iconBg: "bg-orange-500/20", 
-    features: [
-      "Regional Overview",
-      "Multi-School Analytics",
-      "Resource Allocation"
-    ],
-    gradient: "from-orange-500/20 to-orange-600/10"
   }
 ];
 
@@ -80,7 +66,18 @@ const DashboardSelection = () => {
   const navigate = useNavigate();
 
   const handleAccessDashboard = (roleId: string) => {
-    navigate(`/dashboard/${roleId}`);
+    // Navigate to role-specific login page
+    if (roleId === 'admin') {
+      navigate('/login/admin');
+    } else if (roleId === 'school-admin') {
+      navigate('/login/school-admin');
+    } else if (roleId === 'teacher') {
+      navigate('/login/teacher');
+    } else if (roleId === 'student') {
+      navigate('/login/student');
+    } else {
+      navigate('/login');
+    }
   };
 
   return (
