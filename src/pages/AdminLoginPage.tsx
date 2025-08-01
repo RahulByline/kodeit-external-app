@@ -8,8 +8,8 @@ const AdminLoginPage: React.FC = () => {
       title="Admin Login"
       description="Sign in to access the KodeIT Admin Dashboard"
       credentials={{
-        username: "",
-        password: ""
+        username: "kodeit_admin",
+        password: "password"
       }}
       bgColor="bg-red-50"
       accentColor="bg-red-600"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -19,9 +19,13 @@ import {
   Target,
   TrendingUp,
   Award,
-  Clock
+  Clock,
+  LogOut,
+  Settings as SettingsIcon
 } from 'lucide-react';
 import logo from '../assets/logo.png';
+import LogoutDialog from './ui/logout-dialog';
+import { authService } from '../services/authService';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -32,6 +36,9 @@ interface DashboardLayoutProps {
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, userName }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -85,18 +92,25 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
 
     if (userRole === 'school_admin') {
       return [
-        ...baseItems,
         {
-          title: 'TEACHERS',
+          title: 'DASHBOARD',
+          items: [
+            { name: 'School Management Dashboard', icon: LayoutDashboard, path: '/dashboard/school-admin' },
+            { name: 'Community', icon: Users, path: '/dashboard/school-admin/community' },
+            { name: 'Enrollments', icon: GraduationCap, path: '/dashboard/school-admin/enrollments' },
+          ]
+        },
+        {
+          title: 'USERS',
           items: [
             { name: 'Teachers', icon: Users, path: '/dashboard/school-admin/teachers' },
-            { name: 'Master Trainers', icon: Award, path: '/dashboard/school-admin/master-trainers' },
+            { name: 'Students', icon: GraduationCap, path: '/dashboard/school-admin/students' },
           ]
         },
         {
           title: 'COURSES & PROGRAMS',
           items: [
-            { name: 'Courses & Programs', icon: BookOpen, path: '/dashboard/school-admin/courses' },
+            { name: 'Courses', icon: BookOpen, path: '/dashboard/school-admin/courses' },
             { name: 'Certifications', icon: GraduationCap, path: '/dashboard/school-admin/certifications' },
             { name: 'Assessments', icon: FileText, path: '/dashboard/school-admin/assessments' },
           ]
@@ -192,6 +206,31 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
 
   const navigationItems = getNavigationItems();
 
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      setShowLogoutDialog(false);
+      setShowProfileDropdown(false);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
@@ -266,12 +305,49 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                 <span>New Report</span>
               </button>
 
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4 text-gray-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-700">{userName}</span>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                  className="flex items-center space-x-2 hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-gray-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{userName}</span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Profile Dropdown */}
+                {showProfileDropdown && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <p className="text-sm font-medium text-gray-900">{userName}</p>
+                      <p className="text-xs text-gray-500 capitalize">{userRole.replace('_', ' ')}</p>
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        setShowProfileDropdown(false);
+                        navigate(`/dashboard/${userRole}/settings`);
+                      }}
+                      className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <SettingsIcon className="w-4 h-4" />
+                      <span>Settings</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowProfileDropdown(false);
+                        setShowLogoutDialog(true);
+                      }}
+                      className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -282,6 +358,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           {children}
         </main>
       </div>
+
+      {/* Logout Dialog */}
+      <LogoutDialog
+        isOpen={showLogoutDialog}
+        onClose={() => setShowLogoutDialog(false)}
+        onConfirm={handleLogout}
+        userName={userName}
+      />
     </div>
   );
 };

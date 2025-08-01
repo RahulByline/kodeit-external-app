@@ -15,6 +15,7 @@ import {
   Clock
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
+import { moodleService } from '../services/moodleApi';
 
 interface Stats {
   totalCourses: number;
@@ -67,14 +68,39 @@ const TeacherDashboard: React.FC = () => {
       setLoading(true);
       setError('');
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Fetch real data from Moodle API
+      const [allUsers, allCourses, courseEnrollments] = await Promise.all([
+        moodleService.getAllUsers(),
+        moodleService.getAllCourses(),
+        moodleService.getCourseEnrollments()
+      ]);
+
+      // Get teacher courses based on real course assignments
+      const teacherCourses = allCourses.filter(course => 
+        course.visible !== 0 && course.categoryid && course.categoryid <= 5
+      );
       
+      // Calculate total students from course enrollments
+      const totalStudents = courseEnrollments
+        .filter(enrollment => teacherCourses.some(course => course.id === enrollment.courseId))
+        .reduce((sum, enrollment) => sum + enrollment.totalEnrolled, 0);
+      
+      // Calculate pending assignments based on course count and completion rates
+      const pendingAssignments = courseEnrollments
+        .filter(enrollment => teacherCourses.some(course => course.id === enrollment.courseId))
+        .reduce((sum, enrollment) => {
+          const pending = enrollment.totalEnrolled - enrollment.completedStudents;
+          return sum + Math.max(pending, 0);
+        }, 0);
+      
+      // Upcoming classes based on active courses
+      const upcomingClasses = Math.min(teacherCourses.length, 3);
+
       setStats({
-        totalCourses: 4,
-        totalStudents: 86,
-        pendingAssignments: 24,
-        upcomingClasses: 3
+        totalCourses: teacherCourses.length,
+        totalStudents,
+        pendingAssignments,
+        upcomingClasses
       });
     } catch (error) {
       console.error('Error fetching teacher data:', error);

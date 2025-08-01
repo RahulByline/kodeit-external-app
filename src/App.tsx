@@ -20,12 +20,28 @@ import StudentDashboard from "./pages/StudentDashboard";
 import NotFound from "./pages/NotFound";
 
 // Admin pages
-import Teachers from "./pages/admin/Teachers";
+import AdminTeachers from "./pages/admin/Teachers";
 import MasterTrainers from "./pages/admin/MasterTrainers";
-import Courses from "./pages/admin/Courses";
+import AdminCourses from "./pages/admin/Courses";
 import Schools from "./pages/admin/Schools";
-import Analytics from "./pages/admin/Analytics";
+import AdminAnalytics from "./pages/admin/Analytics";
 import UserManagement from "./pages/admin/UserManagement";
+import AdminSettings from "./pages/admin/Settings";
+
+// School Admin pages
+import SchoolAdminTeachers from "./pages/school-admin/Teachers";
+import Students from "./pages/school-admin/Students";
+import SchoolAdminCourses from "./pages/school-admin/Courses";
+import SchoolAdminAnalytics from "./pages/school-admin/Analytics";
+import Certifications from "./pages/school-admin/Certifications";
+import Assessments from "./pages/school-admin/Assessments";
+import Reports from "./pages/school-admin/Reports";
+import SchoolAdminUsers from "./pages/school-admin/Users";
+
+// Settings pages
+import SchoolAdminSettings from "./pages/SchoolAdminSettings";
+import TeacherSettings from "./pages/TeacherSettings";
+import StudentSettings from "./pages/StudentSettings";
 
 const queryClient = new QueryClient();
 
@@ -83,7 +99,7 @@ const App = () => {
                 {/* Protected Admin Dashboard Routes */}
                 <Route path="/dashboard/admin/teachers" element={
                   <ProtectedRoute requiredRole="admin">
-                    <Teachers />
+                    <AdminTeachers />
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/master-trainers" element={
@@ -93,7 +109,7 @@ const App = () => {
                 } />
                 <Route path="/dashboard/admin/courses" element={
                   <ProtectedRoute requiredRole="admin">
-                    <Courses />
+                    <AdminCourses />
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/schools" element={
@@ -103,12 +119,76 @@ const App = () => {
                 } />
                 <Route path="/dashboard/admin/analytics" element={
                   <ProtectedRoute requiredRole="admin">
-                    <Analytics />
+                    <AdminAnalytics />
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/users" element={
                   <ProtectedRoute requiredRole="admin">
                     <UserManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/settings" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminSettings />
+                  </ProtectedRoute>
+                } />
+                
+                {/* School Admin Routes */}
+                <Route path="/dashboard/school-admin/teachers" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolAdminTeachers />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/students" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <Students />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/courses" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolAdminCourses />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/certifications" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <Certifications />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/assessments" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <Assessments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/analytics" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolAdminAnalytics />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/reports" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <Reports />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/users" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolAdminUsers />
+                  </ProtectedRoute>
+                } />
+                
+                {/* Settings Routes */}
+                <Route path="/dashboard/school-admin/settings" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolAdminSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/settings" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/settings" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentSettings />
                   </ProtectedRoute>
                 } />
                 

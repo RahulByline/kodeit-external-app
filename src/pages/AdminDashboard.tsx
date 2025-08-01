@@ -280,11 +280,23 @@ const AdminDashboard: React.FC = () => {
         user.lastaccess && (user.lastaccess * 1000) > thirtyDaysAgo
       );
 
-      // Count users by role using the enhanced role detection
-      const teachers = users.filter(user => user.isTeacher || user.role === 'teacher' || user.role === 'trainer');
-      const students = users.filter(user => user.isStudent || user.role === 'student');
-      const admins = users.filter(user => user.isAdmin || user.role === 'admin' || user.role === 'school_admin');
-      const activeTeachers = activeUsers.filter(user => user.isTeacher || user.role === 'teacher' || user.role === 'trainer');
+      // Enhanced role detection using the moodleService method
+      const teachers = users.filter(user => {
+        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
+        return role === 'teacher' || role === 'trainer';
+      });
+      const students = users.filter(user => {
+        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
+        return role === 'student';
+      });
+      const admins = users.filter(user => {
+        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
+        return role === 'admin' || role === 'school_admin';
+      });
+      const activeTeachers = activeUsers.filter(user => {
+        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
+        return role === 'teacher' || role === 'trainer';
+      });
 
       console.log('User categorization:', {
         totalUsers: users.length,

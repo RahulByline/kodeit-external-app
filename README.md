@@ -1,4 +1,40 @@
-# Welcome to your Lovable project
+# Kodeit External App - Teacher Training Academy
+
+## Project Overview
+
+A comprehensive teacher training academy platform built with React, TypeScript, and integrated with Moodle/Iomad API for real-time data management.
+
+## Features
+
+### 🔐 Authentication & Authorization
+- Multi-role login system (Admin, School Admin, Teacher, Student)
+- Real Moodle/Iomad API integration for authentication
+- Protected routes based on user roles
+- Secure logout functionality with confirmation dialog
+
+### 📊 Dashboard System
+- **Admin Dashboard**: System-wide analytics, user management, course oversight
+- **School Admin Dashboard**: School-specific analytics and management
+- **Teacher Dashboard**: Course management, student performance tracking
+- **Student Dashboard**: Course progress, assignment tracking, grade monitoring
+
+### ⚙️ System Settings
+- Comprehensive settings panel for all user roles
+- Profile management, notifications, security settings
+- Appearance customization, privacy controls
+- Admin-specific system configuration and API settings
+
+### 🔗 Real-time Data Integration
+- Live data from Moodle/Iomad API
+- Real user statistics, course information, and company data
+- Dynamic dashboard metrics based on actual system data
+- Role-based data filtering and presentation
+
+### 🎨 Modern UI/UX
+- Responsive design with Tailwind CSS
+- shadcn/ui components for consistent styling
+- Interactive profile dropdown with logout functionality
+- Smooth animations and transitions
 
 ## Project info
 

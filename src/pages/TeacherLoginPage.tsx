@@ -8,8 +8,8 @@ const TeacherLoginPage: React.FC = () => {
       title="Teacher Login"
       description="Sign in to access the Teacher Dashboard"
       credentials={{
-        username: "",
-        password: ""
+        username: "teacher1",
+        password: "password"
       }}
       bgColor="bg-green-50"
       accentColor="bg-green-600"

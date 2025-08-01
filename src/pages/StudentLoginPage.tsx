@@ -8,8 +8,8 @@ const StudentLoginPage: React.FC = () => {
       title="Student Login"
       description="Sign in to access the Student Dashboard"
       credentials={{
-        username: "",
-        password: ""
+        username: "user1",
+        password: "password"
       }}
       bgColor="bg-blue-50"
       accentColor="bg-blue-600"
