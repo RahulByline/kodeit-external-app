@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MyAIBuddy from "./components/MyAIBuddy";
 import Index from "./pages/Index";
 import LoginPage from "./pages/LoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
@@ -65,6 +66,7 @@ const App = () => {
         <AuthProvider>
           <BrowserRouter>
             <div className="min-h-screen bg-gray-50 text-gray-800">
+              <MyAIBuddy />
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<LoginPage />} />
