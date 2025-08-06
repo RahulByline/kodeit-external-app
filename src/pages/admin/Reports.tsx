@@ -6,14 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Filter, Download, Eye, FileText, Calendar, User, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Search, Filter, Download, Eye, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Edit, Plus, BarChart3 } from 'lucide-react';
 import { moodleService } from '@/services/moodleApi';
 import { useAuth } from '@/context/AuthContext';
 
 interface Report {
   id: number;
   name: string;
-  type: 'academic' | 'attendance' | 'performance' | 'financial' | 'enrollment';
+  type: 'academic' | 'attendance' | 'performance' | 'financial' | 'enrollment' | 'system';
   status: 'generated' | 'pending' | 'failed';
   generatedBy: string;
   generatedAt: string;
@@ -22,7 +22,7 @@ interface Report {
   description: string;
 }
 
-const Reports: React.FC = () => {
+const AdminReports: React.FC = () => {
   const { currentUser } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [filteredReports, setFilteredReports] = useState<Report[]>([]);
@@ -60,10 +60,10 @@ const Reports: React.FC = () => {
       const realReports: Report[] = [
         {
           id: 1,
-          name: `Student Performance Report - ${totalStudents} Students`,
+          name: `Platform Performance Report - ${totalStudents} Students`,
           type: 'performance',
           status: 'generated',
-          generatedBy: currentUser?.fullname || 'School Admin',
+          generatedBy: currentUser?.fullname || 'System Admin',
           generatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: `${(totalStudents * 0.015).toFixed(1)} MB`,
           recordCount: totalStudents,
@@ -83,9 +83,9 @@ const Reports: React.FC = () => {
         {
           id: 3,
           name: `Teacher Performance Report - ${totalTeachers} Teachers`,
-          type: 'attendance',
+          type: 'performance',
           status: 'generated',
-          generatedBy: currentUser?.fullname || 'School Admin',
+          generatedBy: currentUser?.fullname || 'System Admin',
           generatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: `${(totalTeachers * 0.012).toFixed(1)} MB`,
           recordCount: totalTeachers,
@@ -107,7 +107,7 @@ const Reports: React.FC = () => {
           name: `Company Overview Report - ${totalCompanies} Companies`,
           type: 'financial',
           status: 'generated',
-          generatedBy: currentUser?.fullname || 'School Admin',
+          generatedBy: currentUser?.fullname || 'System Admin',
           generatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: `${(totalCompanies * 0.005).toFixed(1)} MB`,
           recordCount: totalCompanies,
@@ -116,13 +116,24 @@ const Reports: React.FC = () => {
         {
           id: 6,
           name: 'System Health Report',
-          type: 'performance',
+          type: 'system',
           status: 'pending',
           generatedBy: 'System',
           generatedAt: new Date(Date.now() - 0.5 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: '0.8 MB',
           recordCount: 15,
           description: 'System performance and health metrics'
+        },
+        {
+          id: 7,
+          name: 'Attendance Report - All Schools',
+          type: 'attendance',
+          status: 'generated',
+          generatedBy: 'System',
+          generatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+          fileSize: `${(totalStudents * 0.010).toFixed(1)} MB`,
+          recordCount: totalStudents,
+          description: `Attendance tracking for ${totalStudents} students across all schools`
         }
       ];
 
@@ -141,7 +152,8 @@ const Reports: React.FC = () => {
     if (searchTerm) {
       filtered = filtered.filter(report => 
         report.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.description.toLowerCase().includes(searchTerm.toLowerCase())
+        report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        report.generatedBy.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -168,6 +180,8 @@ const Reports: React.FC = () => {
         return <Badge className="bg-yellow-100 text-yellow-800">Financial</Badge>;
       case 'enrollment':
         return <Badge className="bg-orange-100 text-orange-800">Enrollment</Badge>;
+      case 'system':
+        return <Badge className="bg-gray-100 text-gray-800">System</Badge>;
       default:
         return <Badge variant="secondary">{type}</Badge>;
     }
@@ -202,12 +216,12 @@ const Reports: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="school_admin" userName={currentUser?.fullname || "School Admin"}>
+      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-              <p className="text-muted-foreground">Generate and manage school reports</p>
+              <p className="text-muted-foreground">Generate and manage platform reports</p>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -228,12 +242,12 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <DashboardLayout userRole="school_admin" userName={currentUser?.fullname || "School Admin"}>
+    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-            <p className="text-muted-foreground">Generate and manage school reports</p>
+            <p className="text-muted-foreground">Generate and manage platform reports • {currentUser?.fullname || 'Admin'}</p>
           </div>
           <Button>
             <Plus className="w-4 h-4 mr-2" />
@@ -316,6 +330,7 @@ const Reports: React.FC = () => {
                   <SelectItem value="performance">Performance</SelectItem>
                   <SelectItem value="financial">Financial</SelectItem>
                   <SelectItem value="enrollment">Enrollment</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -337,7 +352,7 @@ const Reports: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>Generated Reports</CardTitle>
-            <CardDescription>A list of all generated reports and their status</CardDescription>
+            <CardDescription>A comprehensive list of all generated reports and their status</CardDescription>
           </CardHeader>
           <CardContent>
             {filteredReports.length === 0 ? (
@@ -400,4 +415,4 @@ const Reports: React.FC = () => {
   );
 };
 
-export default Reports; 
+export default AdminReports; 
