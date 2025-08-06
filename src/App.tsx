@@ -38,10 +38,29 @@ import Assessments from "./pages/school-admin/Assessments";
 import Reports from "./pages/school-admin/Reports";
 import SchoolAdminUsers from "./pages/school-admin/Users";
 
+// Teacher pages
+import TeacherAnalytics from "./pages/teacher/Analytics";
+import TeacherAssessments from "./pages/teacher/Assessments";
+import TeacherAssignments from "./pages/teacher/Assignments";
+import TeacherCalendar from "./pages/teacher/Calendar";
+import TeacherCourses from "./pages/teacher/Courses";
+import TeacherReports from "./pages/teacher/Reports";
+import TeacherStudents from "./pages/teacher/Students";
+
+// Student pages
+import StudentAssessments from "./pages/student/Assessments";
+import StudentAssignments from "./pages/student/Assignments";
+import StudentCalendar from "./pages/student/Calendar";
+import StudentCourses from "./pages/student/Courses";
+import StudentGrades from "./pages/student/Grades";
+import StudentMessages from "./pages/student/Messages";
+import StudentProgress from "./pages/student/Progress";
+
 // Settings pages
 import SchoolAdminSettings from "./pages/SchoolAdminSettings";
 import TeacherSettings from "./pages/TeacherSettings";
 import StudentSettings from "./pages/StudentSettings";
+import RoleDebug from "./pages/RoleDebug";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +86,7 @@ const App = () => {
             <div className="min-h-screen bg-gray-50 text-gray-800">
               <Routes>
                 <Route path="/" element={<Index />} />
+                <Route path="/debug/roles" element={<RoleDebug />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/login/admin" element={<AdminLoginPage />} />
                 <Route path="/login/school-admin" element={<SchoolAdminLoginPage />} />
@@ -189,6 +209,80 @@ const App = () => {
                 <Route path="/dashboard/student/settings" element={
                   <ProtectedRoute requiredRole="student">
                     <StudentSettings />
+                  </ProtectedRoute>
+                } />
+                
+                {/* Teacher Section Routes */}
+                <Route path="/dashboard/teacher/analytics" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherAnalytics />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/assessments" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherAssessments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/assignments" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherAssignments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/calendar" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherCalendar />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/courses" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherCourses />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/reports" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherReports />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/students" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherStudents />
+                  </ProtectedRoute>
+                } />
+                
+                {/* Student Section Routes */}
+                <Route path="/dashboard/student/assessments" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentAssessments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/assignments" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentAssignments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/calendar" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentCalendar />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/courses" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentCourses />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/grades" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentGrades />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/messages" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentMessages />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/progress" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentProgress />
                   </ProtectedRoute>
                 } />
                 
