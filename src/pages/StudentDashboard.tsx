@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { moodleService } from '../services/moodleApi';
+import { useAuth } from '../context/AuthContext';
 
 interface Stats {
   enrolledCourses: number;
@@ -36,6 +37,7 @@ interface GradeBreakdown {
 }
 
 const StudentDashboard: React.FC = () => {
+  const { currentUser } = useAuth();
   const [stats, setStats] = useState<Stats>({
     enrolledCourses: 0,
     completedAssignments: 0,
@@ -61,6 +63,13 @@ const StudentDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchStudentData();
+    
+    // Refresh data every 5 minutes
+    const interval = setInterval(() => {
+      fetchStudentData();
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchStudentData = async () => {
@@ -68,10 +77,16 @@ const StudentDashboard: React.FC = () => {
       setLoading(true);
       setError('');
       
-      // Fetch real data from Moodle API
-      const [allCourses, courseEnrollments] = await Promise.all([
+      console.log('🔄 Fetching student data from IOMAD API...');
+      console.log('👤 Current user:', currentUser);
+      console.log('🆔 Current user ID:', currentUser?.id);
+      
+      // Fetch real data from IOMAD API
+      const [allCourses, courseEnrollments, courseCompletion, userActivity] = await Promise.all([
         moodleService.getAllCourses(),
-        moodleService.getCourseEnrollments()
+        moodleService.getCourseEnrollments(),
+        moodleService.getCourseCompletionStats(),
+        moodleService.getUserActivityData(currentUser?.id) // Pass current user ID
       ]);
 
       // Get student courses based on real course availability
@@ -98,12 +113,35 @@ const StudentDashboard: React.FC = () => {
       const totalGrade = studentEnrollments.reduce((sum, enrollment) => sum + enrollment.averageGrade, 0);
       const averageGrade = studentEnrollments.length > 0 ? Math.round(totalGrade / studentEnrollments.length) : 85;
 
+      // Use real course progress data if available
+      const realCourseProgress = courseCompletion.length > 0 ? 
+        courseCompletion.map(item => ({
+          subject: item.courseName || 'Course',
+          progress: Math.round(item.completionRate || 0)
+        })) : courseProgress;
+
+      // Use real grade breakdown data
+      const realGradeBreakdown = userActivity.length > 0 ? 
+        userActivity.map(item => ({
+          grade: item.gradeRange || 'A (90-100)',
+          count: item.count || 0,
+          percentage: Math.round((item.count / totalAssignments) * 100)
+        })) : gradeBreakdown;
+
       setStats({
         enrolledCourses: enrolledCourses.length,
         completedAssignments,
         pendingAssignments,
         averageGrade
       });
+
+      // Update the progress data with real data
+      if (courseCompletion.length > 0) {
+        courseProgress.splice(0, courseProgress.length, ...realCourseProgress);
+      }
+      if (userActivity.length > 0) {
+        gradeBreakdown.splice(0, gradeBreakdown.length, ...realGradeBreakdown);
+      }
     } catch (error) {
       console.error('Error fetching student data:', error);
       setError('Failed to load dashboard data');
@@ -114,7 +152,7 @@ const StudentDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="student" userName="Alex">
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <Loader2 className="animate-spin h-6 w-6 text-blue-600" />
@@ -127,7 +165,7 @@ const StudentDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <DashboardLayout userRole="student" userName="Alex">
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800">{error}</p>
           <button 
@@ -142,13 +180,13 @@ const StudentDashboard: React.FC = () => {
   }
 
   return (
-    <DashboardLayout userRole="student" userName="Alex">
+    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Student Dashboard</h1>
-            <p className="text-gray-600 mt-1">Comprehensive analytics for Academic Performance</p>
+            <p className="text-gray-600 mt-1">Welcome back, {currentUser?.firstname || "Student"}! Here's your academic overview</p>
           </div>
           
           {/* Dashboard Controls */}
