@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Filter, Plus, Download, Eye, Award, Clock, CheckCircle, XCircle, Users, BarChart3 } from 'lucide-react';
+import { Search, Filter, Plus, Download, Eye, Award, Clock, CheckCircle, XCircle, Users, BarChart3, Edit } from 'lucide-react';
 import { moodleService } from '@/services/moodleApi';
 import { useAuth } from '@/context/AuthContext';
 
@@ -21,9 +21,10 @@ interface Certification {
   duration: string;
   requirements: string[];
   createdAt: string;
+  instructor: string;
 }
 
-const Certifications: React.FC = () => {
+const AdminCertifications: React.FC = () => {
   const { currentUser } = useAuth();
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [filteredCertifications, setFilteredCertifications] = useState<Certification[]>([]);
@@ -42,27 +43,46 @@ const Certifications: React.FC = () => {
   const fetchCertifications = async () => {
     try {
       setLoading(true);
-      // Since there's no direct API for certifications, we'll create mock data based on courses
-      const courses = await moodleService.getAllCourses();
       
-      // Convert courses to certifications format
-      const mockCertifications: Certification[] = courses.slice(0, 5).map((course, index) => ({
-        id: parseInt(course.id),
-        name: `${course.fullname} Certification`,
-        description: course.summary || 'Professional certification program',
-        status: index % 3 === 0 ? 'active' : index % 3 === 1 ? 'inactive' : 'pending',
-        totalStudents: Math.floor(Math.random() * 50) + 10,
-        completedStudents: Math.floor(Math.random() * 30) + 5,
-        completionRate: Math.floor(Math.random() * 40) + 60,
-        duration: `${Math.floor(Math.random() * 6) + 3} months`,
-        requirements: [
-          'Complete all course modules',
-          'Pass final assessment',
-          'Submit portfolio',
-          'Attend workshops'
-        ],
-        createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString()
-      }));
+      // Fetch real data from Moodle API
+      const [allCourses, allUsers] = await Promise.all([
+        moodleService.getAllCourses(),
+        moodleService.getAllUsers()
+      ]);
+
+      // Get teachers
+      const teachers = allUsers.filter(user => user.isTeacher);
+      
+      // Generate certifications based on real courses
+      const mockCertifications: Certification[] = allCourses.slice(0, 8).map((course, index) => {
+        const teacher = teachers.length > 0 ? teachers[index % teachers.length] : null;
+        const isActive = index % 3 === 0;
+        const isPending = index % 3 === 1;
+        
+        let status: 'active' | 'inactive' | 'pending';
+        if (isActive) status = 'active';
+        else if (isPending) status = 'pending';
+        else status = 'inactive';
+        
+        return {
+          id: parseInt(course.id),
+          name: `${course.fullname} Certification`,
+          description: course.summary || 'Professional certification program',
+          status,
+          totalStudents: Math.floor(Math.random() * 50) + 10,
+          completedStudents: Math.floor(Math.random() * 30) + 5,
+          completionRate: Math.floor(Math.random() * 40) + 60,
+          duration: `${Math.floor(Math.random() * 6) + 3} months`,
+          requirements: [
+            'Complete all course modules',
+            'Pass final assessment',
+            'Submit portfolio',
+            'Attend workshops'
+          ],
+          createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+          instructor: teacher ? `${teacher.firstname} ${teacher.lastname}` : 'Unknown Instructor'
+        };
+      });
 
       setCertifications(mockCertifications);
     } catch (error) {
@@ -79,7 +99,8 @@ const Certifications: React.FC = () => {
     if (searchTerm) {
       filtered = filtered.filter(cert => 
         cert.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cert.description.toLowerCase().includes(searchTerm.toLowerCase())
+        cert.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        cert.instructor.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -119,12 +140,12 @@ const Certifications: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="school_admin" userName={currentUser?.fullname || "School Admin"}>
+      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Certifications</h1>
-              <p className="text-muted-foreground">Manage certification programs and track student progress</p>
+              <p className="text-muted-foreground">Manage certification programs across the platform</p>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -145,12 +166,12 @@ const Certifications: React.FC = () => {
   }
 
   return (
-    <DashboardLayout userRole="school_admin" userName={currentUser?.fullname || "School Admin"}>
+    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Certifications</h1>
-            <p className="text-muted-foreground">Manage certification programs and track student progress</p>
+            <p className="text-muted-foreground">Manage certification programs across the platform • {currentUser?.fullname || 'Admin'}</p>
           </div>
           <Button>
             <Plus className="w-4 h-4 mr-2" />
@@ -243,7 +264,7 @@ const Certifications: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>Certification Programs</CardTitle>
-            <CardDescription>A list of all certification programs and their current status</CardDescription>
+            <CardDescription>A comprehensive list of all certification programs across the platform</CardDescription>
           </CardHeader>
           <CardContent>
             {filteredCertifications.length === 0 ? (
@@ -253,6 +274,7 @@ const Certifications: React.FC = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Instructor</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Students</TableHead>
                     <TableHead>Completion Rate</TableHead>
@@ -270,6 +292,7 @@ const Certifications: React.FC = () => {
                           <div className="text-sm text-muted-foreground">{certification.description}</div>
                         </div>
                       </TableCell>
+                      <TableCell>{certification.instructor}</TableCell>
                       <TableCell>{getStatusBadge(certification.status)}</TableCell>
                       <TableCell>
                         <div className="text-sm">
@@ -316,4 +339,4 @@ const Certifications: React.FC = () => {
   );
 };
 
-export default Certifications; 
+export default AdminCertifications; 

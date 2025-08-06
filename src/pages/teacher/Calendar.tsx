@@ -1,0 +1,433 @@
+import React, { useState, useEffect } from 'react';
+import DashboardLayout from '@/components/DashboardLayout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { 
+  Calendar, 
+  Plus, 
+  Clock, 
+  Users, 
+  BookOpen, 
+  FileText, 
+  CheckCircle, 
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  Filter
+} from 'lucide-react';
+import { moodleService } from '@/services/moodleApi';
+import { useAuth } from '@/context/AuthContext';
+
+interface CalendarEvent {
+  id: number;
+  title: string;
+  type: 'class' | 'assignment' | 'exam' | 'meeting' | 'deadline';
+  startDate: string;
+  endDate: string;
+  courseName?: string;
+  description?: string;
+  location?: string;
+  attendees?: number;
+  status: 'upcoming' | 'ongoing' | 'completed' | 'overdue';
+}
+
+const TeacherCalendar: React.FC = () => {
+  const { currentUser } = useAuth();
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  useEffect(() => {
+    fetchCalendarData();
+  }, []);
+
+  const fetchCalendarData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch real data from Moodle API
+      const [allCourses] = await Promise.all([
+        moodleService.getAllCourses()
+      ]);
+
+      // Get teacher courses
+      const teacherCourses = allCourses
+        .filter(course => course.visible !== 0 && course.categoryid && course.categoryid <= 10)
+        .slice(0, 8);
+      
+      // Generate mock calendar events based on courses
+      const mockEvents: CalendarEvent[] = [];
+      
+      teacherCourses.forEach((course, courseIndex) => {
+        // Add classes
+        for (let i = 0; i < 3; i++) {
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() + courseIndex * 2 + i);
+          startDate.setHours(9 + (i * 2), 0, 0, 0);
+          
+          const endDate = new Date(startDate);
+          endDate.setHours(startDate.getHours() + 1);
+          
+          mockEvents.push({
+            id: courseIndex * 10 + i + 1,
+            title: `${course.shortname} Class ${i + 1}`,
+            type: 'class',
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            courseName: course.fullname,
+            description: `Regular class session for ${course.fullname}`,
+            location: 'Room 101',
+            attendees: Math.floor(Math.random() * 30) + 5,
+            status: startDate > new Date() ? 'upcoming' : 'completed'
+          });
+        }
+        
+        // Add assignments
+        for (let i = 0; i < 2; i++) {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + courseIndex * 3 + i * 5);
+          dueDate.setHours(23, 59, 0, 0);
+          
+          mockEvents.push({
+            id: courseIndex * 10 + i + 100,
+            title: `${course.shortname} Assignment ${i + 1} Due`,
+            type: 'assignment',
+            startDate: dueDate.toISOString(),
+            endDate: dueDate.toISOString(),
+            courseName: course.fullname,
+            description: `Assignment submission deadline`,
+            status: dueDate > new Date() ? 'upcoming' : 'overdue'
+          });
+        }
+      });
+      
+      // Add some meetings and exams
+      const meetingDate = new Date();
+      meetingDate.setDate(meetingDate.getDate() + 3);
+      meetingDate.setHours(14, 0, 0, 0);
+      
+      mockEvents.push({
+        id: 1000,
+        title: 'Faculty Meeting',
+        type: 'meeting',
+        startDate: meetingDate.toISOString(),
+        endDate: new Date(meetingDate.getTime() + 60 * 60 * 1000).toISOString(),
+        description: 'Monthly faculty meeting',
+        location: 'Conference Room A',
+        attendees: 15,
+        status: 'upcoming'
+      });
+      
+      const examDate = new Date();
+      examDate.setDate(examDate.getDate() + 7);
+      examDate.setHours(10, 0, 0, 0);
+      
+      mockEvents.push({
+        id: 1001,
+        title: 'Final Exam - Mathematics',
+        type: 'exam',
+        startDate: examDate.toISOString(),
+        endDate: new Date(examDate.getTime() + 2 * 60 * 60 * 1000).toISOString(),
+        courseName: 'Mathematics 101',
+        description: 'Final examination',
+        location: 'Exam Hall',
+        attendees: 25,
+        status: 'upcoming'
+      });
+
+      setEvents(mockEvents);
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getEventTypeColor = (type: string) => {
+    switch (type) {
+      case 'class': return 'bg-blue-100 text-blue-800';
+      case 'assignment': return 'bg-yellow-100 text-yellow-800';
+      case 'exam': return 'bg-red-100 text-red-800';
+      case 'meeting': return 'bg-purple-100 text-purple-800';
+      case 'deadline': return 'bg-orange-100 text-orange-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'upcoming': return 'bg-green-100 text-green-800';
+      case 'ongoing': return 'bg-blue-100 text-blue-800';
+      case 'completed': return 'bg-gray-100 text-gray-800';
+      case 'overdue': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getEventsForDate = (date: Date) => {
+    return events.filter(event => {
+      const eventDate = new Date(event.startDate);
+      return eventDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const getUpcomingEvents = () => {
+    const now = new Date();
+    return events
+      .filter(event => new Date(event.startDate) > now)
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+      .slice(0, 5);
+  };
+
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout userRole="teacher" userName={currentUser?.fullname || "Teacher"}>
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span className="text-gray-600">Loading calendar...</span>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout userRole="teacher" userName={currentUser?.fullname || "Teacher"}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+            <p className="text-gray-600 mt-1">Welcome {currentUser?.firstname || "Teacher"}, manage your schedule and upcoming events</p>
+          </div>
+          <div className="flex space-x-2">
+            <Button variant="outline">
+              <Filter className="w-4 h-4 mr-2" />
+              Filter
+            </Button>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Event
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Calendar View */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Calendar</CardTitle>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newDate = new Date(currentDate);
+                        newDate.setMonth(newDate.getMonth() - 1);
+                        setCurrentDate(newDate);
+                      }}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentDate(new Date())}
+                    >
+                      <Home className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newDate = new Date(currentDate);
+                        newDate.setMonth(newDate.getMonth() + 1);
+                        setCurrentDate(newDate);
+                      }}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription>
+                  {currentDate.toLocaleDateString('en-US', { 
+                    month: 'long', 
+                    year: 'numeric' 
+                  })}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-700 text-sm">
+                    Calendar view showing all your scheduled events, classes, and deadlines
+                  </p>
+                  <div className="mt-4 grid grid-cols-7 gap-1 text-xs">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="p-2 font-medium text-gray-500">{day}</div>
+                    ))}
+                    {Array.from({ length: 35 }, (_, i) => {
+                      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+                      date.setDate(date.getDate() + i - date.getDay());
+                      const dayEvents = getEventsForDate(date);
+                      return (
+                        <div
+                          key={i}
+                          className={`p-2 border border-gray-200 bg-white min-h-[60px] cursor-pointer hover:bg-gray-50 ${
+                            date.toDateString() === selectedDate.toDateString() ? 'bg-blue-50 border-blue-300' : ''
+                          }`}
+                          onClick={() => setSelectedDate(date)}
+                        >
+                          <div className="text-sm font-medium">{date.getDate()}</div>
+                          {dayEvents.length > 0 && (
+                            <div className="mt-1">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto"></div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Upcoming Events */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upcoming Events</CardTitle>
+                <CardDescription>Next 5 scheduled events</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {getUpcomingEvents().map((event) => (
+                    <div key={event.id} className="p-3 border border-gray-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm">{event.title}</h4>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(event.startDate).toLocaleDateString()} at {formatTime(event.startDate)}
+                          </p>
+                          {event.courseName && (
+                            <p className="text-xs text-blue-600 mt-1">{event.courseName}</p>
+                          )}
+                        </div>
+                        <Badge className={getEventTypeColor(event.type)}>
+                          {event.type.charAt(0).toUpperCase() + event.type.slice(1)}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Today's Events */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Today's Events</CardTitle>
+                <CardDescription>Events scheduled for today</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {getEventsForDate(new Date()).map((event) => (
+                    <div key={event.id} className="p-3 border border-gray-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm">{event.title}</h4>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formatTime(event.startDate)} - {formatTime(event.endDate)}
+                          </p>
+                          {event.location && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              <Clock className="w-3 h-3 inline mr-1" />
+                              {event.location}
+                            </p>
+                          )}
+                        </div>
+                        <Badge className={getStatusColor(event.status)}>
+                          {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  {getEventsForDate(new Date()).length === 0 && (
+                    <div className="text-center py-4 text-gray-500">
+                      <Calendar className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">No events scheduled for today</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* All Events List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>All Events</CardTitle>
+            <CardDescription>Complete list of all scheduled events</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {events
+                .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+                .map((event) => (
+                  <div key={event.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-2 rounded-lg ${getEventTypeColor(event.type)}`}>
+                        {event.type === 'class' && <Users className="w-4 h-4" />}
+                        {event.type === 'assignment' && <FileText className="w-4 h-4" />}
+                        {event.type === 'exam' && <AlertCircle className="w-4 h-4" />}
+                        {event.type === 'meeting' && <Users className="w-4 h-4" />}
+                        {event.type === 'deadline' && <CheckCircle className="w-4 h-4" />}
+                      </div>
+                      <div>
+                        <h4 className="font-medium">{event.title}</h4>
+                        <p className="text-sm text-gray-500">
+                          {new Date(event.startDate).toLocaleDateString()} at {formatTime(event.startDate)}
+                        </p>
+                        {event.courseName && (
+                          <p className="text-xs text-blue-600">{event.courseName}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className={getStatusColor(event.status)}>
+                        {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
+                      </Badge>
+                      {event.attendees && (
+                        <div className="flex items-center space-x-1 text-sm text-gray-500">
+                          <Users className="w-4 h-4" />
+                          <span>{event.attendees}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+export default TeacherCalendar; 
