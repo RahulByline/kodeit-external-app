@@ -94,6 +94,7 @@ interface UserData {
   lastname?: string;
   phone?: string;
   department?: string;
+  companyid?: number | null;
 }
 
 const SchoolAdminDashboard: React.FC = () => {
@@ -158,19 +159,35 @@ const SchoolAdminDashboard: React.FC = () => {
       });
 
       // Process real data
-      const processedUsers = allUsers.map(user => ({
-        id: user.id,
-        username: user.username,
-        fullname: user.fullname,
-        email: user.email,
-        lastaccess: user.lastaccess,
-        role: moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []),
-        profileImage: user.profileimageurl || user.profileimage || '/placeholder.svg',
-        firstname: user.firstname,
-        lastname: user.lastname,
-        phone: user.phone1 || user.phone2,
-        department: user.department || 'General'
-      }));
+      const processedUsers = allUsers.map(user => {
+        // Convert user to MoodleUser format for role detection
+        const moodleUser = {
+          id: parseInt(user.id),
+          email: user.email,
+          firstname: user.firstname,
+          lastname: user.lastname,
+          fullname: user.fullname,
+          username: user.username,
+          profileimageurl: user.profileimageurl,
+          lastaccess: user.lastaccess,
+          roles: user.roles || []
+        };
+        
+        return {
+          id: user.id,
+          username: user.username,
+          fullname: user.fullname,
+          email: user.email,
+          lastaccess: user.lastaccess,
+          role: moodleService.detectUserRoleEnhanced(user.username, moodleUser, user.roles || []),
+          profileImage: user.profileimageurl || '/placeholder.svg',
+          firstname: user.firstname,
+          lastname: user.lastname,
+          phone: '', // Phone not available in API response
+          department: 'General', // Department not available in API response
+          companyid: (user as any).companyid || null // Add companyid for filtering
+        };
+      });
 
       const processedCourses = allCourses.map(course => ({
         id: parseInt(course.id),
