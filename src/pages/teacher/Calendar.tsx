@@ -21,7 +21,7 @@ import { moodleService } from '@/services/moodleApi';
 import { useAuth } from '@/context/AuthContext';
 
 interface CalendarEvent {
-  id: number;
+  id: string | number;
   title: string;
   type: 'class' | 'assignment' | 'exam' | 'meeting' | 'deadline';
   startDate: string;
@@ -31,6 +31,9 @@ interface CalendarEvent {
   location?: string;
   attendees?: number;
   status: 'upcoming' | 'ongoing' | 'completed' | 'overdue';
+  courseId?: string;
+  assignmentId?: string;
+  priority?: 'low' | 'medium' | 'high';
 }
 
 const TeacherCalendar: React.FC = () => {
@@ -48,99 +51,27 @@ const TeacherCalendar: React.FC = () => {
     try {
       setLoading(true);
       
-      // Fetch real data from Moodle API
-      const [allCourses] = await Promise.all([
-        moodleService.getAllCourses()
-      ]);
-
-      // Get teacher courses
-      const teacherCourses = allCourses
-        .filter(course => course.visible !== 0 && course.categoryid && course.categoryid <= 10)
-        .slice(0, 8);
+      console.log('🔄 Fetching teacher calendar events from IOMAD API...');
+      console.log('👤 Current user:', currentUser);
+      console.log('🆔 Current user ID:', currentUser?.id);
       
-      // Generate mock calendar events based on courses
-      const mockEvents: CalendarEvent[] = [];
+      // Use the new real calendar data fetching method
+      const calendarEvents = await moodleService.getTeacherCalendarEvents(currentUser?.id);
       
-      teacherCourses.forEach((course, courseIndex) => {
-        // Add classes
-        for (let i = 0; i < 3; i++) {
-          const startDate = new Date();
-          startDate.setDate(startDate.getDate() + courseIndex * 2 + i);
-          startDate.setHours(9 + (i * 2), 0, 0, 0);
-          
-          const endDate = new Date(startDate);
-          endDate.setHours(startDate.getHours() + 1);
-          
-          mockEvents.push({
-            id: courseIndex * 10 + i + 1,
-            title: `${course.shortname} Class ${i + 1}`,
-            type: 'class',
-            startDate: startDate.toISOString(),
-            endDate: endDate.toISOString(),
-            courseName: course.fullname,
-            description: `Regular class session for ${course.fullname}`,
-            location: 'Room 101',
-            attendees: Math.floor(Math.random() * 30) + 5,
-            status: startDate > new Date() ? 'upcoming' : 'completed'
-          });
-        }
-        
-        // Add assignments
-        for (let i = 0; i < 2; i++) {
-          const dueDate = new Date();
-          dueDate.setDate(dueDate.getDate() + courseIndex * 3 + i * 5);
-          dueDate.setHours(23, 59, 0, 0);
-          
-          mockEvents.push({
-            id: courseIndex * 10 + i + 100,
-            title: `${course.shortname} Assignment ${i + 1} Due`,
-            type: 'assignment',
-            startDate: dueDate.toISOString(),
-            endDate: dueDate.toISOString(),
-            courseName: course.fullname,
-            description: `Assignment submission deadline`,
-            status: dueDate > new Date() ? 'upcoming' : 'overdue'
-          });
-        }
-      });
-      
-      // Add some meetings and exams
-      const meetingDate = new Date();
-      meetingDate.setDate(meetingDate.getDate() + 3);
-      meetingDate.setHours(14, 0, 0, 0);
-      
-      mockEvents.push({
-        id: 1000,
-        title: 'Faculty Meeting',
-        type: 'meeting',
-        startDate: meetingDate.toISOString(),
-        endDate: new Date(meetingDate.getTime() + 60 * 60 * 1000).toISOString(),
-        description: 'Monthly faculty meeting',
-        location: 'Conference Room A',
-        attendees: 15,
-        status: 'upcoming'
-      });
-      
-      const examDate = new Date();
-      examDate.setDate(examDate.getDate() + 7);
-      examDate.setHours(10, 0, 0, 0);
-      
-      mockEvents.push({
-        id: 1001,
-        title: 'Final Exam - Mathematics',
-        type: 'exam',
-        startDate: examDate.toISOString(),
-        endDate: new Date(examDate.getTime() + 2 * 60 * 60 * 1000).toISOString(),
-        courseName: 'Mathematics 101',
-        description: 'Final examination',
-        location: 'Exam Hall',
-        attendees: 25,
-        status: 'upcoming'
+      console.log('📊 Calendar API Response:', {
+        totalEvents: calendarEvents.length,
+        eventTypes: calendarEvents.reduce((acc, event) => {
+          acc[event.type] = (acc[event.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
       });
 
-      setEvents(mockEvents);
+      console.log('✅ Processed calendar events:', calendarEvents.length);
+      console.log('📅 Sample events:', calendarEvents.slice(0, 3));
+
+      setEvents(calendarEvents);
     } catch (error) {
-      console.error('Error fetching calendar data:', error);
+      console.error('❌ Error fetching calendar data:', error);
       setEvents([]);
     } finally {
       setLoading(false);
@@ -168,6 +99,15 @@ const TeacherCalendar: React.FC = () => {
     }
   };
 
+  const getPriorityColor = (priority?: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 text-red-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'low': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   const getEventsForDate = (date: Date) => {
     return events.filter(event => {
       const eventDate = new Date(event.startDate);
@@ -181,6 +121,27 @@ const TeacherCalendar: React.FC = () => {
       .filter(event => new Date(event.startDate) > now)
       .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
       .slice(0, 5);
+  };
+
+  const getUpcomingReminders = () => {
+    const now = new Date();
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    
+    return events
+      .filter(event => {
+        const eventDate = new Date(event.startDate);
+        return eventDate > now && eventDate <= nextWeek;
+      })
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+      .slice(0, 3);
+  };
+
+  const getHighPriorityEvents = () => {
+    return events
+      .filter(event => event.priority === 'high' && new Date(event.startDate) > new Date())
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+      .slice(0, 3);
   };
 
   const formatTime = (dateString: string) => {
@@ -327,16 +288,64 @@ const TeacherCalendar: React.FC = () => {
                           {event.courseName && (
                             <p className="text-xs text-blue-600 mt-1">{event.courseName}</p>
                           )}
+                          {event.priority && (
+                            <Badge className={`${getPriorityColor(event.priority)} text-xs mt-1`}>
+                              {event.priority} priority
+                            </Badge>
+                          )}
                         </div>
-                        <Badge className={getEventTypeColor(event.type)}>
-                          {event.type.charAt(0).toUpperCase() + event.type.slice(1)}
-                        </Badge>
+                        <div className="flex flex-col items-end space-y-1">
+                          <Badge className={getEventTypeColor(event.type)}>
+                            {event.type.charAt(0).toUpperCase() + event.type.slice(1)}
+                          </Badge>
+                          {event.priority === 'high' && (
+                            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
+                  {getUpcomingEvents().length === 0 && (
+                    <div className="text-center py-4 text-gray-500">
+                      <Calendar className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">No upcoming events</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
+
+            {/* High Priority Reminders */}
+            {getHighPriorityEvents().length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-red-600">High Priority Reminders</CardTitle>
+                  <CardDescription>Urgent deadlines and events</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {getHighPriorityEvents().map((event) => (
+                      <div key={event.id} className="p-3 border border-red-200 rounded-lg bg-red-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-sm text-red-800">{event.title}</h4>
+                            <p className="text-xs text-red-600 mt-1">
+                              {new Date(event.startDate).toLocaleDateString()} at {formatTime(event.startDate)}
+                            </p>
+                            {event.courseName && (
+                              <p className="text-xs text-red-700 mt-1">{event.courseName}</p>
+                            )}
+                          </div>
+                          <Badge className="bg-red-100 text-red-800">
+                            {event.type.charAt(0).toUpperCase() + event.type.slice(1)}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Today's Events */}
             <Card>
@@ -422,6 +431,12 @@ const TeacherCalendar: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              {events.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-sm">No events found</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
