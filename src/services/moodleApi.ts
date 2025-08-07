@@ -2172,6 +2172,9 @@ export const moodleService = {
       return null;
     } catch (error) {
       console.error('Error getting current user company:', error);
+      return null;
+    }
+  },
 
   // Group Management Functions
   async getCourseGroups(courseId: string) {
@@ -2734,6 +2737,10 @@ export const moodleService = {
       };
     } catch (error) {
       console.error('❌ Error testing user roles:', error);
+      return null;
+    }
+  },
+
   async getTeacherCourseProgress(teacherId?: string) {
     try {
       console.log('📈 Fetching teacher course progress from IOMAD API...');
@@ -3548,121 +3555,121 @@ export const moodleService = {
   },
 
   // School Management Methods for School Admins
-  async getSchoolManagementData(schoolAdminId: string) {
-    try {
-      console.log('🏫 Fetching school management data from IOMAD API...');
+  // async getSchoolManagementData(schoolAdminId: string) {
+  //   try {
+  //     console.log('🏫 Fetching school management data from IOMAD API...');
       
-      const [allUsers, allCourses, allCompanies, allEnrollments, allRoles] = await Promise.all([
-        this.getAllUsers(),
-        this.getAllCourses(),
-        this.getCompanies(),
-        this.getCourseEnrollments(),
-        this.getAvailableRoles()
-      ]);
+  //     const [allUsers, allCourses, allCompanies, allEnrollments, allRoles] = await Promise.all([
+  //       this.getAllUsers(),
+  //       this.getAllCourses(),
+  //       this.getCompanies(),
+  //       this.getCourseEnrollments(),
+  //       this.getAvailableRoles()
+  //     ]);
 
-      // Find the school admin user to get their company/school
-      const schoolAdmin = allUsers.find(user => user.id.toString() === schoolAdminId);
-      const schoolAdminCompanyId = schoolAdmin?.companyid;
-      const schoolCompany = allCompanies.find(company => company.id === schoolAdminCompanyId);
+  //     // Find the school admin user to get their company/school
+  //     const schoolAdmin = allUsers.find(user => user.id.toString() === schoolAdminId);
+  //     const schoolAdminCompanyId = schoolAdmin?.companyid;
+  //     const schoolCompany = allCompanies.find(company => company.id === schoolAdminCompanyId);
 
-      console.log('🏫 School Management - Company ID:', schoolAdminCompanyId);
+  //     console.log('🏫 School Management - Company ID:', schoolAdminCompanyId);
 
-      // Get all users that can be assigned to this school
-      const availableUsers = allUsers.filter(user => {
-        // Users not yet assigned to any company or assigned to this company
-        return !user.companyid || user.companyid === schoolAdminCompanyId;
-      });
+  //     // Get all users that can be assigned to this school
+  //     const availableUsers = allUsers.filter(user => {
+  //       // Users not yet assigned to any company or assigned to this company
+  //       return !user.companyid || user.companyid === schoolAdminCompanyId;
+  //     });
 
-      // Get current school users
-      const currentSchoolUsers = allUsers.filter(user => user.companyid === schoolAdminCompanyId);
+  //     // Get current school users
+  //     const currentSchoolUsers = allUsers.filter(user => user.companyid === schoolAdminCompanyId);
 
-      // Get users by role for this school
-      const schoolTeachers = currentSchoolUsers.filter(user => {
-        const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher';
-      });
+  //     // Get users by role for this school
+  //     const schoolTeachers = currentSchoolUsers.filter(user => {
+  //       const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
+  //       return role === 'teacher';
+  //     });
 
-      const schoolStudents = currentSchoolUsers.filter(user => {
-        const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'student';
-      });
+  //     const schoolStudents = currentSchoolUsers.filter(user => {
+  //       const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
+  //       return role === 'student';
+  //     });
 
-      const schoolAdmins = currentSchoolUsers.filter(user => {
-        const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'school_admin';
-      });
+  //     const schoolAdmins = currentSchoolUsers.filter(user => {
+  //       const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
+  //       return role === 'school_admin';
+  //     });
 
-      const schoolManagementData = {
-        schoolInfo: {
-          companyId: schoolAdminCompanyId,
-          companyName: schoolCompany?.name || 'Unknown School',
-          companyShortname: schoolCompany?.shortname || 'Unknown',
-          address: schoolCompany?.address || 'Address not available',
-          email: schoolCompany?.email || 'Email not available',
-          phone: schoolCompany?.phone1 || 'Phone not available',
-          description: schoolCompany?.description || 'No description available',
-          city: schoolCompany?.city || 'City not available',
-          country: schoolCompany?.country || 'Country not available'
-        },
-        currentUsers: {
-          total: currentSchoolUsers.length,
-          teachers: schoolTeachers.length,
-          students: schoolStudents.length,
-          admins: schoolAdmins.length
-        },
-        availableUsers: {
-          total: availableUsers.length,
-          unassigned: availableUsers.filter(user => !user.companyid).length,
-          otherSchools: availableUsers.filter(user => user.companyid && user.companyid !== schoolAdminCompanyId).length
-        },
-        userManagement: {
-          currentSchoolUsers: currentSchoolUsers.map(user => ({
-            id: user.id,
-            username: user.username,
-            fullname: user.fullname,
-            email: user.email,
-            role: this.detectUserRoleEnhanced(user.username, user, user.roles || []),
-            lastaccess: user.lastaccess,
-            profileImage: user.profileimageurl,
-            companyId: user.companyid
-          })),
-          availableUsers: availableUsers.map(user => ({
-            id: user.id,
-            username: user.username,
-            fullname: user.fullname,
-            email: user.email,
-            currentRole: this.detectUserRoleEnhanced(user.username, user, user.roles || []),
-            currentCompany: user.companyid ? allCompanies.find(c => c.id === user.companyid)?.name : 'Unassigned',
-            lastaccess: user.lastaccess,
-            profileImage: user.profileimageurl
-          }))
-        },
-        roleManagement: {
-          availableRoles: allRoles,
-          roleAssignments: currentSchoolUsers.map(user => ({
-            userId: user.id,
-            username: user.username,
-            fullname: user.fullname,
-            currentRoles: user.roles || [],
-            detectedRole: this.detectUserRoleEnhanced(user.username, user, user.roles || [])
-          }))
-        },
-        schoolSettings: {
-          canAssignUsers: true,
-          canManageRoles: true,
-          canViewAllData: true,
-          canManageCourses: true,
-          canManageEnrollments: true
-        }
-      };
+  //     const schoolManagementData = {
+  //       schoolInfo: {
+  //         companyId: schoolAdminCompanyId,
+  //         companyName: schoolCompany?.name || 'Unknown School',
+  //         companyShortname: schoolCompany?.shortname || 'Unknown',
+  //         address: schoolCompany?.address || 'Address not available',
+  //         email: schoolCompany?.email || 'Email not available',
+  //         phone: schoolCompany?.phone1 || 'Phone not available',
+  //         description: schoolCompany?.description || 'No description available',
+  //         city: schoolCompany?.city || 'City not available',
+  //         country: schoolCompany?.country || 'Country not available'
+  //       },
+  //       currentUsers: {
+  //         total: currentSchoolUsers.length,
+  //         teachers: schoolTeachers.length,
+  //         students: schoolStudents.length,
+  //         admins: schoolAdmins.length
+  //       },
+  //       availableUsers: {
+  //         total: availableUsers.length,
+  //         unassigned: availableUsers.filter(user => !user.companyid).length,
+  //         otherSchools: availableUsers.filter(user => user.companyid && user.companyid !== schoolAdminCompanyId).length
+  //       },
+  //       userManagement: {
+  //         currentSchoolUsers: currentSchoolUsers.map(user => ({
+  //           id: user.id,
+  //           username: user.username,
+  //           fullname: user.fullname,
+  //           email: user.email,
+  //           role: this.detectUserRoleEnhanced(user.username, user, user.roles || []),
+  //           lastaccess: user.lastaccess,
+  //           profileImage: user.profileimageurl,
+  //           companyId: user.companyid
+  //         })),
+  //         availableUsers: availableUsers.map(user => ({
+  //           id: user.id,
+  //           username: user.username,
+  //           fullname: user.fullname,
+  //           email: user.email,
+  //           currentRole: this.detectUserRoleEnhanced(user.username, user, user.roles || []),
+  //           currentCompany: user.companyid ? allCompanies.find(c => c.id === user.companyid)?.name : 'Unassigned',
+  //           lastaccess: user.lastaccess,
+  //           profileImage: user.profileimageurl
+  //         }))
+  //       },
+  //       roleManagement: {
+  //         availableRoles: allRoles,
+  //         roleAssignments: currentSchoolUsers.map(user => ({
+  //           userId: user.id,
+  //           username: user.username,
+  //           fullname: user.fullname,
+  //           currentRoles: user.roles || [],
+  //           detectedRole: this.detectUserRoleEnhanced(user.username, user, user.roles || [])
+  //         }))
+  //       },
+  //       schoolSettings: {
+  //         canAssignUsers: true,
+  //         canManageRoles: true,
+  //         canViewAllData: true,
+  //         canManageCourses: true,
+  //         canManageEnrollments: true
+  //       }
+  //     };
 
-      console.log('✅ School management data fetched for company:', schoolManagementData.schoolInfo.companyName);
-      return schoolManagementData;
-    } catch (error) {
-      console.error('❌ Error fetching school management data:', error);
-      return null;
-    }
-  },
+  //     console.log('✅ School management data fetched for company:', schoolManagementData.schoolInfo.companyName);
+  //     return schoolManagementData;
+  //   } catch (error) {
+  //     console.error('❌ Error fetching school management data:', error);
+  //     return null;
+  //   }
+  // },
 
   async assignUserToSchool(userId: string, schoolCompanyId: string, roleId?: string) {
     try {
@@ -3791,121 +3798,121 @@ export const moodleService = {
     }
   },
 
-  async getSchoolSettings(schoolCompanyId: string) {
-    try {
-      console.log(`🏫 Fetching school settings for company ${schoolCompanyId}...`);
+  // async getSchoolSettings(schoolCompanyId: string) {
+  //   try {
+  //     console.log(`🏫 Fetching school settings for company ${schoolCompanyId}...`);
       
-      const [allCompanies, allUsers, allCourses, allEnrollments] = await Promise.all([
-        this.getCompanies(),
-        this.getAllUsers(),
-        this.getAllCourses(),
-        this.getCourseEnrollments()
-      ]);
+  //     const [allCompanies, allUsers, allCourses, allEnrollments] = await Promise.all([
+  //       this.getCompanies(),
+  //       this.getAllUsers(),
+  //       this.getAllCourses(),
+  //       this.getCourseEnrollments()
+  //     ]);
 
-      const schoolCompany = allCompanies.find(company => company.id.toString() === schoolCompanyId);
-      const schoolUsers = allUsers.filter(user => user.companyid?.toString() === schoolCompanyId);
+  //     const schoolCompany = allCompanies.find(company => company.id.toString() === schoolCompanyId);
+  //     const schoolUsers = allUsers.filter(user => user.companyid?.toString() === schoolCompanyId);
       
-      // Get courses associated with this school's users
-      const schoolUserIds = schoolUsers.map(user => user.id);
-      const schoolCourses = allCourses.filter(course => {
-        // Find enrollments for this course that belong to school users
-        const courseEnrollments = allEnrollments.filter(enrollment => 
-          enrollment.courseid === course.id && schoolUserIds.includes(enrollment.userid)
-        );
-        return courseEnrollments.length > 0;
-      });
+  //     // Get courses associated with this school's users
+  //     const schoolUserIds = schoolUsers.map(user => user.id);
+  //     const schoolCourses = allCourses.filter(course => {
+  //       // Find enrollments for this course that belong to school users
+  //       const courseEnrollments = allEnrollments.filter(enrollment => 
+  //         enrollment.courseid === course.id && schoolUserIds.includes(enrollment.userid)
+  //       );
+  //       return courseEnrollments.length > 0;
+  //     });
 
-      // Get detailed user breakdown
-      const schoolTeachers = schoolUsers.filter(user => {
-        const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher';
-      });
+  //     // Get detailed user breakdown
+  //     const schoolTeachers = schoolUsers.filter(user => {
+  //       const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
+  //       return role === 'teacher';
+  //     });
 
-      const schoolStudents = schoolUsers.filter(user => {
-        const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'student';
-      });
+  //     const schoolStudents = schoolUsers.filter(user => {
+  //       const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
+  //       return role === 'student';
+  //     });
 
-      const schoolAdmins = schoolUsers.filter(user => {
-        const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'school_admin';
-      });
+  //     const schoolAdmins = schoolUsers.filter(user => {
+  //       const role = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
+  //       return role === 'school_admin';
+  //     });
 
-      const schoolSettings = {
-        schoolInfo: {
-          companyId: schoolCompanyId,
-          companyName: schoolCompany?.name || 'Unknown School',
-          companyShortname: schoolCompany?.shortname || 'Unknown',
-          address: schoolCompany?.address || 'Address not available',
-          email: schoolCompany?.email || 'Email not available',
-          phone: schoolCompany?.phone1 || 'Phone not available',
-          description: schoolCompany?.description || 'No description available',
-          city: schoolCompany?.city || 'City not available',
-          country: schoolCompany?.country || 'Country not available',
-          url: schoolCompany?.url || 'Website not available',
-          logo: schoolCompany?.companylogo || schoolCompany?.logo_url || schoolCompany?.logourl || null,
-          suspended: schoolCompany?.suspended || false,
-          userCount: schoolCompany?.usercount || schoolUsers.length,
-          courseCount: schoolCompany?.coursecount || schoolCourses.length
-        },
-        userStatistics: {
-          totalUsers: schoolUsers.length,
-          teachers: schoolTeachers.length,
-          students: schoolStudents.length,
-          admins: schoolAdmins.length,
-          activeUsers: schoolUsers.filter(user => user.lastaccess && user.lastaccess > Date.now() / 1000 - 86400 * 30).length, // Active in last 30 days
-          inactiveUsers: schoolUsers.filter(user => !user.lastaccess || user.lastaccess <= Date.now() / 1000 - 86400 * 30).length
-        },
-        courseStatistics: {
-          totalCourses: schoolCourses.length,
-          activeCourses: schoolCourses.filter(course => course.visible === 1).length,
-          inactiveCourses: schoolCourses.filter(course => course.visible === 0).length,
-          coursesWithEnrollments: schoolCourses.filter(course => {
-            const courseEnrollments = allEnrollments.filter(enrollment => 
-              enrollment.courseid === course.id && schoolUserIds.includes(enrollment.userid)
-            );
-            return courseEnrollments.length > 0;
-          }).length
-        },
-        permissions: {
-          canManageUsers: true,
-          canManageRoles: true,
-          canManageCourses: true,
-          canManageEnrollments: true,
-          canViewReports: true,
-          canManageSettings: true
-        },
-        settings: {
-          allowUserRegistration: true,
-          requireApproval: false,
-          maxUsers: 1000,
-          maxCourses: 100,
-          autoEnrollment: false,
-          emailNotifications: true,
-          allowGuestAccess: false,
-          requireEmailVerification: true,
-          allowProfileEditing: true,
-          enableNotifications: true
-        },
-        recentActivity: {
-          lastUserLogin: Math.max(...schoolUsers.map(user => user.lastaccess || 0)),
-          recentEnrollments: allEnrollments.filter(enrollment => 
-            schoolUserIds.includes(enrollment.userid) && 
-            enrollment.timecreated > Date.now() / 1000 - 86400 * 7 // Last 7 days
-          ).length,
-          newUsersThisMonth: schoolUsers.filter(user => 
-            user.lastaccess && user.lastaccess > Date.now() / 1000 - 86400 * 30
-          ).length
-        }
-      };
+  //     const schoolSettings = {
+  //       schoolInfo: {
+  //         companyId: schoolCompanyId,
+  //         companyName: schoolCompany?.name || 'Unknown School',
+  //         companyShortname: schoolCompany?.shortname || 'Unknown',
+  //         address: schoolCompany?.address || 'Address not available',
+  //         email: schoolCompany?.email || 'Email not available',
+  //         phone: schoolCompany?.phone1 || 'Phone not available',
+  //         description: schoolCompany?.description || 'No description available',
+  //         city: schoolCompany?.city || 'City not available',
+  //         country: schoolCompany?.country || 'Country not available',
+  //         url: schoolCompany?.url || 'Website not available',
+  //         logo: schoolCompany?.companylogo || schoolCompany?.logo_url || schoolCompany?.logourl || null,
+  //         suspended: schoolCompany?.suspended || false,
+  //         userCount: schoolCompany?.usercount || schoolUsers.length,
+  //         courseCount: schoolCompany?.coursecount || schoolCourses.length
+  //       },
+  //       userStatistics: {
+  //         totalUsers: schoolUsers.length,
+  //         teachers: schoolTeachers.length,
+  //         students: schoolStudents.length,
+  //         admins: schoolAdmins.length,
+  //         activeUsers: schoolUsers.filter(user => user.lastaccess && user.lastaccess > Date.now() / 1000 - 86400 * 30).length, // Active in last 30 days
+  //         inactiveUsers: schoolUsers.filter(user => !user.lastaccess || user.lastaccess <= Date.now() / 1000 - 86400 * 30).length
+  //       },
+  //       courseStatistics: {
+  //         totalCourses: schoolCourses.length,
+  //         activeCourses: schoolCourses.filter(course => course.visible === 1).length,
+  //         inactiveCourses: schoolCourses.filter(course => course.visible === 0).length,
+  //         coursesWithEnrollments: schoolCourses.filter(course => {
+  //           const courseEnrollments = allEnrollments.filter(enrollment => 
+  //             enrollment.courseid === course.id && schoolUserIds.includes(enrollment.userid)
+  //           );
+  //           return courseEnrollments.length > 0;
+  //         }).length
+  //       },
+  //       permissions: {
+  //         canManageUsers: true,
+  //         canManageRoles: true,
+  //         canManageCourses: true,
+  //         canManageEnrollments: true,
+  //         canViewReports: true,
+  //         canManageSettings: true
+  //       },
+  //       settings: {
+  //         allowUserRegistration: true,
+  //         requireApproval: false,
+  //         maxUsers: 1000,
+  //         maxCourses: 100,
+  //         autoEnrollment: false,
+  //         emailNotifications: true,
+  //         allowGuestAccess: false,
+  //         requireEmailVerification: true,
+  //         allowProfileEditing: true,
+  //         enableNotifications: true
+  //       },
+  //       recentActivity: {
+  //         lastUserLogin: Math.max(...schoolUsers.map(user => user.lastaccess || 0)),
+  //         recentEnrollments: allEnrollments.filter(enrollment => 
+  //           schoolUserIds.includes(enrollment.userid) && 
+  //           enrollment.timecreated > Date.now() / 1000 - 86400 * 7 // Last 7 days
+  //         ).length,
+  //         newUsersThisMonth: schoolUsers.filter(user => 
+  //           user.lastaccess && user.lastaccess > Date.now() / 1000 - 86400 * 30
+  //         ).length
+  //       }
+  //     };
 
-      console.log('✅ School settings fetched for company:', schoolSettings.schoolInfo.companyName);
-      return schoolSettings;
-    } catch (error) {
-      console.error('❌ Error fetching school settings:', error);
-      return null;
-    }
-  },
+  //     console.log('✅ School settings fetched for company:', schoolSettings.schoolInfo.companyName);
+  //     return schoolSettings;
+  //   } catch (error) {
+  //     console.error('❌ Error fetching school settings:', error);
+  //     return null;
+  //   }
+  // },
 
   async updateSchoolSettings(schoolCompanyId: string, settings: any) {
     try {
@@ -4503,66 +4510,66 @@ export const moodleService = {
   },
 
   // Function to assign user to school
-  async assignUserToSchool(userId: string, companyId: string, roleId?: string) {
-    try {
-      console.log(`👤 Assigning user ${userId} to company ${companyId} with role ${roleId}`);
+  // async assignUserToSchool(userId: string, companyId: string, roleId?: string) {
+  //   try {
+  //     console.log(`👤 Assigning user ${userId} to company ${companyId} with role ${roleId}`);
       
-      // This would typically call a Moodle API to assign user to company
-      // For now, we'll simulate the operation
+  //     // This would typically call a Moodle API to assign user to company
+  //     // For now, we'll simulate the operation
       
-      return {
-        success: true,
-        message: `User successfully assigned to school`
-      };
-    } catch (error) {
-      console.error('❌ Error assigning user to school:', error);
-      return {
-        success: false,
-        message: 'Failed to assign user to school'
-      };
-    }
-  },
+  //     return {
+  //       success: true,
+  //       message: `User successfully assigned to school`
+  //     };
+  //   } catch (error) {
+  //     console.error('❌ Error assigning user to school:', error);
+  //     return {
+  //       success: false,
+  //       message: 'Failed to assign user to school'
+  //     };
+  //   }
+  // },
 
   // Function to remove user from school
-  async removeUserFromSchool(userId: string, companyId: string) {
-    try {
-      console.log(`👤 Removing user ${userId} from company ${companyId}`);
+  // async removeUserFromSchool(userId: string, companyId: string) {
+  //   try {
+  //     console.log(`👤 Removing user ${userId} from company ${companyId}`);
       
-      // This would typically call a Moodle API to remove user from company
-      // For now, we'll simulate the operation
+  //     // This would typically call a Moodle API to remove user from company
+  //     // For now, we'll simulate the operation
       
-      return {
-        success: true,
-        message: `User successfully removed from school`
-      };
-    } catch (error) {
-      console.error('❌ Error removing user from school:', error);
-      return {
-        success: false,
-        message: 'Failed to remove user from school'
-      };
-    }
-  },
+  //     return {
+  //       success: true,
+  //       message: `User successfully removed from school`
+  //     };
+  //   } catch (error) {
+  //     console.error('❌ Error removing user from school:', error);
+  //     return {
+  //       success: false,
+  //       message: 'Failed to remove user from school'
+  //     };
+  //   }
+  // },
 
   // Function to assign role to school user
-  async assignRoleToSchoolUser(userId: string, roleId: string, companyId: string) {
-    try {
-      console.log(`🔧 Assigning role ${roleId} to user ${userId} in company ${companyId}`);
+//   async assignRoleToSchoolUser(userId: string, roleId: string, companyId: string) {
+//     try {
+//       console.log(`🔧 Assigning role ${roleId} to user ${userId} in company ${companyId}`);
       
-      // This would typically call a Moodle API to assign role
-      // For now, we'll simulate the operation
+//       // This would typically call a Moodle API to assign role
+//       // For now, we'll simulate the operation
       
-      return {
-        success: true,
-        message: `Role successfully assigned to user`
-      };
-    } catch (error) {
-      console.error('❌ Error assigning role to school user:', error);
-      return {
-        success: false,
-  }
-};
-  }
+//       return {
+//         success: true,
+//         message: `Role successfully assigned to user`
+//       };
+//     } catch (error) {
+//       console.error('❌ Error assigning role to school user:', error);
+//       return {
+//         success: false,
+//   }
+// };
+//   }
 };
 
 export default moodleService;
