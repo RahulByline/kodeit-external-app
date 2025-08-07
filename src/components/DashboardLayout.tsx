@@ -96,6 +96,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           title: 'DASHBOARD',
           items: [
             { name: 'School Management Dashboard', icon: LayoutDashboard, path: '/dashboard/school-admin' },
+            { name: 'School Management', icon: School, path: '/dashboard/school-admin/school-management' },
             { name: 'Community', icon: Users, path: '/dashboard/school-admin/community' },
             { name: 'Enrollments', icon: GraduationCap, path: '/dashboard/school-admin/enrollments' },
           ]
@@ -147,6 +148,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           title: 'STUDENTS',
           items: [
             { name: 'My Students', icon: Users, path: '/dashboard/teacher/students' },
+            { name: 'Groups', icon: Users, path: '/dashboard/teacher/groups' },
             { name: 'Performance', icon: BarChart3, path: '/dashboard/teacher/performance' },
           ]
         },
