@@ -1,20 +1,22 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-100 shadow-sm">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <div className="flex items-center">
-            <img 
-              src="/logo.png" 
-              alt="Kodeit Logo" 
-              className="h-8 w-auto"
+          <div className="flex items-center ml-[-150px]">
+            <img
+              src="/logo.png"
+              alt="Kodeit Logo"
+              className="h-20 w-auto"
             />
           </div>
 
@@ -32,14 +34,16 @@ const Header = () => {
           </nav>
 
           {/* Desktop CTA Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
-            <Button variant="ghost" size="sm" className="text-gray-700">
-              Login
-            </Button>
-            <Button variant="hero" size="sm">
-              Get Started
-            </Button>
-          </div>
+          <div className="hidden md:flex items-center space-x-4 mr-[-100px]">
+  <Button
+    variant="hero"
+    size="lg"
+    className="h-12 px-6"
+    onClick={() => navigate("/dashboards")}
+  >
+    Access Dashboard
+  </Button>
+</div>
 
           {/* Mobile Menu Button */}
           <div className="flex items-center space-x-2 md:hidden">

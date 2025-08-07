@@ -610,7 +610,6 @@ export const moodleService = {
     } else {
       console.log(`❌ No IOMAD roles found for user ${username}`);
     }
-
     // Tier 2: Fallback for specific known users
     if (username === 'school_admin1' || username === 'kodeit_admin' || username === 'webservice_user') {
       console.log(`✅ User ${username} detected as school admin (known user)`);
@@ -1411,7 +1410,7 @@ export const moodleService = {
       console.log('👥 Enrollments in teacher courses:', teacherCourseEnrollments.length);
       
       // Get unique student IDs enrolled in teacher's courses
-      const enrolledStudentIds = [...new Set(teacherCourseEnrollments.map(enrollment => enrollment.userId))];
+      const enrolledStudentIds = Array.from(new Set(teacherCourseEnrollments.map(enrollment => enrollment.userId)));
       
       console.log('🎓 Unique students enrolled in teacher courses:', enrolledStudentIds.length);
       
