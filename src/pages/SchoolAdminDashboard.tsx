@@ -129,22 +129,50 @@ const SchoolAdminDashboard: React.FC = () => {
       
       console.log('🔄 Fetching school-specific data for school admin...');
       
-      // Get the current user's profile to determine their company/school
-      const currentUser = await moodleService.getProfile();
-      const schoolAdminCompanyId = currentUser?.companyid;
+
+      // Get current user's company first
+      const currentUserCompany = await moodleService.getCurrentUserCompany();
+      console.log('Current user company:', currentUserCompany);
       
-      console.log('🏫 School Admin Company ID:', schoolAdminCompanyId);
-      
-      // Fetch school-specific data using the school admin's company ID
-      const schoolData = await moodleService.getSchoolAdminData(currentUser?.id || '1');
-      
-      if (!schoolData) {
-        console.error('❌ No school data found');
-        setError('Could not fetch school-specific data');
-        return;
-      }
-      
-      console.log('✅ School-specific data fetched:', schoolData);
+      // Fetch all real data from Moodle API
+      const [
+        allUsers, 
+        allCourses, 
+        allCompanies, 
+        allEnrollments, 
+        companyManagers
+      ] = await Promise.all([
+        moodleService.getAllUsers(),
+        moodleService.getAllCourses(),
+        moodleService.getCompanies(),
+        moodleService.getCourseEnrollments(),
+        moodleService.getCompanyManagers()
+      ]);
+
+      console.log('✅ Real data fetched:', {
+        users: allUsers.length,
+        courses: allCourses.length,
+        companies: allCompanies.length,
+        enrollments: allEnrollments.length,
+        companyManagers: companyManagers.length,
+        currentUserCompany: currentUserCompany?.name
+      });
+
+      // Process real data
+      const processedUsers = allUsers.map(user => ({
+        id: user.id,
+        username: user.username,
+        fullname: user.fullname,
+        email: user.email,
+        lastaccess: user.lastaccess,
+        role: moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []),
+        profileImage: user.profileimageurl || user.profileimage || '/placeholder.svg',
+        firstname: user.firstname,
+        lastname: user.lastname,
+        phone: user.phone1 || user.phone2,
+        department: user.department || 'General'
+      }));
+
 
       // Use school-specific data
       const schoolUsers = schoolData.schoolUsers;
@@ -173,20 +201,26 @@ const SchoolAdminDashboard: React.FC = () => {
         phone: '',
         department: 'General'
       }));
+
+
+      // Filter users by current user's company if available
+      let filteredUsers = processedUsers;
+      if (currentUserCompany) {
+        filteredUsers = processedUsers.filter(user => user.companyid === currentUserCompany.id);
+        console.log(`Filtered users for company ${currentUserCompany.name}: ${filteredUsers.length} users`);
+      } else {
+        console.log('No company filter applied, showing all users');
+      }
+
+      // Filter users by role
+      const teachers = filteredUsers.filter(user => 
+        user.role === 'teacher' || user.role === 'trainer'
+      );
       
-      const students = schoolUsers.students.map(student => ({
-        id: student.id,
-        username: student.username,
-        fullname: student.fullname,
-        email: student.email,
-        lastaccess: student.lastaccess,
-        role: 'student',
-        profileImage: student.profileImage || '/placeholder.svg',
-        firstname: student.fullname.split(' ')[0],
-        lastname: student.fullname.split(' ').slice(1).join(' '),
-        phone: '',
-        department: 'General'
-      }));
+      const students = filteredUsers.filter(user => 
+        user.role === 'student'
+      );
+
 
       // Calculate school-specific statistics
       const totalEnrollments = schoolOverview.totalEnrollments;
