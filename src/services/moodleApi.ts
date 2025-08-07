@@ -231,12 +231,42 @@ export const moodleService = {
           console.log('🏫 Company Response for user:', userData.username, companyResponse.data);
           
           // The response is an object containing a 'companies' array.
-          // We'll take the first one as the primary company.
+          // For school admins, we need to determine the correct company association
           if (companyResponse.data && Array.isArray(companyResponse.data.companies) && companyResponse.data.companies.length > 0) {
-            userData.companyid = companyResponse.data.companies[0].id;
-            console.log('✅ User assigned to company:', companyResponse.data.companies[0].name, 'ID:', companyResponse.data.companies[0].id);
-          } else {
-            console.log('⚠️ No companies found for user:', userData.username);
+
+            // First, detect the user's role to determine company assignment logic
+            const detectedRole = this.detectUserRoleEnhanced(username, userData, roles);
+            
+            if (detectedRole === 'school_admin') {
+              // For school admins, try to find the company they manage
+              // Look for a company where the user has manager/principal role
+              let targetCompany = null;
+              
+              for (const company of companyResponse.data.companies) {
+                // Check if this user is a manager/principal for this company
+                // This is a heuristic - in a real system, you'd check specific permissions
+                if (company.role && (company.role.toLowerCase().includes('manager') || 
+                                   company.role.toLowerCase().includes('principal') ||
+                                   company.role.toLowerCase().includes('admin'))) {
+                  targetCompany = company;
+                  break;
+                }
+              }
+              
+              // If no specific manager role found, use the first company but log a warning
+              if (!targetCompany) {
+                console.warn(`School admin ${username} has no clear company manager role, using first company`);
+                targetCompany = companyResponse.data.companies[0];
+              }
+              
+              userData.companyid = targetCompany.id;
+              console.log(`School admin ${username} assigned to company: ${targetCompany.name} (ID: ${targetCompany.id})`);
+            } else {
+              // For non-school-admin users, use the first company as before
+              userData.companyid = companyResponse.data.companies[0].id;
+              console.log(`User ${username} assigned to company: ${companyResponse.data.companies[0].name} (ID: ${companyResponse.data.companies[0].id})`);
+            }
+
           }
         } catch (e) {
           // If company fetch fails, it might not be a company user, which is fine.
@@ -1693,6 +1723,20 @@ export const moodleService = {
         const manager = companyManagers.find(m => m.id === managerId);
         if (manager && manager.companyData) {
           targetCompany = manager.companyData;
+          console.log(`Filtering data for company: ${targetCompany.name} (ID: ${targetCompany.id})`);
+        }
+      }
+
+      // If no specific manager ID, try to get the current user's company from localStorage
+      if (!targetCompany) {
+        try {
+          const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+          if (currentUser.companyid) {
+            targetCompany = companies.find(c => c.id === currentUser.companyid);
+            console.log(`Using current user's company: ${targetCompany?.name} (ID: ${currentUser.companyid})`);
+          }
+        } catch (e) {
+          console.warn('Could not parse current user data from localStorage');
         }
       }
 
@@ -1700,6 +1744,8 @@ export const moodleService = {
       const companyUsers = targetCompany 
         ? allUsers.filter(user => user.companyid === targetCompany.id)
         : allUsers;
+
+      console.log(`Filtered users for company: ${companyUsers.length} users`);
 
       // Get teachers and students for this company
       const teachers = companyUsers.filter(user => {
@@ -1742,106 +1788,6 @@ export const moodleService = {
     }
   },
 
-  // Test function to check all users and their roles
-  async testUserRoles() {
-    try {
-      console.log('🔍 Testing IOMAD user roles...');
-      
-      // Get all users
-      const allUsers = await this.getAllUsers();
-      
-      console.log('📊 All Users with Roles:');
-      allUsers.forEach((user, index) => {
-        console.log(`${index + 1}. ${user.fullname} (${user.username})`);
-        console.log(`   ID: ${user.id}`);
-        console.log(`   Role: ${user.role}`);
-        console.log(`   IOMAD Roles:`, user.roles);
-        console.log(`   Email: ${user.email}`);
-        console.log('---');
-      });
-      
-      // Group users by role with fallback logic
-      const teachers = allUsers.filter(u => u.role === 'teacher' || u.role === 'trainer');
-      const students = allUsers.filter(u => u.role === 'student');
-      const admins = allUsers.filter(u => u.role === 'admin' || u.role === 'school_admin');
-      
-      // If no teachers found, try alternative roles
-      let alternativeTeachers: any[] = [];
-      if (teachers.length === 0) {
-        console.log('⚠️ No teachers found, checking alternative roles...');
-        alternativeTeachers = allUsers.filter(user => 
-          user.role === 'editingteacher' || 
-          user.role === 'student' || 
-          user.role === 'teachers' ||
-          user.username?.toLowerCase().includes('teacher') ||
-          user.username?.toLowerCase().includes('trainer')
-        );
-        console.log(`Found ${alternativeTeachers.length} alternative teachers:`, alternativeTeachers.map(u => u.username));
-      }
-      
-      console.log('📈 Role Statistics:');
-      console.log(`Teachers: ${teachers.length}`);
-      console.log(`Students: ${students.length}`);
-      console.log(`Admins: ${admins.length}`);
-      console.log(`Alternative Teachers: ${alternativeTeachers.length}`);
-      
-      // Show sample users for each role
-      console.log('\n👨‍🏫 Sample Teachers:');
-      teachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username})`));
-      
-      console.log('\n👨‍🎓 Sample Students:');
-      students.slice(0, 3).forEach(s => console.log(`- ${s.fullname} (${s.username})`));
-      
-      console.log('\n👨‍💼 Sample Admins:');
-      admins.slice(0, 3).forEach(a => console.log(`- ${a.fullname} (${a.username})`));
-      
-      // Test school admin functionality
-      console.log('\n🏫 Testing School Admin Functionality:');
-      const schoolAdmins = admins.filter(a => a.role === 'school_admin');
-      console.log(`Found ${schoolAdmins.length} school admins`);
-      
-      if (schoolAdmins.length > 0) {
-        const testSchoolAdmin = schoolAdmins[0];
-        console.log(`Testing with school admin: ${testSchoolAdmin.fullname} (${testSchoolAdmin.username})`);
-        
-        try {
-          const schoolData = await this.getSchoolAdminData(testSchoolAdmin.id.toString());
-          console.log('✅ School data fetched successfully:', {
-            schoolName: schoolData?.schoolInfo?.companyName,
-            totalUsers: schoolData?.overview?.totalUsers,
-            totalTeachers: schoolData?.overview?.totalTeachers,
-            totalStudents: schoolData?.overview?.totalStudents
-          });
-        } catch (schoolError) {
-          console.error('❌ Error fetching school data:', schoolError);
-        }
-      } else {
-        console.log('⚠️ No school admins found in the system');
-      }
-      
-      if (alternativeTeachers.length > 0) {
-        console.log('\n🔍 Alternative Teachers:');
-        alternativeTeachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username}) - Role: ${t.role}`));
-      }
-      
-      return {
-        totalUsers: allUsers.length,
-        teachers: teachers.length,
-        students: students.length,
-        admins: admins.length,
-        alternativeTeachers: alternativeTeachers.length,
-        sampleUsers: {
-          teachers: teachers.slice(0, 3),
-          students: students.slice(0, 3),
-          admins: admins.slice(0, 3),
-          alternativeTeachers: alternativeTeachers.slice(0, 3)
-        }
-      };
-    } catch (error) {
-      console.error('❌ Error testing user roles:', error);
-      return null;
-    }
-  },
 
   // Function to assign roles to users
   async assignRoleToUser(userId: number, roleId: number, contextLevel: string = 'system', contextId?: number, instanceId?: number) {
@@ -2170,6 +2116,62 @@ export const moodleService = {
       console.error('❌ Error in user search tests:', error);
     }
   },
+
+
+  // Function to get current user's company data
+  async getCurrentUserCompany() {
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      if (!currentUser.id) {
+        console.warn('No current user found in localStorage');
+        return null;
+      }
+
+      console.log('Getting company data for current user:', currentUser.username);
+      
+      // Fetch the user's companies
+      const companyResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'block_iomad_company_admin_get_user_companies',
+          userid: currentUser.id,
+        },
+      });
+
+      if (companyResponse.data && Array.isArray(companyResponse.data.companies) && companyResponse.data.companies.length > 0) {
+        // Use the same logic as in authenticateUser to determine the correct company
+        const detectedRole = currentUser.role || 'student';
+        
+        if (detectedRole === 'school_admin') {
+          // For school admins, try to find the company they manage
+          let targetCompany = null;
+          
+          for (const company of companyResponse.data.companies) {
+            if (company.role && (company.role.toLowerCase().includes('manager') || 
+                               company.role.toLowerCase().includes('principal') ||
+                               company.role.toLowerCase().includes('admin'))) {
+              targetCompany = company;
+              break;
+            }
+          }
+          
+          if (!targetCompany) {
+            console.warn(`School admin ${currentUser.username} has no clear company manager role, using first company`);
+            targetCompany = companyResponse.data.companies[0];
+          }
+          
+          console.log(`Current user company: ${targetCompany.name} (ID: ${targetCompany.id})`);
+          return targetCompany;
+        } else {
+          // For non-school-admin users, use the first company
+          const company = companyResponse.data.companies[0];
+          console.log(`Current user company: ${company.name} (ID: ${company.id})`);
+          return company;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting current user company:', error);
 
   // Group Management Functions
   async getCourseGroups(courseId: string) {
@@ -2654,10 +2656,84 @@ export const moodleService = {
       return analytics;
     } catch (error) {
       console.error('❌ Error fetching detailed analytics:', error);
+
       return null;
     }
   },
 
+  // Test function to check all users and their roles
+  async testUserRoles() {
+    try {
+      console.log('🔍 Testing IOMAD user roles...');
+      
+      // Get all users
+      const allUsers = await this.getAllUsers();
+      
+      console.log('📊 All Users with Roles:');
+      allUsers.forEach((user, index) => {
+        console.log(`${index + 1}. ${user.fullname} (${user.username})`);
+        console.log(`   ID: ${user.id}`);
+        console.log(`   Role: ${user.role}`);
+        console.log(`   IOMAD Roles:`, user.roles);
+        console.log(`   Email: ${user.email}`);
+        console.log('---');
+      });
+      
+      // Group users by role with fallback logic
+      const teachers = allUsers.filter(u => u.role === 'teacher' || u.role === 'trainer');
+      const students = allUsers.filter(u => u.role === 'student');
+      const admins = allUsers.filter(u => u.role === 'admin' || u.role === 'school_admin');
+      
+      // If no teachers found, try alternative roles
+      let alternativeTeachers: any[] = [];
+      if (teachers.length === 0) {
+        console.log('⚠️ No teachers found, checking alternative roles...');
+        alternativeTeachers = allUsers.filter(user => 
+          user.role === 'editingteacher' || 
+          user.role === 'student' || 
+          user.role === 'teachers' ||
+          user.username?.toLowerCase().includes('teacher') ||
+          user.username?.toLowerCase().includes('trainer')
+        );
+        console.log(`Found ${alternativeTeachers.length} alternative teachers:`, alternativeTeachers.map(u => u.username));
+      }
+      
+      console.log('📈 Role Statistics:');
+      console.log(`Teachers: ${teachers.length}`);
+      console.log(`Students: ${students.length}`);
+      console.log(`Admins: ${admins.length}`);
+      console.log(`Alternative Teachers: ${alternativeTeachers.length}`);
+      
+      // Show sample users for each role
+      console.log('\n👨‍🏫 Sample Teachers:');
+      teachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username})`));
+      
+      console.log('\n👨‍🎓 Sample Students:');
+      students.slice(0, 3).forEach(s => console.log(`- ${s.fullname} (${s.username})`));
+      
+      console.log('\n👨‍💼 Sample Admins:');
+      admins.slice(0, 3).forEach(a => console.log(`- ${a.fullname} (${a.username})`));
+      
+      if (alternativeTeachers.length > 0) {
+        console.log('\n🔍 Alternative Teachers:');
+        alternativeTeachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username}) - Role: ${t.role}`));
+      }
+      
+      return {
+        totalUsers: allUsers.length,
+        teachers: teachers.length,
+        students: students.length,
+        admins: admins.length,
+        alternativeTeachers: alternativeTeachers.length,
+        sampleUsers: {
+          teachers: teachers.slice(0, 3),
+          students: students.slice(0, 3),
+          admins: admins.slice(0, 3),
+          alternativeTeachers: alternativeTeachers.slice(0, 3)
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error testing user roles:', error);
   async getTeacherCourseProgress(teacherId?: string) {
     try {
       console.log('📈 Fetching teacher course progress from IOMAD API...');
@@ -3947,136 +4023,136 @@ export const moodleService = {
     }
   },
 
-  async getComprehensiveUserSettings(userId: string) {
-    try {
-      console.log(`⚙️ Fetching comprehensive user settings for user ${userId}...`);
+//   async getComprehensiveUserSettings(userId: string) {
+//     try {
+//       console.log(`⚙️ Fetching comprehensive user settings for user ${userId}...`);
       
-      const [allUsers, allCompanies, allRoles, allCourses, allEnrollments] = await Promise.all([
-        this.getAllUsers(),
-        this.getCompanies(),
-        this.getAvailableRoles(),
-        this.getAllCourses(),
-        this.getCourseEnrollments()
-      ]);
+//       const [allUsers, allCompanies, allRoles, allCourses, allEnrollments] = await Promise.all([
+//         this.getAllUsers(),
+//         this.getCompanies(),
+//         this.getAvailableRoles(),
+//         this.getAllCourses(),
+//         this.getCourseEnrollments()
+//       ]);
 
-      const user = allUsers.find(u => u.id.toString() === userId);
-      if (!user) {
-        throw new Error('User not found');
-      }
+//       const user = allUsers.find(u => u.id.toString() === userId);
+//       if (!user) {
+//         throw new Error('User not found');
+//       }
 
-      const userCompany = user.companyid ? allCompanies.find(c => c.id === user.companyid) : null;
-      const detectedRole = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
+//       const userCompany = user.companyid ? allCompanies.find(c => c.id === user.companyid) : null;
+//       const detectedRole = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
 
-      // Get user's courses and enrollments
-      const userEnrollments = allEnrollments.filter(enrollment => enrollment.userid === user.id);
-      const userCourses = allCourses.filter(course => 
-        userEnrollments.some(enrollment => enrollment.courseid === course.id)
-      );
+//       // Get user's courses and enrollments
+//       const userEnrollments = allEnrollments.filter(enrollment => enrollment.userid === user.id);
+//       const userCourses = allCourses.filter(course => 
+//         userEnrollments.some(enrollment => enrollment.courseid === course.id)
+//       );
 
-      // Get user's activity data
-      const userActivity = {
-        lastLogin: user.lastaccess,
-        totalCourses: userCourses.length,
-        activeCourses: userCourses.filter(course => course.visible === 1).length,
-        completedCourses: userCourses.filter(course => course.enddate && course.enddate < Date.now() / 1000).length,
-        totalEnrollments: userEnrollments.length
-      };
+//       // Get user's activity data
+//       const userActivity = {
+//         lastLogin: user.lastaccess,
+//         totalCourses: userCourses.length,
+//         activeCourses: userCourses.filter(course => course.visible === 1).length,
+//         completedCourses: userCourses.filter(course => course.enddate && course.enddate < Date.now() / 1000).length,
+//         totalEnrollments: userEnrollments.length
+//       };
 
-      // Get security settings
-      const securitySettings = {
-        twoFactorEnabled: false, // Would be fetched from security API
-        passwordLastChanged: user.timecreated ? new Date(parseInt(user.timecreated) * 1000).toISOString() : null,
-        sessionTimeout: 30, // minutes
-        loginHistory: [
-          {
-            timestamp: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : null,
-            ip: '192.168.1.1', // Would be fetched from logs
-            location: 'Unknown',
-            device: 'Web Browser'
-          }
-        ],
-        failedLoginAttempts: 0,
-        accountLocked: user.suspended === '1'
-      };
+//       // Get security settings
+//       const securitySettings = {
+//         twoFactorEnabled: false, // Would be fetched from security API
+//         passwordLastChanged: user.timecreated ? new Date(parseInt(user.timecreated) * 1000).toISOString() : null,
+//         sessionTimeout: 30, // minutes
+//         loginHistory: [
+//           {
+//             timestamp: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : null,
+//             ip: '192.168.1.1', // Would be fetched from logs
+//             location: 'Unknown',
+//             device: 'Web Browser'
+//           }
+//         ],
+//         failedLoginAttempts: 0,
+//         accountLocked: user.suspended === '1'
+//       };
 
-      // Get notification preferences
-      const notificationSettings = {
-        emailNotifications: true,
-        pushNotifications: true,
-        courseUpdates: true,
-        assignmentReminders: true,
-        gradeUpdates: true,
-        systemAlerts: false,
-        weeklyReports: false,
-        marketingEmails: false
-      };
+//       // Get notification preferences
+//       const notificationSettings = {
+//         emailNotifications: true,
+//         pushNotifications: true,
+//         courseUpdates: true,
+//         assignmentReminders: true,
+//         gradeUpdates: true,
+//         systemAlerts: false,
+//         weeklyReports: false,
+//         marketingEmails: false
+//       };
 
-      // Get appearance settings
-      const appearanceSettings = {
-        theme: 'light',
-        fontSize: 'medium',
-        compactMode: false,
-        showAnimations: true,
-        colorScheme: 'blue',
-        sidebarCollapsed: false
-      };
+//       // Get appearance settings
+//       const appearanceSettings = {
+//         theme: 'light',
+//         fontSize: 'medium',
+//         compactMode: false,
+//         showAnimations: true,
+//         colorScheme: 'blue',
+//         sidebarCollapsed: false
+//       };
 
-      // Get API configuration (for admin users)
-      const apiConfiguration = {
-        apiKey: detectedRole === 'admin' || detectedRole === 'school_admin' ? 'sk-...' + Math.random().toString(36).substr(2, 8) : null,
-        apiEndpoint: 'https://kodeit.legatoserver.com/webservice/rest/server.php',
-        rateLimit: '1000 requests/hour',
-        lastUsed: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : null,
-        permissions: detectedRole === 'admin' ? ['read', 'write', 'delete'] : 
-                    detectedRole === 'school_admin' ? ['read', 'write'] : ['read']
-      };
+//       // Get API configuration (for admin users)
+//       const apiConfiguration = {
+//         apiKey: detectedRole === 'admin' || detectedRole === 'school_admin' ? 'sk-...' + Math.random().toString(36).substr(2, 8) : null,
+//         apiEndpoint: 'https://kodeit.legatoserver.com/webservice/rest/server.php',
+//         rateLimit: '1000 requests/hour',
+//         lastUsed: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : null,
+//         permissions: detectedRole === 'admin' ? ['read', 'write', 'delete'] : 
+//                     detectedRole === 'school_admin' ? ['read', 'write'] : ['read']
+//       };
 
-      const comprehensiveSettings = {
-        profile: {
-          id: user.id,
-          username: user.username,
-          firstname: user.firstname,
-          lastname: user.lastname,
-          fullname: user.fullname,
-          email: user.email,
-          phone: user.phone1 || user.phone2 || '',
-          profileImage: user.profileimageurl,
-          role: detectedRole,
-          department: user.department || 'General',
-          lastAccess: user.lastaccess,
-          createdAt: user.timecreated,
-          status: user.suspended === '1' ? 'suspended' : 'active',
-          company: userCompany ? {
-            id: userCompany.id,
-            name: userCompany.name,
-            shortname: userCompany.shortname
-          } : null,
-          bio: user.description || '',
-          location: user.city || '',
-          timezone: 'UTC-5',
-          language: 'English'
-        },
-        activity: userActivity,
-        security: securitySettings,
-        notifications: notificationSettings,
-        appearance: appearanceSettings,
-        api: apiConfiguration,
-        preferences: {
-          timezone: 'UTC-5',
-          language: 'English',
-          dateFormat: 'MM/DD/YYYY',
-          timeFormat: '12-hour',
-          currency: 'USD'
-        }
-      };
+//       const comprehensiveSettings = {
+//         profile: {
+//           id: user.id,
+//           username: user.username,
+//           firstname: user.firstname,
+//           lastname: user.lastname,
+//           fullname: user.fullname,
+//           email: user.email,
+//           phone: user.phone1 || user.phone2 || '',
+//           profileImage: user.profileimageurl,
+//           role: detectedRole,
+//           department: user.department || 'General',
+//           lastAccess: user.lastaccess,
+//           createdAt: user.timecreated,
+//           status: user.suspended === '1' ? 'suspended' : 'active',
+//           company: userCompany ? {
+//             id: userCompany.id,
+//             name: userCompany.name,
+//             shortname: userCompany.shortname
+//           } : null,
+//           bio: user.description || '',
+//           location: user.city || '',
+//           timezone: 'UTC-5',
+//           language: 'English'
+//         },
+//         activity: userActivity,
+//         security: securitySettings,
+//         notifications: notificationSettings,
+//         appearance: appearanceSettings,
+//         api: apiConfiguration,
+//         preferences: {
+//           timezone: 'UTC-5',
+//           language: 'English',
+//           dateFormat: 'MM/DD/YYYY',
+//           timeFormat: '12-hour',
+//           currency: 'USD'
+//         }
+//       };
 
-      console.log('✅ Comprehensive user settings fetched for:', user.fullname);
-      return comprehensiveSettings;
-    } catch (error) {
-      console.error('❌ Error fetching comprehensive user settings:', error);
-      return null;
-    }
-  },
+//       console.log('✅ Comprehensive user settings fetched for:', user.fullname);
+//       return comprehensiveSettings;
+//     } catch (error) {
+//       console.error('❌ Error fetching comprehensive user settings:', error);
+//       return null;
+//     }
+//   },
 
   async getSchoolComprehensiveSettings(schoolCompanyId: string) {
     try {
@@ -4225,6 +4301,7 @@ export const moodleService = {
       return comprehensiveSchoolSettings;
     } catch (error) {
       console.error('❌ Error fetching comprehensive school settings:', error);
+
       return null;
     }
   }

@@ -80,6 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       localStorage.setItem('moodle_token', token);
       localStorage.setItem('token', token); // Keep for compatibility
+      localStorage.setItem('currentUser', JSON.stringify(user)); // Store current user data
       setCurrentUser(user);
       setUserRole(user.role || null);
       
@@ -106,6 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserRole(null);
     localStorage.removeItem('moodle_token');
     localStorage.removeItem('token');
+    localStorage.removeItem('currentUser'); // Clear current user data
   };
 
   const updateProfile = async (profileData: Partial<UserData>): Promise<UserData | null> => {
