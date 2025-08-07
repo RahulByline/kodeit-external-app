@@ -2172,6 +2172,8 @@ export const moodleService = {
       return null;
     } catch (error) {
       console.error('Error getting current user company:', error);
+    }
+  },
 
   // Group Management Functions
   async getCourseGroups(courseId: string) {
@@ -2734,6 +2736,9 @@ export const moodleService = {
       };
     } catch (error) {
       console.error('❌ Error testing user roles:', error);
+    }
+  },
+  
   async getTeacherCourseProgress(teacherId?: string) {
     try {
       console.log('📈 Fetching teacher course progress from IOMAD API...');
