@@ -191,10 +191,30 @@ const SchoolAdminDashboard: React.FC = () => {
       });
 
 
-      // Use school-specific data
-      const schoolUsers = schoolData.schoolUsers;
-      const schoolOverview = schoolData.overview;
-      const schoolInfo = schoolData.schoolInfo;
+      // Create school-specific data structure
+      const schoolUsers = {
+        teachers: processedUsers.filter(user => 
+          user.role === 'teacher' || user.role === 'trainer'
+        ),
+        students: processedUsers.filter(user => 
+          user.role === 'student'
+        )
+      };
+
+      const schoolOverview = {
+        totalUsers: processedUsers.length,
+        totalTeachers: schoolUsers.teachers.length,
+        totalStudents: schoolUsers.students.length,
+        totalCourses: allCourses.length,
+        totalEnrollments: allEnrollments.length
+      };
+
+      const schoolInfo = {
+        companyName: currentUserCompany?.name || 'School',
+        companyId: currentUserCompany?.id || 0,
+        companyShortname: currentUserCompany?.shortname || 'SCH',
+        address: 'School Address'
+      };
       
       console.log('✅ School-specific data processed:', {
         schoolName: schoolInfo.companyName,
@@ -205,7 +225,7 @@ const SchoolAdminDashboard: React.FC = () => {
       });
 
       // Process school-specific users
-      const teachers = schoolUsers.teachers.map(teacher => ({
+      const processedTeachers = schoolUsers.teachers.map(teacher => ({
         id: teacher.id,
         username: teacher.username,
         fullname: teacher.fullname,
