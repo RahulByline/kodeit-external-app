@@ -38,6 +38,7 @@ import Certifications from "./pages/school-admin/Certifications";
 import Assessments from "./pages/school-admin/Assessments";
 import Reports from "./pages/school-admin/Reports";
 import SchoolAdminUsers from "./pages/school-admin/Users";
+import SchoolManagement from "./pages/school-admin/SchoolManagement";
 
 // Teacher pages
 import TeacherAnalytics from "./pages/teacher/Analytics";
@@ -47,6 +48,7 @@ import TeacherCalendar from "./pages/teacher/Calendar";
 import TeacherCourses from "./pages/teacher/Courses";
 import TeacherReports from "./pages/teacher/Reports";
 import TeacherStudents from "./pages/teacher/Students";
+import TeacherGroups from "./pages/teacher/Groups";
 
 // Student pages
 import StudentAssessments from "./pages/student/Assessments";
@@ -196,6 +198,11 @@ const App = () => {
                     <SchoolAdminUsers />
                   </ProtectedRoute>
                 } />
+                <Route path="/dashboard/school-admin/school-management" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolManagement />
+                  </ProtectedRoute>
+                } />
                 
                 {/* Settings Routes */}
                 <Route path="/dashboard/school-admin/settings" element={
@@ -250,6 +257,11 @@ const App = () => {
                     <TeacherStudents />
                   </ProtectedRoute>
                 } />
+                <Route path="/dashboard/teacher/groups" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherGroups />
+                  </ProtectedRoute>
+                } />
                 
                 {/* Student Section Routes */}
                 <Route path="/dashboard/student/assessments" element={
@@ -287,6 +299,9 @@ const App = () => {
                     <StudentProgress />
                   </ProtectedRoute>
                 } />
+                
+                {/* Debug Routes */}
+                <Route path="/debug/roles" element={<RoleDebug />} />
                 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
