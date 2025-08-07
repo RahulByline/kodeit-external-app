@@ -7,13 +7,14 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MyAIBuddy from "./components/MyAIBuddy";
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 import Index from "./pages/Index";
 import LoginPage from "./pages/LoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import SchoolAdminLoginPage from "./pages/SchoolAdminLoginPage";
 import TeacherLoginPage from "./pages/TeacherLoginPage";
 import StudentLoginPage from "./pages/StudentLoginPage";
-import DashboardSelection from "./pages/DashboardSelection";
 import AdminDashboard from "./pages/AdminDashboard";
 import SchoolAdminDashboard from "./pages/SchoolAdminDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
@@ -73,6 +74,12 @@ const App = () => {
 
   useEffect(() => {
     setMounted(true);
+    // Initialize AOS
+    AOS.init({
+      duration: 800,
+      once: true,
+      offset: 100,
+    });
   }, []);
 
   if (!mounted) {
@@ -96,7 +103,6 @@ const App = () => {
                 <Route path="/login/school-admin" element={<SchoolAdminLoginPage />} />
                 <Route path="/login/teacher" element={<TeacherLoginPage />} />
                 <Route path="/login/student" element={<StudentLoginPage />} />
-                <Route path="/dashboards" element={<DashboardSelection />} />
                 
                 {/* Protected Dashboard Routes */}
                 <Route path="/dashboard/admin" element={
