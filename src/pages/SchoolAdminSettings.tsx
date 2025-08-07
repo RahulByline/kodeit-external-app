@@ -37,6 +37,7 @@ import {
   Lock
 } from 'lucide-react';
 import { moodleService } from '@/services/moodleApi';
+import { useAuth } from '@/context/AuthContext';
 
 interface ProfileData {
   id: number;
@@ -51,6 +52,11 @@ interface ProfileData {
   lastAccess: string;
   createdAt: string;
   status: 'active' | 'inactive' | 'suspended';
+  company?: {
+    id: number;
+    name: string;
+    shortname: string;
+  };
 }
 
 interface SchoolData {
@@ -92,6 +98,7 @@ const SchoolAdminSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     fetchSchoolData();
@@ -100,7 +107,12 @@ const SchoolAdminSettings: React.FC = () => {
   const fetchSchoolData = async () => {
     try {
       setLoading(true);
+      if (!currentUser?.id) {
+        console.error('❌ No logged-in user found');
+        return;
+      }
       
+
       // Get current user's company first
       const currentUserCompany = await moodleService.getCurrentUserCompany();
       console.log('Current user company:', currentUserCompany);
@@ -122,13 +134,12 @@ const SchoolAdminSettings: React.FC = () => {
         targetCompany = companies[0] as any;
         console.log('No current user company found, using first company:', targetCompany);
       }
+
       
-      // Count users by role using enhanced detection
-      const teachers = users.filter((user: any) => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher' || role === 'trainer';
-      });
+      // Determine the company ID to use for school settings
+      let schoolCompanyId = currentUser?.companyid;
       
+
       const students = users.filter((user: any) => {
         const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
         return role === 'student';
@@ -234,9 +245,9 @@ const SchoolAdminSettings: React.FC = () => {
       
       console.log('✅ School Admin Settings - Dynamic data loaded for company:', targetCompany?.name);
       console.log('✅ Current user profile loaded:', processedProfileData.username);
+
     } catch (error) {
-      console.error('Error fetching school data:', error);
-      // Set default data if API fails
+      console.error('❌ Error fetching comprehensive settings:', error);
       setSchoolData({
         id: 1,
         name: 'KodeIT Learning Institute',
@@ -402,6 +413,40 @@ const SchoolAdminSettings: React.FC = () => {
         </Card>
       </div>
 
+      {/* School Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>School Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-4">
+              <Building className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <h3 className="font-medium">{schoolData?.name || 'Loading...'}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {schoolData?.shortname || 'School Short Name'} • {schoolData?.type || 'Educational Institution'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">
+                {schoolData?.address || 'Address not available'}, {schoolData?.city || 'City'}, {schoolData?.country || 'Country'}
+              </span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{schoolData?.email || 'Email not available'}</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{schoolData?.phone || 'Phone not available'}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* School Status */}
       <Card>
         <CardHeader>
@@ -505,7 +550,9 @@ const SchoolAdminSettings: React.FC = () => {
               <h3 className="text-lg font-medium">{profileData?.firstname} {profileData?.lastname}</h3>
               <p className="text-sm text-muted-foreground">{profileData?.role}</p>
               <p className="text-sm text-muted-foreground">{profileData?.department}</p>
+
               <p className="text-sm text-blue-600">@{profileData?.username}</p>
+
             </div>
           </div>
         </CardContent>
@@ -675,10 +722,17 @@ const SchoolAdminSettings: React.FC = () => {
                 {profileData?.createdAt ? new Date(profileData.createdAt).toLocaleDateString() : 'Unknown'}
               </p>
             </div>
-            <div>
-              <Label>User ID</Label>
-              <p className="text-sm text-muted-foreground mt-1">{profileData?.id}</p>
-            </div>
+                         <div>
+               <Label>User ID</Label>
+               <p className="text-sm text-muted-foreground mt-1">{profileData?.id}</p>
+             </div>
+             <div>
+               <Label>School/Company</Label>
+               <p className="text-sm text-muted-foreground mt-1">
+                 {profileData?.company ? `${profileData.company.name} (ID: ${profileData.company.id})` : 
+                  currentUser?.companyid ? `Company ID: ${currentUser.companyid}` : 'Not assigned to any school'}
+               </p>
+             </div>
           </div>
         </CardContent>
       </Card>

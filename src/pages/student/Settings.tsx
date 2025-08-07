@@ -35,6 +35,11 @@ interface UserProfile {
   role: string;
   lastaccess?: string;
   profileimageurl?: string;
+  company?: {
+    id: number;
+    name: string;
+    shortname: string;
+  };
 }
 
 interface NotificationSettings {
@@ -72,34 +77,30 @@ const StudentSettings: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      
-      console.log('🔍 Fetching real student profile from Moodle API...');
-      
-      // Get user profile from Moodle API
-      const userProfile = await moodleService.getProfile();
-      
-      console.log('📊 Real profile data fetched:', userProfile);
-
-      if (userProfile) {
-        const processedProfile: UserProfile = {
-          id: userProfile.id || '1',
-          username: userProfile.username || 'student',
-          firstname: userProfile.firstname || 'Student',
-          lastname: userProfile.lastname || 'User',
-          email: userProfile.email || 'student@example.com',
-          phone: '+1 (555) 123-4567',
-          department: 'Computer Science',
-          role: userProfile.role || 'student',
-          lastaccess: userProfile.lastaccess ? new Date(parseInt(userProfile.lastaccess) * 1000).toLocaleString() : 'Never',
-          profileimageurl: userProfile.profileimageurl
-        };
-        
-        setProfile(processedProfile);
-        console.log('✅ Profile processed successfully');
+      if (!currentUser?.id) {
+        setError('No logged-in user found');
+        return;
       }
-
+      const userSettings = await moodleService.getComprehensiveUserSettings(currentUser.id.toString());
+      if (userSettings) {
+        const processedProfile: UserProfile = {
+          id: userSettings.profile.id.toString(),
+          username: userSettings.profile.username,
+          firstname: userSettings.profile.firstname,
+          lastname: userSettings.profile.lastname,
+          email: userSettings.profile.email,
+          phone: userSettings.profile.phone,
+          department: userSettings.profile.department,
+          role: userSettings.profile.role,
+          lastaccess: userSettings.profile.lastAccess ? new Date(parseInt(userSettings.profile.lastAccess) * 1000).toLocaleString() : 'Never',
+          profileimageurl: userSettings.profile.profileImage,
+          company: userSettings.profile.company
+        };
+        setProfile(processedProfile);
+        console.log('✅ Student settings loaded successfully');
+      }
     } catch (error) {
-      console.error('❌ Error fetching profile:', error);
+      console.error('❌ Error fetching student settings:', error);
       setError('Failed to load profile. Please check your connection and try again.');
     } finally {
       setLoading(false);
@@ -490,6 +491,14 @@ const StudentSettings: React.FC = () => {
                   <CheckCircle className="w-4 h-4 text-green-600" />
                   <span className="text-sm text-green-600">Active</span>
                 </div>
+              </div>
+              
+              <div>
+                <Label className="text-sm font-medium text-gray-500">School/Company</Label>
+                <p className="text-sm">
+                  {profile?.company ? `${profile.company.name} (ID: ${profile.company.id})` : 
+                   currentUser?.companyid ? `Company ID: ${currentUser.companyid}` : 'Not assigned to any school'}
+                </p>
               </div>
             </div>
           </CardContent>
