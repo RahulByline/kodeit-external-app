@@ -52,6 +52,11 @@ interface TeacherProfile {
   location?: string;
   timezone?: string;
   language?: string;
+  company?: {
+    id: number;
+    name: string;
+    shortname: string;
+  };
 }
 
 const TeacherSettings: React.FC = () => {
@@ -71,63 +76,45 @@ const TeacherSettings: React.FC = () => {
   const fetchProfileData = async () => {
     try {
       setLoading(true);
+      if (!currentUser?.id) {
+        console.error('❌ No logged-in user found');
+        return;
+      }
       
-      // Fetch real data from Moodle API
-      const [allUsers] = await Promise.all([
-        moodleService.getAllUsers()
-      ]);
-
-      // Find teacher profile
-      const teacher = allUsers.find((user: any) => {
-        const username = user.username.toLowerCase();
-        const roles = user.roles || [];
-        
-        if (username === 'teacher1' || username.includes('teacher')) {
-          return true;
-        }
-        
-        const hasTeacherRole = roles.some((role: any) => 
-          role.shortname?.toLowerCase().includes('teacher') ||
-          role.shortname?.toLowerCase().includes('trainer') ||
-          role.shortname?.toLowerCase().includes('instructor')
-        );
-        
-        return hasTeacherRole;
-      }) as any || allUsers.find((user: any) => 
-        user.username.toLowerCase().includes('teacher') || 
-        user.username.toLowerCase().includes('trainer')
-      ) as any || allUsers[0] as any;
-
-      const detectedRole = moodleService.detectUserRoleEnhanced(
-        teacher.username, 
-        teacher, 
-        teacher.roles || []
-      );
+      console.log('👨‍🏫 Fetching comprehensive teacher settings...');
       
-      const processedProfileData: TeacherProfile = {
-        id: parseInt(teacher.id) || 1,
-        username: teacher.username || 'teacher1',
-        firstname: teacher.firstname || 'John',
-        lastname: teacher.lastname || 'Teacher',
-        email: teacher.email || 'teacher@kodeit.edu',
-        phone: teacher.phone1 || teacher.phone2 || '+1 (555) 123-4567',
-        profileImage: teacher.profileimageurl || '/placeholder.svg',
-        role: detectedRole === 'teacher' ? 'Teacher' : 
-              detectedRole === 'trainer' ? 'Trainer' : 
-              detectedRole === 'instructor' ? 'Instructor' : 'Teacher',
-        department: teacher.department || 'Education',
-        lastAccess: teacher.lastaccess ? new Date(parseInt(teacher.lastaccess) * 1000).toISOString() : new Date().toISOString(),
-        createdAt: teacher.timecreated ? new Date(parseInt(teacher.timecreated) * 1000).toISOString() : new Date().toISOString(),
-        status: teacher.suspended === '1' ? 'suspended' : 'active',
-        bio: 'Experienced educator passionate about student success and innovative teaching methods.',
-        location: 'New York, NY',
-        timezone: 'UTC-5',
-        language: 'English'
-      };
+      // Get comprehensive user settings
+      const userSettings = await moodleService.getComprehensiveUserSettings(currentUser.id.toString());
 
-      setProfileData(processedProfileData);
+      if (userSettings) {
+        const processedProfileData: TeacherProfile = {
+          id: userSettings.profile.id,
+          username: userSettings.profile.username,
+          firstname: userSettings.profile.firstname,
+          lastname: userSettings.profile.lastname,
+          email: userSettings.profile.email,
+          phone: userSettings.profile.phone,
+          profileImage: userSettings.profile.profileImage,
+          role: userSettings.profile.role === 'teacher' ? 'Teacher' : 
+                userSettings.profile.role === 'trainer' ? 'Trainer' : 
+                userSettings.profile.role === 'instructor' ? 'Instructor' : 'Teacher',
+          department: userSettings.profile.department,
+          lastAccess: userSettings.profile.lastAccess ? new Date(parseInt(userSettings.profile.lastAccess) * 1000).toISOString() : new Date().toISOString(),
+          createdAt: userSettings.profile.createdAt ? new Date(parseInt(userSettings.profile.createdAt) * 1000).toISOString() : new Date().toISOString(),
+          status: userSettings.profile.status,
+          bio: userSettings.profile.bio,
+          location: userSettings.profile.location,
+          timezone: userSettings.preferences.timezone,
+          language: userSettings.preferences.language,
+          company: userSettings.profile.company
+        };
+
+        setProfileData(processedProfileData);
+        console.log('✅ Teacher settings loaded successfully');
+      }
+
     } catch (error) {
-      console.error('Error fetching profile data:', error);
+      console.error('❌ Error fetching teacher settings:', error);
     } finally {
       setLoading(false);
     }
@@ -359,10 +346,17 @@ const TeacherSettings: React.FC = () => {
                 {profileData?.createdAt ? new Date(profileData.createdAt).toLocaleDateString() : 'Unknown'}
               </p>
             </div>
-            <div>
-              <Label>User ID</Label>
-              <p className="text-sm text-muted-foreground mt-1">{profileData?.id}</p>
-            </div>
+                         <div>
+               <Label>User ID</Label>
+               <p className="text-sm text-muted-foreground mt-1">{profileData?.id}</p>
+             </div>
+             <div>
+               <Label>School/Company</Label>
+               <p className="text-sm text-muted-foreground mt-1">
+                 {profileData?.company ? `${profileData.company.name} (ID: ${profileData.company.id})` : 
+                  currentUser?.companyid ? `Company ID: ${currentUser.companyid}` : 'Not assigned to any school'}
+               </p>
+             </div>
           </div>
         </CardContent>
       </Card>
