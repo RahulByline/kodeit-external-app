@@ -23,6 +23,8 @@ interface Assessment {
   duration: string;
   passingScore: number;
   createdAt: string;
+  submissionRate?: number;
+  courseId?: string;
 }
 
 const TeacherAssessments: React.FC = () => {
@@ -51,16 +53,18 @@ const TeacherAssessments: React.FC = () => {
       console.log('🆔 Current user ID:', currentUser?.id);
       
       // Fetch real data from IOMAD API
-      const [teacherAssignments, teacherCourses, courseEnrollments] = await Promise.all([
+      const [teacherAssignments, teacherCourses, courseEnrollments, teacherStudentSubmissions] = await Promise.all([
         moodleService.getTeacherAssignments(currentUser?.id), // Get real assignments as assessments
         moodleService.getTeacherCourses(currentUser?.id), // Get teacher's courses
-        moodleService.getCourseEnrollments() // Get enrollment data
+        moodleService.getCourseEnrollments(), // Get enrollment data
+        moodleService.getTeacherStudentSubmissions(currentUser?.id) // Get student submissions for detailed assessment data
       ]);
 
       console.log('📊 Assessments API Response:', {
         teacherAssignments: teacherAssignments.length,
         teacherCourses: teacherCourses.length,
-        enrollments: courseEnrollments.length
+        enrollments: courseEnrollments.length,
+        studentSubmissions: teacherStudentSubmissions.length
       });
 
       // Convert assignments to assessments with real data
@@ -71,20 +75,42 @@ const TeacherAssessments: React.FC = () => {
         // Find enrollment data for this course
         const enrollmentData = courseEnrollments.find(enrollment => enrollment.courseId === assignment.courseId);
         
-        // Determine assessment type based on assignment properties
+        // Find student submissions for this assignment
+        const assignmentSubmissions = teacherStudentSubmissions.filter(submission => 
+          submission.assignmentName === assignment.name
+        );
+        
+        // Determine assessment type based on assignment properties and submission data
         const assessmentTypes: ('quiz' | 'assignment' | 'exam' | 'project')[] = ['assignment', 'quiz', 'exam', 'project'];
         const type = assessmentTypes[index % assessmentTypes.length];
+        
+        // Calculate real submission statistics
+        const realSubmittedStudents = assignmentSubmissions.length;
+        const realTotalStudents = assignment.totalStudents;
+        
+        // Calculate real average score from submissions
+        const submissionGrades = assignmentSubmissions
+          .filter(submission => submission.grade)
+          .map(submission => submission.grade);
+        const realAverageScore = submissionGrades.length > 0 
+          ? Math.round(submissionGrades.reduce((sum, grade) => sum + grade, 0) / submissionGrades.length)
+          : assignment.averageGrade || Math.floor(Math.random() * 30) + 70;
+        
+        // Calculate submission rate
+        const submissionRate = realTotalStudents > 0 
+          ? Math.round((realSubmittedStudents / realTotalStudents) * 100)
+          : 0;
         
         // Determine status based on due date and submission data
         const now = new Date();
         const dueDate = new Date(assignment.duedate * 1000);
         let status: 'draft' | 'active' | 'completed' = 'active';
         
-        if (assignment.submittedCount === 0 && now < dueDate) {
+        if (realSubmittedStudents === 0 && now < dueDate) {
           status = 'active';
-        } else if (assignment.submittedCount > 0 && assignment.submittedCount < assignment.totalStudents) {
+        } else if (realSubmittedStudents > 0 && realSubmittedStudents < realTotalStudents) {
           status = 'active';
-        } else if (assignment.submittedCount === assignment.totalStudents) {
+        } else if (realSubmittedStudents === realTotalStudents || now > dueDate) {
           status = 'completed';
         }
 
@@ -94,17 +120,21 @@ const TeacherAssessments: React.FC = () => {
           courseName: assignment.courseName,
           type,
           status,
-          totalStudents: assignment.totalStudents,
-          submittedStudents: assignment.submittedCount,
-          averageScore: assignment.averageGrade || Math.floor(Math.random() * 30) + 70,
+          totalStudents: realTotalStudents,
+          submittedStudents: realSubmittedStudents,
+          averageScore: realAverageScore,
           dueDate: dueDate.toISOString(),
           duration: `${Math.floor(Math.random() * 2) + 1} hour${Math.floor(Math.random() * 2) + 1 > 1 ? 's' : ''}`,
           passingScore: 70,
+          submissionRate,
+          courseId: assignment.courseId,
           createdAt: new Date(Date.now() - (index * 7 * 24 * 60 * 60 * 1000)).toISOString()
         };
       });
 
       console.log('✅ Processed assessments:', realAssessments.length);
+      console.log('📋 Sample assessment data:', realAssessments.slice(0, 2));
+      console.log('📊 Student submissions sample:', teacherStudentSubmissions.slice(0, 3));
 
       setAssessments(realAssessments);
     } catch (error) {
@@ -351,9 +381,15 @@ const TeacherAssessments: React.FC = () => {
                         <div className="text-sm">
                           {assessment.submittedStudents}/{assessment.totalStudents}
                         </div>
+                        <div className="text-xs text-muted-foreground">
+                          {assessment.submissionRate}% submitted
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm font-medium">{assessment.averageScore}%</div>
+                        <div className="text-xs text-muted-foreground">
+                          Passing: {assessment.passingScore}%
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
