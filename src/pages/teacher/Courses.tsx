@@ -23,7 +23,8 @@ import {
   Calendar,
   BarChart3,
   Star,
-  GraduationCap
+  GraduationCap,
+  FileText
 } from 'lucide-react';
 import { moodleService } from '@/services/moodleApi';
 
@@ -41,6 +42,9 @@ interface CourseData {
   completionRate?: number;
   averageGrade?: number;
   totalAssignments?: number;
+  totalAssessments?: number;
+  activeAssessments?: number;
+  completedAssessments?: number;
   status: 'active' | 'inactive' | 'draft';
 }
 
@@ -56,7 +60,9 @@ const TeacherCourses: React.FC = () => {
     totalCourses: 0,
     activeCourses: 0,
     totalStudents: 0,
-    averageCompletion: 0
+    averageCompletion: 0,
+    totalAssessments: 0,
+    activeAssessments: 0
   });
 
   useEffect(() => {
@@ -76,21 +82,24 @@ const TeacherCourses: React.FC = () => {
       console.log('🆔 Current user ID:', currentUser?.id);
       
       // Fetch real teacher-specific data from IOMAD API
-      const [teacherCourses, courseEnrollments, teacherAssignments] = await Promise.all([
+      const [teacherCourses, courseEnrollments, teacherAssignments, teacherAssessments] = await Promise.all([
         moodleService.getTeacherCourses(currentUser?.id), // Get teacher's specific courses
         moodleService.getCourseEnrollments(), // Get course enrollments
-        moodleService.getTeacherAssignments(currentUser?.id) // Get teacher's assignments
+        moodleService.getTeacherAssignments(currentUser?.id), // Get teacher's assignments
+        moodleService.getTeacherAssignments(currentUser?.id) // Get assignments as assessments
       ]);
 
       console.log('📊 Teacher Courses API Response:', {
         teacherCourses: teacherCourses.length,
         enrollments: courseEnrollments.length,
-        assignments: teacherAssignments.length
+        assignments: teacherAssignments.length,
+        assessments: teacherAssessments.length
       });
 
       console.log('📚 Sample teacher course:', teacherCourses[0]);
       console.log('👥 Sample enrollment data:', courseEnrollments.slice(0, 3));
       console.log('📝 Sample assignment data:', teacherAssignments.slice(0, 2));
+      console.log('📋 Sample assessment data:', teacherAssessments.slice(0, 2));
 
       // Process teacher courses with real data
       const processedCourses: CourseData[] = teacherCourses.map(course => {
@@ -99,6 +108,9 @@ const TeacherCourses: React.FC = () => {
         
         // Find assignments for this course
         const courseAssignments = teacherAssignments.filter(assignment => assignment.courseId === course.id);
+        
+        // Find assessments for this course (using assignments as assessments)
+        const courseAssessments = teacherAssessments.filter(assessment => assessment.courseId === course.id);
         
         // Calculate real enrollment count from individual enrollments
         const courseEnrollmentsForThisCourse = courseEnrollments.filter(enrollment => enrollment.courseId === course.id);
@@ -120,6 +132,19 @@ const TeacherCourses: React.FC = () => {
           ? Math.round(assignmentGrades.reduce((sum, grade) => sum + grade, 0) / assignmentGrades.length)
           : Math.floor(Math.random() * 30) + 70;
         
+        // Calculate assessment statistics
+        const totalAssessments = courseAssessments.length;
+        const activeAssessments = courseAssessments.filter(assessment => {
+          const now = new Date();
+          const dueDate = new Date(assessment.duedate * 1000);
+          return now < dueDate;
+        }).length;
+        const completedAssessments = courseAssessments.filter(assessment => {
+          const now = new Date();
+          const dueDate = new Date(assessment.duedate * 1000);
+          return now > dueDate;
+        }).length;
+        
         return {
           id: parseInt(course.id),
           fullname: course.fullname,
@@ -134,6 +159,9 @@ const TeacherCourses: React.FC = () => {
           completionRate: realCompletionRate,
           averageGrade: realAverageGrade,
           totalAssignments: courseAssignments.length || Math.floor(Math.random() * 10) + 3,
+          totalAssessments: totalAssessments,
+          activeAssessments: activeAssessments,
+          completedAssessments: completedAssessments,
           status: course.visible === 1 ? 'active' : 'inactive'
         };
       });
@@ -147,12 +175,16 @@ const TeacherCourses: React.FC = () => {
       const averageCompletion = processedCourses.length > 0 
         ? Math.round(processedCourses.reduce((sum, course) => sum + (course.completionRate || 0), 0) / processedCourses.length)
         : 0;
+      const totalAssessments = processedCourses.reduce((sum, course) => sum + (course.totalAssessments || 0), 0);
+      const activeAssessments = processedCourses.reduce((sum, course) => sum + (course.activeAssessments || 0), 0);
 
       console.log('📈 Calculated Stats:', {
         totalCourses,
         activeCourses,
         totalStudents,
-        averageCompletion
+        averageCompletion,
+        totalAssessments,
+        activeAssessments
       });
 
       setCourses(processedCourses);
@@ -160,7 +192,9 @@ const TeacherCourses: React.FC = () => {
         totalCourses,
         activeCourses,
         totalStudents,
-        averageCompletion
+        averageCompletion,
+        totalAssessments,
+        activeAssessments
       });
     } catch (error) {
       console.error('❌ Error fetching teacher courses:', error);
@@ -241,7 +275,7 @@ const TeacherCourses: React.FC = () => {
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalCourses}</div>
               <p className="text-xs text-muted-foreground">
-                +2 from last month
+                Teaching courses
               </p>
             </CardContent>
           </Card>
@@ -259,25 +293,25 @@ const TeacherCourses: React.FC = () => {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Total Assessments</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalStudents}</div>
+              <div className="text-2xl font-bold">{stats.totalAssessments}</div>
               <p className="text-xs text-muted-foreground">
-                Enrolled across all courses
+                Across all courses
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Completion</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Active Assessments</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.averageCompletion}%</div>
+              <div className="text-2xl font-bold">{stats.activeAssessments}</div>
               <p className="text-xs text-muted-foreground">
-                Course completion rate
+                Currently open
               </p>
             </CardContent>
           </Card>
@@ -377,6 +411,14 @@ const TeacherCourses: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <BookOpen className="w-4 h-4 text-purple-500" />
                       <span>{course.totalAssignments} assignments</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4 text-indigo-500" />
+                      <span>{course.totalAssessments} assessments</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-orange-500" />
+                      <span>{course.activeAssessments} active</span>
                     </div>
                   </div>
                   

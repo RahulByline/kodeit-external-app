@@ -37,6 +37,7 @@ import {
   Lock
 } from 'lucide-react';
 import { moodleService } from '@/services/moodleApi';
+import { useAuth } from '@/context/AuthContext';
 
 interface ProfileData {
   id: number;
@@ -51,6 +52,11 @@ interface ProfileData {
   lastAccess: string;
   createdAt: string;
   status: 'active' | 'inactive' | 'suspended';
+  company?: {
+    id: number;
+    name: string;
+    shortname: string;
+  };
 }
 
 interface SchoolData {
@@ -92,6 +98,7 @@ const SchoolAdminSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     fetchSchoolData();
@@ -100,111 +107,118 @@ const SchoolAdminSettings: React.FC = () => {
   const fetchSchoolData = async () => {
     try {
       setLoading(true);
+      if (!currentUser?.id) {
+        console.error('❌ No logged-in user found');
+        return;
+      }
       
-      // Fetch real data from Moodle API
-      const [companies, users, courses] = await Promise.all([
-        moodleService.getCompanies(),
-        moodleService.getAllUsers(),
-        moodleService.getAllCourses()
-      ]);
-
-      // Process the first company as our school data
-      const company = companies[0] as any || {};
+      // Get user settings first
+      const userSettings = await moodleService.getComprehensiveUserSettings(currentUser.id.toString());
       
-      // Count users by role using enhanced detection
-      const teachers = users.filter((user: any) => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher' || role === 'trainer';
+      // Determine the company ID to use for school settings
+      let schoolCompanyId = currentUser?.companyid;
+      
+      if (!schoolCompanyId) {
+        console.log('🏫 School admin has no company ID, getting default company...');
+        try {
+          const companies = await moodleService.getCompanies();
+          if (companies && companies.length > 0) {
+            schoolCompanyId = companies[0].id;
+            console.log(`✅ Using default company ID: ${schoolCompanyId} (${companies[0].name})`);
+          } else {
+            schoolCompanyId = 1; // Fallback
+            console.log(`⚠️ Using fallback company ID: ${schoolCompanyId}`);
+          }
+        } catch (error) {
+          schoolCompanyId = 1; // Fallback
+          console.log(`⚠️ Using fallback company ID: ${schoolCompanyId}`);
+        }
+      }
+      
+      // Get school settings using the determined company ID
+      const schoolSettings = await moodleService.getSchoolComprehensiveSettings(schoolCompanyId.toString());
+      
+      console.log('🏫 School Settings Data:', {
+        userSettings: userSettings ? 'Loaded' : 'Failed',
+        schoolSettings: schoolSettings ? 'Loaded' : 'Failed',
+        schoolCompanyId,
+        schoolName: schoolSettings?.schoolInfo?.name,
+        totalUsers: schoolSettings?.statistics?.totalUsers,
+        totalTeachers: schoolSettings?.statistics?.totalTeachers,
+        totalStudents: schoolSettings?.statistics?.totalStudents,
+        totalCourses: schoolSettings?.statistics?.totalCourses
       });
       
-      const students = users.filter((user: any) => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'student';
+      if (userSettings) {
+        const processedProfileData: ProfileData = {
+          id: userSettings.profile.id,
+          username: userSettings.profile.username,
+          firstname: userSettings.profile.firstname,
+          lastname: userSettings.profile.lastname,
+          email: userSettings.profile.email,
+          phone: userSettings.profile.phone,
+          profileImage: userSettings.profile.profileImage,
+          role: userSettings.profile.role === 'school_admin' ? 'School Administrator' : 
+                userSettings.profile.role === 'admin' ? 'System Administrator' : 
+                userSettings.profile.role === 'teacher' ? 'Teacher' : 
+                userSettings.profile.role === 'student' ? 'Student' : 'School Administrator',
+          department: userSettings.profile.department,
+          lastAccess: userSettings.profile.lastAccess ? new Date(parseInt(userSettings.profile.lastAccess) * 1000).toISOString() : new Date().toISOString(),
+          createdAt: userSettings.profile.createdAt ? new Date(parseInt(userSettings.profile.createdAt) * 1000).toISOString() : new Date().toISOString(),
+          status: userSettings.profile.status,
+          company: userSettings.profile.company
+        };
+        setProfileData(processedProfileData);
+      }
+      if (schoolSettings) {
+        const processedSchoolData: SchoolData = {
+          id: schoolSettings.schoolInfo.id || 1,
+          name: schoolSettings.schoolInfo.name,
+          shortname: schoolSettings.schoolInfo.shortname,
+          description: schoolSettings.schoolInfo.description,
+          address: schoolSettings.schoolInfo.address,
+          city: schoolSettings.schoolInfo.city,
+          country: schoolSettings.schoolInfo.country,
+          phone: schoolSettings.schoolInfo.phone,
+          email: schoolSettings.schoolInfo.email,
+          website: schoolSettings.schoolInfo.website,
+          established: schoolSettings.schoolInfo.established || '2020',
+          type: schoolSettings.schoolInfo.type || 'Educational Institution',
+          status: schoolSettings.schoolInfo.status,
+          totalUsers: schoolSettings.statistics.totalUsers,
+          totalCourses: schoolSettings.statistics.totalCourses,
+          totalTeachers: schoolSettings.statistics.totalTeachers,
+          totalStudents: schoolSettings.statistics.totalStudents,
+          settings: {
+            allowEnrollments: schoolSettings.system.allowEnrollments,
+            requireApproval: schoolSettings.system.requireApproval,
+            maxStudentsPerCourse: schoolSettings.system.maxStudentsPerCourse,
+            autoBackup: schoolSettings.system.autoBackup,
+            notificationsEnabled: schoolSettings.notifications.emailNotifications,
+            theme: schoolSettings.appearance.theme,
+            language: schoolSettings.system.language,
+            timezone: schoolSettings.system.timezone
+          }
+        };
+        setSchoolData(processedSchoolData);
+      }
+      console.log('✅ Comprehensive settings loaded successfully');
+      console.log('📊 Final Data Summary:', {
+        profileData: profileData ? {
+          name: `${profileData.firstname} ${profileData.lastname}`,
+          role: profileData.role,
+          company: profileData.company?.name
+        } : null,
+        schoolData: schoolData ? {
+          name: schoolData.name,
+          totalUsers: schoolData.totalUsers,
+          totalTeachers: schoolData.totalTeachers,
+          totalStudents: schoolData.totalStudents,
+          totalCourses: schoolData.totalCourses
+        } : null
       });
-
-      // Find school admin profile (company managers, school admins, etc.)
-      const schoolAdmin = users.find((user: any) => {
-        const username = user.username.toLowerCase();
-        const roles = user.roles || [];
-        
-        // Check for specific school admin usernames
-        if (username === 'school_admin1' || username.includes('school_admin')) {
-          return true;
-        }
-        
-        // Check for company manager roles
-        const hasManagerRole = roles.some((role: any) => 
-          role.shortname?.toLowerCase().includes('manager') ||
-          role.shortname?.toLowerCase().includes('admin') ||
-          role.shortname?.toLowerCase().includes('companymanager')
-        );
-        
-        return hasManagerRole;
-      }) as any || users.find((user: any) => 
-        user.username.toLowerCase().includes('admin') || 
-        user.username.toLowerCase().includes('manager')
-      ) as any || users[0] as any;
-
-      const processedSchoolData: SchoolData = {
-        id: parseInt(company.id) || 1,
-        name: company.name || 'KodeIT Learning Institute',
-        shortname: company.shortname || 'KodeIT',
-        description: company.description || 'Leading technology education institute providing comprehensive training programs.',
-        address: company.address || '123 Technology Street',
-        city: company.city || 'Tech City',
-        country: company.country || 'United States',
-        phone: company.phone || '+1 (555) 123-4567',
-        email: company.email || 'info@kodeit.edu',
-        website: company.website || 'https://kodeit.edu',
-        established: company.established || '2020',
-        type: company.type || 'Educational Institution',
-        status: company.suspended === '1' ? 'suspended' : 'active',
-        totalUsers: users.length,
-        totalCourses: courses.length,
-        totalTeachers: teachers.length,
-        totalStudents: students.length,
-        settings: {
-          allowEnrollments: true,
-          requireApproval: false,
-          maxStudentsPerCourse: 50,
-          autoBackup: true,
-          notificationsEnabled: true,
-          theme: 'light',
-          language: 'English',
-          timezone: 'UTC-5'
-        }
-      };
-
-      // Process profile data with enhanced role detection
-      const detectedRole = moodleService.detectUserRoleEnhanced(
-        schoolAdmin.username, 
-        schoolAdmin, 
-        schoolAdmin.roles || []
-      );
-      
-      const processedProfileData: ProfileData = {
-        id: parseInt(schoolAdmin.id) || 1,
-        username: schoolAdmin.username || 'school_admin1',
-        firstname: schoolAdmin.firstname || 'School',
-        lastname: schoolAdmin.lastname || 'Administrator',
-        email: schoolAdmin.email || 'school.admin@kodeit.edu',
-        phone: schoolAdmin.phone1 || schoolAdmin.phone2 || '+1 (555) 123-4567',
-        profileImage: schoolAdmin.profileimageurl || '/placeholder.svg',
-        role: detectedRole === 'school_admin' ? 'School Administrator' : 
-              detectedRole === 'admin' ? 'System Administrator' : 
-              detectedRole === 'teacher' ? 'Teacher' : 
-              detectedRole === 'student' ? 'Student' : 'School Administrator',
-        department: schoolAdmin.department || 'Administration',
-        lastAccess: schoolAdmin.lastaccess ? new Date(parseInt(schoolAdmin.lastaccess) * 1000).toISOString() : new Date().toISOString(),
-        createdAt: schoolAdmin.timecreated ? new Date(parseInt(schoolAdmin.timecreated) * 1000).toISOString() : new Date().toISOString(),
-        status: schoolAdmin.suspended === '1' ? 'suspended' : 'active'
-      };
-
-      setSchoolData(processedSchoolData);
-      setProfileData(processedProfileData);
     } catch (error) {
-      console.error('Error fetching school data:', error);
-      // Set default data if API fails
+      console.error('❌ Error fetching comprehensive settings:', error);
       setSchoolData({
         id: 1,
         name: 'KodeIT Learning Institute',
@@ -341,6 +355,40 @@ const SchoolAdminSettings: React.FC = () => {
         </Card>
       </div>
 
+      {/* School Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>School Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-4">
+              <Building className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <h3 className="font-medium">{schoolData?.name || 'Loading...'}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {schoolData?.shortname || 'School Short Name'} • {schoolData?.type || 'Educational Institution'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">
+                {schoolData?.address || 'Address not available'}, {schoolData?.city || 'City'}, {schoolData?.country || 'Country'}
+              </span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{schoolData?.email || 'Email not available'}</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{schoolData?.phone || 'Phone not available'}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* School Status */}
       <Card>
         <CardHeader>
@@ -415,6 +463,16 @@ const SchoolAdminSettings: React.FC = () => {
               <h3 className="text-lg font-medium">{profileData?.firstname} {profileData?.lastname}</h3>
               <p className="text-sm text-muted-foreground">{profileData?.role}</p>
               <p className="text-sm text-muted-foreground">{profileData?.department}</p>
+              {profileData?.company && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                  <p className="text-sm font-medium text-blue-800">
+                    🏫 Managing: {profileData.company.name}
+                  </p>
+                  <p className="text-xs text-blue-600">
+                    Company ID: {profileData.company.id} • Short: {profileData.company.shortname}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -584,10 +642,17 @@ const SchoolAdminSettings: React.FC = () => {
                 {profileData?.createdAt ? new Date(profileData.createdAt).toLocaleDateString() : 'Unknown'}
               </p>
             </div>
-            <div>
-              <Label>User ID</Label>
-              <p className="text-sm text-muted-foreground mt-1">{profileData?.id}</p>
-            </div>
+                         <div>
+               <Label>User ID</Label>
+               <p className="text-sm text-muted-foreground mt-1">{profileData?.id}</p>
+             </div>
+             <div>
+               <Label>School/Company</Label>
+               <p className="text-sm text-muted-foreground mt-1">
+                 {profileData?.company ? `${profileData.company.name} (ID: ${profileData.company.id})` : 
+                  currentUser?.companyid ? `Company ID: ${currentUser.companyid}` : 'Not assigned to any school'}
+               </p>
+             </div>
           </div>
         </CardContent>
       </Card>
