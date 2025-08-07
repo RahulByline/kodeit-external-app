@@ -28,22 +28,22 @@ const Header = () => {
             <a href="#about" className="text-gray-700 hover:text-primary transition-colors">
               About
             </a>
-            <a href="#contact" className="text-gray-700 hover:text-primary transition-colors">
+            <a href="#footer" className="text-gray-700 hover:text-primary transition-colors">
               Contact
             </a>
           </nav>
 
           {/* Desktop CTA Buttons */}
           <div className="hidden md:flex items-center space-x-4 mr-[-100px]">
-  <Button
-    variant="hero"
-    size="lg"
-    className="h-12 px-6"
-    onClick={() => navigate("/dashboards")}
-  >
-    Access Dashboard
-  </Button>
-</div>
+            <Button
+              variant="hero"
+              size="lg"
+              className="h-12 px-6"
+              onClick={() => document.getElementById('dashboard-section')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              Access Dashboard
+            </Button>
+          </div>
 
           {/* Mobile Menu Button */}
           <div className="flex items-center space-x-2 md:hidden">
@@ -68,7 +68,7 @@ const Header = () => {
               <a href="#about" className="text-gray-700 hover:text-primary transition-colors">
                 About
               </a>
-              <a href="#contact" className="text-gray-700 hover:text-primary transition-colors">
+              <a href="#footer" className="text-gray-700 hover:text-primary transition-colors">
                 Contact
               </a>
               <div className="pt-4 border-t border-gray-100">
