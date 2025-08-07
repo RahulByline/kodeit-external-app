@@ -98,12 +98,9 @@ const BaseLoginPage: React.FC<BaseLoginPageProps> = ({
           <p className="mt-2 text-sm text-gray-600">
             {description}
           </p>
-          <p className="mt-1 text-xs text-gray-500">
-            Enter your Moodle credentials
-          </p>
+       
           {(role === 'student' || role === 'teacher' || role === 'school_admin') && (
             <p className="mt-1 text-xs text-blue-600">
-              💡 For testing: Use any password if your account doesn't have one set
             </p>
           )}
         </div>
