@@ -502,32 +502,7 @@ export const moodleService = {
     } else {
       console.log(`❌ No IOMAD roles found for user ${username}`);
     }
-
-    // Tier 2: Fallback for specific known users
-    if (username === 'school_admin1' || username === 'kodeit_admin') {
-      console.log(`✅ User ${username} detected as school admin (known user)`);
-      return 'school_admin';
-    }
     
-    // Tier 3: Username pattern fallback
-    if (username.toLowerCase().includes('admin')) {
-      console.log(`✅ User ${username} detected as admin (username pattern)`);
-      return 'admin';
-    }
-    
-    if (username.toLowerCase().includes('teacher') || username.toLowerCase().includes('trainer')) {
-      console.log(`✅ User ${username} detected as teacher (username pattern)`);
-      return 'teacher';
-    }
-    
-    if (username.toLowerCase().includes('student')) {
-      console.log(`✅ User ${username} detected as student (username pattern)`);
-      return 'student';
-    }
-    
-    // Tier 4: LAST RESORT: Default to student
-    console.log(`⚠️ User ${username} has no IOMAD role - defaulting to student`);
-    return 'student';
   },
 
   async getUserCourses(userId: string) {
