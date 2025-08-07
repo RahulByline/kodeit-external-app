@@ -129,6 +129,10 @@ const SchoolAdminDashboard: React.FC = () => {
       
       console.log('🔄 Fetching comprehensive school data...');
       
+      // Get current user's company first
+      const currentUserCompany = await moodleService.getCurrentUserCompany();
+      console.log('Current user company:', currentUserCompany);
+      
       // Fetch all real data from Moodle API
       const [
         allUsers, 
@@ -149,7 +153,8 @@ const SchoolAdminDashboard: React.FC = () => {
         courses: allCourses.length,
         companies: allCompanies.length,
         enrollments: allEnrollments.length,
-        companyManagers: companyManagers.length
+        companyManagers: companyManagers.length,
+        currentUserCompany: currentUserCompany?.name
       });
 
       // Process real data
@@ -190,12 +195,21 @@ const SchoolAdminDashboard: React.FC = () => {
         coursecount: company.courseCount
       }));
 
+      // Filter users by current user's company if available
+      let filteredUsers = processedUsers;
+      if (currentUserCompany) {
+        filteredUsers = processedUsers.filter(user => user.companyid === currentUserCompany.id);
+        console.log(`Filtered users for company ${currentUserCompany.name}: ${filteredUsers.length} users`);
+      } else {
+        console.log('No company filter applied, showing all users');
+      }
+
       // Filter users by role
-      const teachers = processedUsers.filter(user => 
+      const teachers = filteredUsers.filter(user => 
         user.role === 'teacher' || user.role === 'trainer'
       );
       
-      const students = processedUsers.filter(user => 
+      const students = filteredUsers.filter(user => 
         user.role === 'student'
       );
 

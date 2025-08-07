@@ -101,6 +101,14 @@ const SchoolAdminSettings: React.FC = () => {
     try {
       setLoading(true);
       
+      // Get current user's company first
+      const currentUserCompany = await moodleService.getCurrentUserCompany();
+      console.log('Current user company:', currentUserCompany);
+      
+      // Get current user's profile from localStorage
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      console.log('Current user from localStorage:', currentUser);
+      
       // Fetch real data from Moodle API
       const [companies, users, courses] = await Promise.all([
         moodleService.getCompanies(),
@@ -108,8 +116,12 @@ const SchoolAdminSettings: React.FC = () => {
         moodleService.getAllCourses()
       ]);
 
-      // Process the first company as our school data
-      const company = companies[0] as any || {};
+      // Use current user's company or fallback to first company
+      let targetCompany = currentUserCompany;
+      if (!targetCompany && companies.length > 0) {
+        targetCompany = companies[0] as any;
+        console.log('No current user company found, using first company:', targetCompany);
+      }
       
       // Count users by role using enhanced detection
       const teachers = users.filter((user: any) => {
@@ -122,43 +134,60 @@ const SchoolAdminSettings: React.FC = () => {
         return role === 'student';
       });
 
-      // Find school admin profile (company managers, school admins, etc.)
-      const schoolAdmin = users.find((user: any) => {
-        const username = user.username.toLowerCase();
-        const roles = user.roles || [];
+      // Find current user's profile in the users array
+      let currentUserProfile = null;
+      if (currentUser.id) {
+        currentUserProfile = users.find((user: any) => user.id === currentUser.id);
+        console.log('Found current user profile:', currentUserProfile);
+      }
+      
+      // If current user not found in users array, try to find by username
+      if (!currentUserProfile && currentUser.username) {
+        currentUserProfile = users.find((user: any) => user.username === currentUser.username);
+        console.log('Found current user profile by username:', currentUserProfile);
+      }
+      
+      // Fallback to first school admin if current user not found
+      if (!currentUserProfile) {
+        currentUserProfile = users.find((user: any) => {
+          const username = user.username.toLowerCase();
+          const roles = user.roles || [];
+          
+          // Check for specific school admin usernames
+          if (username === 'school_admin1' || username.includes('school_admin')) {
+            return true;
+          }
+          
+          // Check for company manager roles
+          const hasManagerRole = roles.some((role: any) => 
+            role.shortname?.toLowerCase().includes('manager') ||
+            role.shortname?.toLowerCase().includes('admin') ||
+            role.shortname?.toLowerCase().includes('companymanager')
+          );
+          
+          return hasManagerRole;
+        }) as any || users.find((user: any) => 
+          user.username.toLowerCase().includes('admin') || 
+          user.username.toLowerCase().includes('manager')
+        ) as any || users[0] as any;
         
-        // Check for specific school admin usernames
-        if (username === 'school_admin1' || username.includes('school_admin')) {
-          return true;
-        }
-        
-        // Check for company manager roles
-        const hasManagerRole = roles.some((role: any) => 
-          role.shortname?.toLowerCase().includes('manager') ||
-          role.shortname?.toLowerCase().includes('admin') ||
-          role.shortname?.toLowerCase().includes('companymanager')
-        );
-        
-        return hasManagerRole;
-      }) as any || users.find((user: any) => 
-        user.username.toLowerCase().includes('admin') || 
-        user.username.toLowerCase().includes('manager')
-      ) as any || users[0] as any;
+        console.log('Using fallback user profile:', currentUserProfile);
+      }
 
       const processedSchoolData: SchoolData = {
-        id: parseInt(company.id) || 1,
-        name: company.name || 'KodeIT Learning Institute',
-        shortname: company.shortname || 'KodeIT',
-        description: company.description || 'Leading technology education institute providing comprehensive training programs.',
-        address: company.address || '123 Technology Street',
-        city: company.city || 'Tech City',
-        country: company.country || 'United States',
-        phone: company.phone || '+1 (555) 123-4567',
-        email: company.email || 'info@kodeit.edu',
-        website: company.website || 'https://kodeit.edu',
-        established: company.established || '2020',
-        type: company.type || 'Educational Institution',
-        status: company.suspended === '1' ? 'suspended' : 'active',
+        id: parseInt(targetCompany?.id) || 1,
+        name: targetCompany?.name || 'KodeIT Learning Institute',
+        shortname: targetCompany?.shortname || 'KodeIT',
+        description: targetCompany?.description || 'Leading technology education institute providing comprehensive training programs.',
+        address: targetCompany?.address || '123 Technology Street',
+        city: targetCompany?.city || 'Tech City',
+        country: targetCompany?.country || 'United States',
+        phone: targetCompany?.phone || '+1 (555) 123-4567',
+        email: targetCompany?.email || 'info@kodeit.edu',
+        website: targetCompany?.website || 'https://kodeit.edu',
+        established: targetCompany?.established || '2020',
+        type: targetCompany?.type || 'Educational Institution',
+        status: targetCompany?.suspended === '1' ? 'suspended' : 'active',
         totalUsers: users.length,
         totalCourses: courses.length,
         totalTeachers: teachers.length,
@@ -175,33 +204,36 @@ const SchoolAdminSettings: React.FC = () => {
         }
       };
 
-      // Process profile data with enhanced role detection
+      // Process profile data with enhanced role detection for current user
       const detectedRole = moodleService.detectUserRoleEnhanced(
-        schoolAdmin.username, 
-        schoolAdmin, 
-        schoolAdmin.roles || []
+        currentUserProfile.username, 
+        currentUserProfile, 
+        currentUserProfile.roles || []
       );
       
       const processedProfileData: ProfileData = {
-        id: parseInt(schoolAdmin.id) || 1,
-        username: schoolAdmin.username || 'school_admin1',
-        firstname: schoolAdmin.firstname || 'School',
-        lastname: schoolAdmin.lastname || 'Administrator',
-        email: schoolAdmin.email || 'school.admin@kodeit.edu',
-        phone: schoolAdmin.phone1 || schoolAdmin.phone2 || '+1 (555) 123-4567',
-        profileImage: schoolAdmin.profileimageurl || '/placeholder.svg',
+        id: parseInt(currentUserProfile.id) || 1,
+        username: currentUserProfile.username || 'school_admin1',
+        firstname: currentUserProfile.firstname || 'School',
+        lastname: currentUserProfile.lastname || 'Administrator',
+        email: currentUserProfile.email || 'school.admin@kodeit.edu',
+        phone: currentUserProfile.phone1 || currentUserProfile.phone2 || '+1 (555) 123-4567',
+        profileImage: currentUserProfile.profileimageurl || '/placeholder.svg',
         role: detectedRole === 'school_admin' ? 'School Administrator' : 
               detectedRole === 'admin' ? 'System Administrator' : 
               detectedRole === 'teacher' ? 'Teacher' : 
               detectedRole === 'student' ? 'Student' : 'School Administrator',
-        department: schoolAdmin.department || 'Administration',
-        lastAccess: schoolAdmin.lastaccess ? new Date(parseInt(schoolAdmin.lastaccess) * 1000).toISOString() : new Date().toISOString(),
-        createdAt: schoolAdmin.timecreated ? new Date(parseInt(schoolAdmin.timecreated) * 1000).toISOString() : new Date().toISOString(),
-        status: schoolAdmin.suspended === '1' ? 'suspended' : 'active'
+        department: currentUserProfile.department || 'Administration',
+        lastAccess: currentUserProfile.lastaccess ? new Date(parseInt(currentUserProfile.lastaccess) * 1000).toISOString() : new Date().toISOString(),
+        createdAt: currentUserProfile.timecreated ? new Date(parseInt(currentUserProfile.timecreated) * 1000).toISOString() : new Date().toISOString(),
+        status: currentUserProfile.suspended === '1' ? 'suspended' : 'active'
       };
 
       setSchoolData(processedSchoolData);
       setProfileData(processedProfileData);
+      
+      console.log('✅ School Admin Settings - Dynamic data loaded for company:', targetCompany?.name);
+      console.log('✅ Current user profile loaded:', processedProfileData.username);
     } catch (error) {
       console.error('Error fetching school data:', error);
       // Set default data if API fails
@@ -301,6 +333,35 @@ const SchoolAdminSettings: React.FC = () => {
 
   const renderOverviewTab = () => (
     <div className="space-y-6">
+      {/* Company Overview Header */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Building className="w-5 h-5" />
+            <span>School Overview</span>
+            {schoolData && (
+              <Badge variant="outline" className="ml-2">
+                {schoolData.name}
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Overview of your school's statistics and current status
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center space-x-2">
+              <Check className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-medium text-green-800">Active School</span>
+            </div>
+            <p className="text-sm text-green-700 mt-1">
+              Currently managing: <strong>{schoolData?.name}</strong> with {schoolData?.totalUsers || 0} total users
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* School Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -387,6 +448,35 @@ const SchoolAdminSettings: React.FC = () => {
 
   const renderProfileTab = () => (
     <div className="space-y-6">
+      {/* Profile Header */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <User className="w-5 h-5" />
+            <span>My Profile</span>
+            {profileData && (
+              <Badge variant="outline" className="ml-2">
+                {profileData.firstname} {profileData.lastname}
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Manage your personal information and account settings
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center space-x-2">
+              <User className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">Current User</span>
+            </div>
+            <p className="text-sm text-blue-700 mt-1">
+              You are currently viewing and editing your profile: <strong>{profileData?.firstname} {profileData?.lastname}</strong> ({profileData?.username})
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Profile Image */}
       <Card>
         <CardHeader>
@@ -415,6 +505,7 @@ const SchoolAdminSettings: React.FC = () => {
               <h3 className="text-lg font-medium">{profileData?.firstname} {profileData?.lastname}</h3>
               <p className="text-sm text-muted-foreground">{profileData?.role}</p>
               <p className="text-sm text-muted-foreground">{profileData?.department}</p>
+              <p className="text-sm text-blue-600">@{profileData?.username}</p>
             </div>
           </div>
         </CardContent>
@@ -596,6 +687,35 @@ const SchoolAdminSettings: React.FC = () => {
 
   const renderInformationTab = () => (
     <div className="space-y-6">
+      {/* Company Information Header */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Building className="w-5 h-5" />
+            <span>School Information</span>
+            {schoolData && (
+              <Badge variant="outline" className="ml-2">
+                {schoolData.name}
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Manage your school's basic information and contact details
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center space-x-2">
+              <Info className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">Current School</span>
+            </div>
+            <p className="text-sm text-blue-700 mt-1">
+              You are currently viewing and editing information for: <strong>{schoolData?.name}</strong>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Basic Information</CardTitle>

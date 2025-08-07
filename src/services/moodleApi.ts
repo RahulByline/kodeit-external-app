@@ -229,9 +229,40 @@ export const moodleService = {
           });
           
           // The response is an object containing a 'companies' array.
-          // We'll take the first one as the primary company.
+          // For school admins, we need to determine the correct company association
           if (companyResponse.data && Array.isArray(companyResponse.data.companies) && companyResponse.data.companies.length > 0) {
-            userData.companyid = companyResponse.data.companies[0].id;
+            // First, detect the user's role to determine company assignment logic
+            const detectedRole = this.detectUserRoleEnhanced(username, userData, roles);
+            
+            if (detectedRole === 'school_admin') {
+              // For school admins, try to find the company they manage
+              // Look for a company where the user has manager/principal role
+              let targetCompany = null;
+              
+              for (const company of companyResponse.data.companies) {
+                // Check if this user is a manager/principal for this company
+                // This is a heuristic - in a real system, you'd check specific permissions
+                if (company.role && (company.role.toLowerCase().includes('manager') || 
+                                   company.role.toLowerCase().includes('principal') ||
+                                   company.role.toLowerCase().includes('admin'))) {
+                  targetCompany = company;
+                  break;
+                }
+              }
+              
+              // If no specific manager role found, use the first company but log a warning
+              if (!targetCompany) {
+                console.warn(`School admin ${username} has no clear company manager role, using first company`);
+                targetCompany = companyResponse.data.companies[0];
+              }
+              
+              userData.companyid = targetCompany.id;
+              console.log(`School admin ${username} assigned to company: ${targetCompany.name} (ID: ${targetCompany.id})`);
+            } else {
+              // For non-school-admin users, use the first company as before
+              userData.companyid = companyResponse.data.companies[0].id;
+              console.log(`User ${username} assigned to company: ${companyResponse.data.companies[0].name} (ID: ${companyResponse.data.companies[0].id})`);
+            }
           }
         } catch (e) {
           // If company fetch fails, it might not be a company user, which is fine.
@@ -1561,6 +1592,20 @@ export const moodleService = {
         const manager = companyManagers.find(m => m.id === managerId);
         if (manager && manager.companyData) {
           targetCompany = manager.companyData;
+          console.log(`Filtering data for company: ${targetCompany.name} (ID: ${targetCompany.id})`);
+        }
+      }
+
+      // If no specific manager ID, try to get the current user's company from localStorage
+      if (!targetCompany) {
+        try {
+          const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+          if (currentUser.companyid) {
+            targetCompany = companies.find(c => c.id === currentUser.companyid);
+            console.log(`Using current user's company: ${targetCompany?.name} (ID: ${currentUser.companyid})`);
+          }
+        } catch (e) {
+          console.warn('Could not parse current user data from localStorage');
         }
       }
 
@@ -1568,6 +1613,8 @@ export const moodleService = {
       const companyUsers = targetCompany 
         ? allUsers.filter(user => user.companyid === targetCompany.id)
         : allUsers;
+
+      console.log(`Filtered users for company: ${companyUsers.length} users`);
 
       // Get teachers and students for this company
       const teachers = companyUsers.filter(user => {
@@ -1607,83 +1654,6 @@ export const moodleService = {
     } catch (error) {
       console.error('Error fetching company manager dashboard data:', error);
       throw error;
-    }
-  },
-
-  // Test function to check all users and their roles
-  async testUserRoles() {
-    try {
-      console.log('🔍 Testing IOMAD user roles...');
-      
-      // Get all users
-      const allUsers = await this.getAllUsers();
-      
-      console.log('📊 All Users with Roles:');
-      allUsers.forEach((user, index) => {
-        console.log(`${index + 1}. ${user.fullname} (${user.username})`);
-        console.log(`   ID: ${user.id}`);
-        console.log(`   Role: ${user.role}`);
-        console.log(`   IOMAD Roles:`, user.roles);
-        console.log(`   Email: ${user.email}`);
-        console.log('---');
-      });
-      
-      // Group users by role with fallback logic
-      const teachers = allUsers.filter(u => u.role === 'teacher' || u.role === 'trainer');
-      const students = allUsers.filter(u => u.role === 'student');
-      const admins = allUsers.filter(u => u.role === 'admin' || u.role === 'school_admin');
-      
-      // If no teachers found, try alternative roles
-      let alternativeTeachers: any[] = [];
-      if (teachers.length === 0) {
-        console.log('⚠️ No teachers found, checking alternative roles...');
-        alternativeTeachers = allUsers.filter(user => 
-          user.role === 'editingteacher' || 
-          user.role === 'student' || 
-          user.role === 'teachers' ||
-          user.username?.toLowerCase().includes('teacher') ||
-          user.username?.toLowerCase().includes('trainer')
-        );
-        console.log(`Found ${alternativeTeachers.length} alternative teachers:`, alternativeTeachers.map(u => u.username));
-      }
-      
-      console.log('📈 Role Statistics:');
-      console.log(`Teachers: ${teachers.length}`);
-      console.log(`Students: ${students.length}`);
-      console.log(`Admins: ${admins.length}`);
-      console.log(`Alternative Teachers: ${alternativeTeachers.length}`);
-      
-      // Show sample users for each role
-      console.log('\n👨‍🏫 Sample Teachers:');
-      teachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username})`));
-      
-      console.log('\n👨‍🎓 Sample Students:');
-      students.slice(0, 3).forEach(s => console.log(`- ${s.fullname} (${s.username})`));
-      
-      console.log('\n👨‍💼 Sample Admins:');
-      admins.slice(0, 3).forEach(a => console.log(`- ${a.fullname} (${a.username})`));
-      
-      if (alternativeTeachers.length > 0) {
-        console.log('\n🔍 Alternative Teachers:');
-        alternativeTeachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username}) - Role: ${t.role}`));
-      }
-      
-      return {
-        totalUsers: allUsers.length,
-        teachers: teachers.length,
-        students: students.length,
-        admins: admins.length,
-        alternativeTeachers: alternativeTeachers.length,
-        sampleUsers: {
-          teachers: teachers.slice(0, 3),
-          students: students.slice(0, 3),
-          admins: admins.slice(0, 3),
-          alternativeTeachers: alternativeTeachers.slice(0, 3)
-        }
-      };
-    } catch (error) {
-      console.error('❌ Error testing user roles:', error);
-      return null;
     }
   },
 
@@ -2012,6 +1982,141 @@ export const moodleService = {
 
     } catch (error) {
       console.error('❌ Error in user search tests:', error);
+    }
+  },
+
+  // Function to get current user's company data
+  async getCurrentUserCompany() {
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      if (!currentUser.id) {
+        console.warn('No current user found in localStorage');
+        return null;
+      }
+
+      console.log('Getting company data for current user:', currentUser.username);
+      
+      // Fetch the user's companies
+      const companyResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'block_iomad_company_admin_get_user_companies',
+          userid: currentUser.id,
+        },
+      });
+
+      if (companyResponse.data && Array.isArray(companyResponse.data.companies) && companyResponse.data.companies.length > 0) {
+        // Use the same logic as in authenticateUser to determine the correct company
+        const detectedRole = currentUser.role || 'student';
+        
+        if (detectedRole === 'school_admin') {
+          // For school admins, try to find the company they manage
+          let targetCompany = null;
+          
+          for (const company of companyResponse.data.companies) {
+            if (company.role && (company.role.toLowerCase().includes('manager') || 
+                               company.role.toLowerCase().includes('principal') ||
+                               company.role.toLowerCase().includes('admin'))) {
+              targetCompany = company;
+              break;
+            }
+          }
+          
+          if (!targetCompany) {
+            console.warn(`School admin ${currentUser.username} has no clear company manager role, using first company`);
+            targetCompany = companyResponse.data.companies[0];
+          }
+          
+          console.log(`Current user company: ${targetCompany.name} (ID: ${targetCompany.id})`);
+          return targetCompany;
+        } else {
+          // For non-school-admin users, use the first company
+          const company = companyResponse.data.companies[0];
+          console.log(`Current user company: ${company.name} (ID: ${company.id})`);
+          return company;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting current user company:', error);
+      return null;
+    }
+  },
+
+  // Test function to check all users and their roles
+  async testUserRoles() {
+    try {
+      console.log('🔍 Testing IOMAD user roles...');
+      
+      // Get all users
+      const allUsers = await this.getAllUsers();
+      
+      console.log('📊 All Users with Roles:');
+      allUsers.forEach((user, index) => {
+        console.log(`${index + 1}. ${user.fullname} (${user.username})`);
+        console.log(`   ID: ${user.id}`);
+        console.log(`   Role: ${user.role}`);
+        console.log(`   IOMAD Roles:`, user.roles);
+        console.log(`   Email: ${user.email}`);
+        console.log('---');
+      });
+      
+      // Group users by role with fallback logic
+      const teachers = allUsers.filter(u => u.role === 'teacher' || u.role === 'trainer');
+      const students = allUsers.filter(u => u.role === 'student');
+      const admins = allUsers.filter(u => u.role === 'admin' || u.role === 'school_admin');
+      
+      // If no teachers found, try alternative roles
+      let alternativeTeachers: any[] = [];
+      if (teachers.length === 0) {
+        console.log('⚠️ No teachers found, checking alternative roles...');
+        alternativeTeachers = allUsers.filter(user => 
+          user.role === 'editingteacher' || 
+          user.role === 'student' || 
+          user.role === 'teachers' ||
+          user.username?.toLowerCase().includes('teacher') ||
+          user.username?.toLowerCase().includes('trainer')
+        );
+        console.log(`Found ${alternativeTeachers.length} alternative teachers:`, alternativeTeachers.map(u => u.username));
+      }
+      
+      console.log('📈 Role Statistics:');
+      console.log(`Teachers: ${teachers.length}`);
+      console.log(`Students: ${students.length}`);
+      console.log(`Admins: ${admins.length}`);
+      console.log(`Alternative Teachers: ${alternativeTeachers.length}`);
+      
+      // Show sample users for each role
+      console.log('\n👨‍🏫 Sample Teachers:');
+      teachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username})`));
+      
+      console.log('\n👨‍🎓 Sample Students:');
+      students.slice(0, 3).forEach(s => console.log(`- ${s.fullname} (${s.username})`));
+      
+      console.log('\n👨‍💼 Sample Admins:');
+      admins.slice(0, 3).forEach(a => console.log(`- ${a.fullname} (${a.username})`));
+      
+      if (alternativeTeachers.length > 0) {
+        console.log('\n🔍 Alternative Teachers:');
+        alternativeTeachers.slice(0, 3).forEach(t => console.log(`- ${t.fullname} (${t.username}) - Role: ${t.role}`));
+      }
+      
+      return {
+        totalUsers: allUsers.length,
+        teachers: teachers.length,
+        students: students.length,
+        admins: admins.length,
+        alternativeTeachers: alternativeTeachers.length,
+        sampleUsers: {
+          teachers: teachers.slice(0, 3),
+          students: students.slice(0, 3),
+          admins: admins.slice(0, 3),
+          alternativeTeachers: alternativeTeachers.slice(0, 3)
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error testing user roles:', error);
+      return null;
     }
   }
 };
