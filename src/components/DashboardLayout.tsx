@@ -199,6 +199,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           title: 'EMULATORS',
           items: [
             { name: 'Scratch Emulator', icon: Play, path: '/dashboard/student/emulators' },
+            { name: 'Python Emulator', icon: Play, path: '/dashboard/student/python-emulators' },
           ]
         },
         {
