@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MyAIBuddy from "./components/MyAIBuddy";
 import AOS from 'aos';
@@ -93,10 +94,11 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <BrowserRouter>
-            <div className="min-h-screen bg-gray-50 text-gray-800">
-              <MyAIBuddy />
-              <Routes>
+          <ThemeProvider>
+            <BrowserRouter>
+              <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+                <MyAIBuddy />
+                <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/debug/roles" element={<RoleDebug />} />
                 <Route path="/login" element={<LoginPage />} />
@@ -320,6 +322,7 @@ const App = () => {
               </Routes>
             </div>
           </BrowserRouter>
+          </ThemeProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
