@@ -60,6 +60,7 @@ import StudentCourses from "./pages/student/Courses";
 import StudentGrades from "./pages/student/Grades";
 import StudentMessages from "./pages/student/Messages";
 import StudentProgress from "./pages/student/Progress";
+import Emulators from "./pages/student/Emulators";
 
 // Settings pages
 import SchoolAdminSettings from "./pages/SchoolAdminSettings";
@@ -305,6 +306,11 @@ const App = () => {
                 <Route path="/dashboard/student/progress" element={
                   <ProtectedRoute requiredRole="student">
                     <StudentProgress />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/emulators" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Emulators />
                   </ProtectedRoute>
                 } />
                 

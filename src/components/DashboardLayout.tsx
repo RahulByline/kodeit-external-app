@@ -21,7 +21,8 @@ import {
   Award,
   Clock,
   LogOut,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Play
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import LogoutDialog from './ui/logout-dialog';
@@ -192,6 +193,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           items: [
             { name: 'Calendar', icon: Calendar, path: '/dashboard/student/calendar' },
             { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
+          ]
+        },
+        {
+          title: 'EMULATORS',
+          items: [
+            { name: 'Scratch Emulator', icon: Play, path: '/dashboard/student/emulators' },
+            { name: 'Python Emulator', icon: Play, path: '/dashboard/student/python-emulators' },
           ]
         },
         {
