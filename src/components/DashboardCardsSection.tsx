@@ -1,66 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, Shield, School, Users, GraduationCap } from "lucide-react";
+import { Shield, School, Users, GraduationCap } from "lucide-react";
+import { dashboardRoles as sharedDashboardRoles } from "@/data/dashboardRoles";
 import { useNavigate } from "react-router-dom";
 
-const dashboardRoles = [
-  {
-    id: "admin",
-    title: "Admin",
-    description: "Complete system administration and comprehensive analytics dashboard",
-    icon: Shield,
-    iconColor: "text-red-400",
-    iconBg: "bg-red-500/20",
-    features: [
-      "System Management",
-      "Advanced Analytics", 
-      "User Administration"
-    ],
-    gradient: "from-red-500/20 to-red-600/10"
-  },
-  {
-    id: "school-admin", 
-    title: "School Admin",
-    description: "Monitor school-wide progress and manage teacher development programs",
-    icon: School,
-    iconColor: "text-purple-400",
-    iconBg: "bg-purple-500/20",
-    features: [
-      "School Analytics",
-      "Teacher Reports",
-      "Progress Monitoring"
-    ],
-    gradient: "from-purple-500/20 to-purple-600/10"
-  },
-  {
-    id: "teacher",
-    title: "Teacher", 
-    description: "Manage courses, track student progress, and create assignments",
-    icon: Users,
-    iconColor: "text-green-400",
-    iconBg: "bg-green-500/20",
-    features: [
-      "Course Management",
-      "Student Analytics",
-      "Assignment Tools"
-    ],
-    gradient: "from-green-500/20 to-green-600/10"
-  },
-  {
-    id: "student",
-    title: "Student",
-    description: "Access your courses, track progress, and submit assignments",
-    icon: GraduationCap,
-    iconColor: "text-blue-400", 
-    iconBg: "bg-blue-500/20",
-    features: [
-      "Course Access",
-      "Progress Tracking",
-      "Assignment Submission"
-    ],
-    gradient: "from-blue-500/20 to-blue-600/10"
-  }
-];
+const dashboardRoles = sharedDashboardRoles;
 
 const DashboardCardsSection = () => {
   const navigate = useNavigate();
@@ -102,57 +46,44 @@ const DashboardCardsSection = () => {
           </p>
         </div>
 
-        {/* Dashboard Cards in Horizontal Row */}
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 max-w-7xl mx-auto">
+        {/* Cards styled like the provided design */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 max-w-7xl mx-auto">
           {dashboardRoles.map((role, index) => (
-            <Card 
-              key={role.id} 
-              className="group bg-white flex-1 transition-all duration-500 hover:shadow-2xl hover:shadow-primary/20 hover:-translate-y-4 overflow-hidden border border-gray-100 min-h-[400px] relative"
+            <Card
+              key={role.id}
+              className={`relative overflow-hidden rounded-2xl shadow-xl border-0 bg-gradient-to-b ${role.gradient} h-[520px] w-full flex flex-col items-center text-white`}
               data-aos="fade-up"
-              data-aos-delay={index * 200}
+              data-aos-delay={index * 150}
             >
-              {/* Animated Border */}
-              <div className={`h-1.5 bg-gradient-to-r ${role.gradient} animate-pulse`} />
-              
-              {/* Floating Elements */}
-              <div className="absolute top-4 right-4 w-2 h-2 bg-primary/20 rounded-full animate-bounce"></div>
-              <div className="absolute bottom-4 left-4 w-1 h-1 bg-primary/30 rounded-full animate-ping"></div>
-              
-              <CardContent className="p-6 h-full flex flex-col">
-                <div className="flex items-center mb-4 group-hover:scale-105 transition-transform duration-300">
-                  <div className={`p-3 rounded-lg ${role.iconBg} mr-4 group-hover:scale-110 transition-transform duration-300`}>
-                    <role.icon className={`${role.iconColor} w-6 h-6 group-hover:rotate-12 transition-transform duration-300`} />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800 group-hover:text-primary transition-colors">
-                    {role.title}
-                  </h3>
+              <CardContent className="flex flex-col items-center text-center h-full w-full px-6 pt-10 pb-6">
+                {/* Top white icon circle */}
+                <div className="w-28 h-28 rounded-full bg-white shadow-2xl flex items-center justify-center mx-auto mb-8">
+                  <role.icon className={`${role.iconColor} w-12 h-12`} />
                 </div>
 
-                <p className="text-gray-600 mb-6 flex-grow group-hover:text-gray-700 transition-colors">
+                {/* Title */}
+                <h3 className="text-2xl font-semibold tracking-wide mb-2">
+                  {role.title}
+                </h3>
+
+                {/* Description */}
+                <p className="text-white/85 text-sm leading-relaxed px-2 mb-8">
                   {role.description}
                 </p>
 
-                <ul className="space-y-2 mb-6">
-                  {role.features.map((feature, featureIndex) => (
-                    <li 
-                      key={featureIndex} 
-                      className="flex items-center text-sm text-gray-600 group-hover:text-gray-700 transition-colors"
-                      style={{ animationDelay: `${featureIndex * 100}ms` }}
-                    >
-                      <div className="w-1.5 h-1.5 bg-primary rounded-full mr-3 group-hover:scale-150 transition-transform duration-300" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
+                {/* Spacer to push CTA to bottom */}
+                <div className="flex-1" />
 
+                {/* White pill CTA button */}
                 <Button
-                  variant="hero"
-                  className="w-full group/btn mt-auto hover:scale-105 transition-all duration-300"
+                  variant="default"
+                  className="bg-white text-gray-800 hover:bg-white hover:text-gray-900 rounded-full px-8 py-2 shadow-md hover:shadow-lg transition-all"
                   onClick={() => handleAccessDashboard(role.id)}
                 >
                   Access Dashboard
-                  <ArrowRight className="ml-2 w-4 h-4 group-hover/btn:translate-x-2 transition-transform duration-300" />
                 </Button>
+
+                
               </CardContent>
             </Card>
           ))}
