@@ -75,7 +75,7 @@ const BaseLoginPage: React.FC<BaseLoginPageProps> = ({
           {/* Background image with overlay */}
           <div 
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: "url('/login.png')" }}
+            style={{ backgroundImage: "url('/login.webp')" }}
             aria-label="Educational background with students and teachers"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-orange-300/30 to-orange-300/30"></div>

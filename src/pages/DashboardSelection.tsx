@@ -105,12 +105,11 @@ const DashboardCardsSection = () => {
         {enhancedRoles.map((role, index) => (
           <Card
             key={role.id}
-            className={`relative overflow-hidden rounded-2xl shadow-xl border-0 bg-gradient-to-b ${role.gradient} h-[220px] w-full flex flex-col items-center text-white`} // decreased height
+            className={`relative overflow-hidden rounded-2xl shadow-xl border-0 bg-gradient-to-b ${role.gradient} h-[100px] w-full flex flex-col items-center text-white`} // decreased height
             data-aos="fade-up"
             data-aos-delay={index * 150}
           >
-            <CardContent className="flex flex-col items-center text-center h-full w-full px-4 pt-4 pb-3"> {/* reduced padding */}
-              {/* Top white icon circle, reduced size */}
+ <CardContent className="flex flex-col items-center text-center w-full px-4 pt-3 pb-2 gap-y-2">              {/* Top white icon circle, reduced size */}
               <div className="w-16 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center mx-auto mb-3">
                 {/* Correctly rendering the icon component, reduced size */}
                 <role.icon className={`${role.iconColor} w-6 h-6`} />
@@ -124,11 +123,11 @@ const DashboardCardsSection = () => {
                 {role.description}
               </p>
               {/* Spacer to push CTA to bottom */}
-              <div className="flex-1" />
+              {/* <div className="flex-1" /> */}
               {/* White pill CTA button */}
               <Button
-                variant="default"
-                className="bg-white text-gray-800 hover:bg-gray-100 rounded-full px-4 py-1 shadow-md hover:shadow-lg transition-all text-xs"
+   variant="default"
+  className="mt-2 bg-white text-gray-800 hover:bg-gray-100 rounded-full px-4 py-1 shadow-md hover:shadow-lg transition-all text-xs" 
                 onClick={() => handleAccessDashboard(role.id)}
               >
                 Access Dashboard

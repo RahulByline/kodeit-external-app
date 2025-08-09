@@ -9,14 +9,75 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  preview: {
+    port: 8080,
+    host: "::",
+  },
   plugins: [
     react(),
     mode === 'development' &&
     componentTagger(),
+    {
+      name: 'spa-fallback-middleware',
+      configureServer(server: any) {
+        server.middlewares.use('/api', (req: any, res: any, next: any) => next());
+        server.middlewares.use((req: any, res: any, next: any) => {
+          // Skip files with extensions and API routes
+          if (req.url && (req.url.includes('.') || req.url.startsWith('/api'))) {
+            return next();
+          }
+          
+          // For all other routes, serve index.html to let React Router handle it
+          if (req.headers.accept?.includes('text/html')) {
+            req.url = '/';
+          }
+          
+          next();
+        });
+      }
+    }
   ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: [
+      'scratch-vm',
+      'scratch-blocks',
+      'scratch-render',
+      'scratch-audio',
+      'scratch-storage',
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@tanstack/react-query',
+      'lucide-react'
+    ]
+  },
+  build: {
+    rollupOptions: {
+      external: ['fs', 'path'],
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-tabs'],
+          charts: ['recharts'],
+          scratch: ['scratch-vm', 'scratch-blocks', 'scratch-render', 'scratch-audio', 'scratch-storage'],
+          icons: ['lucide-react'],
+          utils: ['clsx', 'class-variance-authority', 'tailwind-merge'],
+        },
+      },
+    },
+    target: 'esnext',
+    minify: 'esbuild',
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1000,
+  },
+  define: {
+    global: 'globalThis',
+  },
+  assetsInclude: ['**/*.wasm'],
 }));
