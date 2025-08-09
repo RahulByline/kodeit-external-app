@@ -1,12 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Users, BookOpen, BarChart3 } from "lucide-react";
+import OptimizedImage from "@/components/ui/optimized-image";
 
 const features = [
   {
     title: "Innovative ICT Curricula",
     description: "KODEIT introduces an ICT curriculum that's tech-forward...",
-    image: "/card1.jpg",
+    image: "/card1.webp",
     icon: Users,
     gradient: "from-blue-500 to-purple-600",
     link: "https://www.kodeit.com/ict_curriculum.html"
@@ -14,7 +15,7 @@ const features = [
   {
     title: "Kodeit for Schools",
     description: "KODEIT provides a unique and innovative ICT curriculum...",
-    image: "/card2.jpg",
+    image: "/card2.webp",
     icon: BookOpen,
     gradient: "from-purple-500 to-pink-600",
     link: "https://www.kodeit.com/kodeit_schools.html"
@@ -22,7 +23,7 @@ const features = [
   {
     title: "Cutting Edge Technology Leading The Way",
     description: "With top-notch multimedia resources...",
-    image: "/card3.jpg",
+    image: "/card3.webp",
     icon: BarChart3,
     gradient: "from-cyan-500 to-blue-600",
     link: "https://www.kodeit.com/technology.html"
@@ -54,10 +55,11 @@ const FeatureSection = () => {
               <div key={index} className="flex-shrink-0 w-full lg:w-1/3 px-4">
                 <Card className="group overflow-hidden bg-white border border-gray-100 hover:border-primary/30 transition-all duration-300 hover:shadow-lg h-full">
                   <div className="relative h-64 overflow-hidden">
-                    <img
+                    <OptimizedImage
                       src={feature.image}
                       alt={feature.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     />
                     <div className={`absolute inset-0 bg-gradient-to-t ${feature.gradient} opacity-30 group-hover:opacity-20 transition-opacity duration-300`} />
                     <div className="absolute top-4 left-4 p-3 rounded-full bg-white/90">

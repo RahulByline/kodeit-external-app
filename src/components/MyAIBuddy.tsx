@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Bot, User, Loader2, MessageCircle, X, CheckCircle, Lightbulb, BookOpen, ExternalLink } from 'lucide-react';
+import { Send, User, Loader2, X, CheckCircle, Lightbulb, BookOpen, ExternalLink } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -369,10 +369,14 @@ const MyAIBuddy: React.FC = () => {
        {!isOpen && (
          <Button
            onClick={() => setIsOpen(true)}
-           className="fixed bottom-20 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 z-50"
+           className="fixed bottom-20 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 z-50 p-2"
            size="icon"
          >
-           <MessageCircle className="h-6 w-6" />
+           <img 
+             src="/Robot.gif" 
+             alt="AI Buddy Robot" 
+             className="h-10 w-10 rounded-full object-cover"
+           />
          </Button>
        )}
 
@@ -383,11 +387,22 @@ const MyAIBuddy: React.FC = () => {
                          <CardHeader className="pb-4 pt-6 px-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
                <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-3">
-                             <div className="p-3 bg-white/20 rounded-full animate-pulse">
-                               <Bot className="h-6 w-6" />
+                             <div className="p-2 bg-white/20 rounded-full">
+                               <img 
+                                 src="/Robot.gif" 
+                                 alt="AI Buddy Robot" 
+                                 className="h-8 w-8 rounded-full object-cover"
+                               />
                              </div>
                              <div className="pl-2">
-                               <CardTitle className="text-xl font-semibold">🤖 My AI Buddy</CardTitle>
+                               <CardTitle className="text-xl font-semibold flex items-center">
+                                 <img 
+                                   src="/Robot.gif" 
+                                   alt="Robot" 
+                                   className="h-6 w-6 mr-2 rounded-full object-cover"
+                                 />
+                                 My AI Buddy
+                               </CardTitle>
                                <p className="text-sm text-blue-100 mt-1">Powered by Koedit</p>
                              </div>
                            </div>
@@ -407,7 +422,11 @@ const MyAIBuddy: React.FC = () => {
                <ScrollArea className="flex-1 p-4 custom-scrollbar smooth-scroll">
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-                    <Bot className="h-12 w-12 mb-4 text-gray-400" />
+                    <img 
+                      src="/Robot.gif" 
+                      alt="AI Buddy Robot" 
+                      className="h-16 w-16 mb-4 rounded-full object-cover"
+                    />
                     <h3 className="text-lg font-semibold mb-2">Welcome to My AI Buddy!</h3>
                     <p className="text-sm">Ask me anything and I'll help you out.</p>
                   </div>
@@ -427,8 +446,12 @@ const MyAIBuddy: React.FC = () => {
                          >
                            <div className="flex items-start space-x-3">
                              {message.sender === 'bot' && (
-                               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-full flex-shrink-0">
-                                 <Bot className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                               <div className="p-1 bg-blue-100 dark:bg-blue-900 rounded-full flex-shrink-0">
+                                 <img 
+                                   src="/Robot.gif" 
+                                   alt="AI Buddy Robot" 
+                                   className="h-6 w-6 rounded-full object-cover"
+                                 />
                                </div>
                              )}
                              <div className="flex-1 space-y-3">
@@ -464,13 +487,22 @@ const MyAIBuddy: React.FC = () => {
                        <div className="flex justify-start">
                          <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl rounded-bl-md px-6 py-4 shadow-lg border border-gray-200 dark:border-gray-700">
                            <div className="flex items-center space-x-3">
-                             <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-full">
-                               <Bot className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                             <div className="p-1 bg-blue-100 dark:bg-blue-900 rounded-full">
+                               <img 
+                                 src="/Robot.gif" 
+                                 alt="AI Buddy Robot" 
+                                 className="h-6 w-6 rounded-full object-cover"
+                               />
                              </div>
                              <div className="flex items-center space-x-2">
                                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                               <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">
-                                 🤖 Typing...
+                               <span className="text-sm text-gray-600 dark:text-gray-400 font-medium flex items-center">
+                                 <img 
+                                   src="/Robot.gif" 
+                                   alt="Robot" 
+                                   className="h-4 w-4 mr-1 rounded-full object-cover"
+                                 />
+                                 Typing...
                                </span>
                              </div>
                            </div>

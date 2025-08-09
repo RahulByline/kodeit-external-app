@@ -3,13 +3,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Shield, School, Users, GraduationCap } from "lucide-react";
 import { dashboardRoles as sharedDashboardRoles } from "@/data/dashboardRoles";
 import { useNavigate } from "react-router-dom";
+import { useCallback } from "react";
+import { preloadComponent } from "@/utils/preloader";
 
 const dashboardRoles = sharedDashboardRoles;
 
 const DashboardCardsSection = () => {
   const navigate = useNavigate();
 
-  const handleAccessDashboard = (roleId: string) => {
+  const handleAccessDashboard = useCallback((roleId: string) => {
     // Navigate to role-specific login page
     if (roleId === 'admin') {
       navigate('/login/admin');
@@ -22,7 +24,34 @@ const DashboardCardsSection = () => {
     } else {
       navigate('/login');
     }
-  };
+  }, [navigate]);
+
+  const handleCardHover = useCallback((roleId: string) => {
+    // Preload components when user hovers over cards
+    const preloadMap = {
+      'admin': () => Promise.all([
+        import('../pages/AdminLoginPage'),
+        import('../pages/AdminDashboard')
+      ]),
+      'school-admin': () => Promise.all([
+        import('../pages/SchoolAdminLoginPage'),
+        import('../pages/SchoolAdminDashboard')
+      ]),
+      'teacher': () => Promise.all([
+        import('../pages/TeacherLoginPage'),
+        import('../pages/TeacherDashboard')
+      ]),
+      'student': () => Promise.all([
+        import('../pages/StudentLoginPage'),
+        import('../pages/StudentDashboard')
+      ])
+    };
+
+    const preloadFn = preloadMap[roleId as keyof typeof preloadMap];
+    if (preloadFn) {
+      preloadComponent(preloadFn, `${roleId}-components`);
+    }
+  }, []);
 
   return (
     <section id="dashboard-section" className="py-20 bg-gradient-to-br from-gray-50 to-white relative overflow-hidden">
@@ -51,9 +80,10 @@ const DashboardCardsSection = () => {
           {dashboardRoles.map((role, index) => (
             <Card
               key={role.id}
-              className={`relative overflow-hidden rounded-2xl shadow-xl border-0 bg-gradient-to-b ${role.gradient} h-[520px] w-full flex flex-col items-center text-white`}
+              className={`relative overflow-hidden rounded-2xl shadow-xl border-0 bg-gradient-to-b ${role.gradient} h-[520px] w-full flex flex-col items-center text-white transition-transform duration-300 hover:scale-105`}
               data-aos="fade-up"
               data-aos-delay={index * 150}
+              onMouseEnter={() => handleCardHover(role.id)}
             >
               <CardContent className="flex flex-col items-center text-center h-full w-full px-6 pt-10 pb-6">
                 {/* Top white icon circle */}
