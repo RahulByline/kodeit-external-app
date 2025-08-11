@@ -8,7 +8,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:scratch": "cd vendor/scratch-gui && $env:BUILD_MODE=\"dist\"; npm run build",
+    "sync:scratch": "if exist public\\scratch rmdir /s /q public\\scratch && mkdir public\\scratch && xcopy vendor\\scratch-gui\\dist\\* public\\scratch\\ /E /I /Y && copy vendor\\scratch-gui\\build\\index.html public\\scratch\\ && copy vendor\\scratch-gui\\build\\gui.js public\\scratch\\",
+    "update:scratch": "npm run build:scratch && npm run sync:scratch"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -43,6 +46,7 @@
     "@tanstack/react-query": "^5.56.2",
     "aos": "^2.3.4",
     "axios": "^1.11.0",
+    "blockly": "^11.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",

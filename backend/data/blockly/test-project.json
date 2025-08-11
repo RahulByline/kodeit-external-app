@@ -1,0 +1,21 @@
+{
+  "id": "test-project",
+  "name": "Test Project",
+  "workspaceJson": {
+    "blocks": {
+      "languageVersion": 0,
+      "blocks": [
+        {
+          "type": "text_print",
+          "id": "test-block",
+          "x": 50,
+          "y": 50,
+          "fields": {
+            "TEXT": "Hello from API!"
+          }
+        }
+      ]
+    }
+  },
+  "updatedAt": "2025-08-11T12:06:41.632Z"
+}

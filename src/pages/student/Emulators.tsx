@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../context/AuthContext';
-import ScratchEditor from '../../components/ScratchEditor';
+import { Link } from 'react-router-dom';
 
 const Emulators: React.FC = () => {
   const { currentUser } = useAuth();
@@ -18,7 +18,8 @@ const Emulators: React.FC = () => {
       name: 'Scratch Emulator',
       description: 'Learn programming with visual blocks',
       icon: Play,
-      status: 'active'
+      status: 'active',
+      url: '/editor'
     }
   ];
 
@@ -128,11 +129,11 @@ const Emulators: React.FC = () => {
             const Icon = emulator.icon;
             
             return (
-              <Card 
-                key={emulator.id}
-                className="ring-2 ring-blue-500 bg-blue-50 cursor-pointer transition-all hover:shadow-md hover:ring-blue-600"
-                onClick={() => setSelectedEmulator(emulator.id)}
-              >
+              <Link to={emulator.url || '#'}>
+                <Card 
+                  key={emulator.id}
+                  className="ring-2 ring-blue-500 bg-blue-50 cursor-pointer transition-all hover:shadow-md hover:ring-blue-600"
+                >
                 <CardContent className="p-4">
                   <div className="flex items-center space-x-3">
                     <div className="p-2 rounded-lg bg-blue-100">
@@ -155,6 +156,7 @@ const Emulators: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
+            </Link>
             );
           })}
         </div>

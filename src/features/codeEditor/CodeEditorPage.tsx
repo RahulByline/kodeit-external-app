@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import * as monaco from "monaco-editor";
 import clsx from "clsx";
-import { 
-  File, 
-  Play, 
-  Save, 
+import DashboardLayout from "../../components/DashboardLayout";
+import {
+  File,
+  Play,
   Download,
   RefreshCw,
   Settings,
@@ -13,7 +13,6 @@ import {
   ChevronDown
 } from "lucide-react";
 
-import DashboardLayout from "../../components/DashboardLayout";
 import { useAuth } from "../../context/AuthContext";
 import EditorPane from "./EditorPane";
 import OutputPane from "./OutputPane";
@@ -56,45 +55,45 @@ const getLanguageLabel = (lang: Language): string => {
 
 const getLanguageIcon = (lang: Language): React.ReactElement => {
   const iconStyle = { width: '20px', height: '20px', borderRadius: '3px' };
-  
+
   switch (lang) {
     case "javascript":
       return (
-        <img 
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg" 
-          alt="JavaScript" 
+        <img
+          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg"
+          alt="JavaScript"
           style={iconStyle}
         />
       );
     case "python":
       return (
-        <img 
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" 
-          alt="Python" 
+        <img
+          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg"
+          alt="Python"
           style={iconStyle}
         />
       );
     case "c":
       return (
-        <img 
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/c/c-original.svg" 
-          alt="C" 
+        <img
+          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/c/c-original.svg"
+          alt="C"
           style={iconStyle}
         />
       );
     case "cpp":
       return (
-        <img 
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/cplusplus/cplusplus-original.svg" 
-          alt="C++" 
+        <img
+          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/cplusplus/cplusplus-original.svg"
+          alt="C++"
           style={iconStyle}
         />
       );
     case "java":
       return (
-        <img 
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg" 
-          alt="Java" 
+        <img
+          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg"
+          alt="Java"
           style={iconStyle}
         />
       );
@@ -115,12 +114,13 @@ const getLanguageSymbol = (lang: Language): string => {
 };
 
 const getLanguageColor = (lang: Language): string => {
+  // Keep language chip colors; UI chrome is controlled by CSS variables (pastel green).
   switch (lang) {
-    case "javascript": return "#f7df1e"; // JavaScript yellow
-    case "python": return "#3776ab"; // Python blue
-    case "c": return "#00599c"; // C blue
-    case "cpp": return "#00599c"; // C++ blue
-    case "java": return "#ed8b00"; // Java orange
+    case "javascript": return "#f7df1e";
+    case "python": return "#3776ab";
+    case "c": return "#00599c";
+    case "cpp": return "#00599c";
+    case "java": return "#ed8b00";
     default: return "#007acc";
   }
 };
@@ -142,31 +142,24 @@ const CodeEditorPage: React.FC = () => {
   // Load template and update filename when language changes
   useEffect(() => {
     const savedCode = localStorage.getItem(`codeEditor_${language}`);
-    
-    // Always load demo code for new language selection
     if (savedCode && savedCode.trim() !== "") {
       setCode(savedCode);
     } else {
-      // Load demo template
       setCode(templates[language] || `// ${getLanguageLabel(language)} Demo Code\nconsole.log("Hello, World!");`);
     }
-    
-    // Update filename based on language
     const extension = getFileExtension(language);
     const newFileName = language === "java" ? "Main.java" : `main.${extension}`;
     setFileName(newFileName);
-    
-    // Set initialized after a brief delay for animation
+
     const timer = setTimeout(() => setIsInitialized(true), 500);
     return () => clearTimeout(timer);
   }, [language]);
 
-  // Save code to localStorage whenever it changes
+  // Save code to localStorage
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       localStorage.setItem(`codeEditor_${language}`, code);
-    }, 1000); // Debounce saving
-    
+    }, 1000);
     return () => clearTimeout(timeoutId);
   }, [code, language]);
 
@@ -174,29 +167,23 @@ const CodeEditorPage: React.FC = () => {
     const currentCode = code.trim();
     const currentTemplate = templates[language].trim();
     const savedCode = localStorage.getItem(`codeEditor_${language}`)?.trim();
-    
-    // Check if user has made changes beyond the template
     const hasUnsavedChanges = currentCode !== currentTemplate && currentCode !== savedCode;
-    
+
     if (hasUnsavedChanges) {
       const confirmed = window.confirm(
         `You have unsaved changes in ${getLanguageLabel(language)}. Do you want to switch to ${getLanguageLabel(newLanguage)} and lose your changes?`
       );
       if (!confirmed) return;
     }
-    
-    // Clear previous state
+
     setOutput("");
     setErrors("");
     setDiagnostics([]);
-    
-    // Set new language (this will trigger useEffect to load template/saved code)
     setLanguage(newLanguage);
   }, [code, language]);
 
   const runCode = useCallback(async () => {
     if (isRunning) return;
-    
     setIsRunning(true);
     setOutput("");
     setErrors("");
@@ -204,22 +191,29 @@ const CodeEditorPage: React.FC = () => {
     setActiveTab("output");
 
     try {
-      const response = await axios.post<RunResult>("http://localhost:5050/api/run", {
-        language,
-        code
+      console.log('🚀 Running code with local execution...');
+      const response = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language,
+          code
+        })
       });
-
-      const { stdout, stderr, exitCode, diagnostics: newDiagnostics } = response.data;
       
-      setOutput(stdout);
-      setErrors(stderr);
-      setDiagnostics(newDiagnostics || []);
+      const result = await response.json();
       
-      if (exitCode !== 0 && newDiagnostics && newDiagnostics.length > 0) {
+      if (result.error) {
+        setErrors(`Error: ${result.error}`);
         setActiveTab("errors");
+      } else {
+        const finalOut = result.stderr?.trim() || result.stdout?.trim() || "No output";
+        setOutput(finalOut);
+        setActiveTab("output");
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || "Failed to run code";
+      console.error('Code execution error:', error);
+      const errorMessage = error.message || "Failed to run code";
       setErrors(`Error: ${errorMessage}`);
       setActiveTab("errors");
     } finally {
@@ -229,29 +223,17 @@ const CodeEditorPage: React.FC = () => {
 
   const saveCode = useCallback(() => {
     try {
-      // Create a blob with the code content
       const blob = new Blob([code], { type: 'text/plain' });
-      
-      // Create a temporary URL for the blob
       const url = URL.createObjectURL(blob);
-      
-      // Create a temporary anchor element for download
       const link = document.createElement('a');
       link.href = url;
-      link.download = fileName; // Use the current fileName which already has the correct extension
-      
-      // Append to body, click, and remove
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Clean up the URL
       URL.revokeObjectURL(url);
-      
-      // Show success feedback
+
       const successMessage = `✅ Downloaded: ${fileName}`;
-      
-      // Create a temporary toast notification
       const toast = document.createElement('div');
       toast.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -267,64 +249,49 @@ const CodeEditorPage: React.FC = () => {
         position: fixed;
         top: 20px;
         right: 20px;
-        background: linear-gradient(135deg, #10b981, #059669);
-        color: white;
+        background: linear-gradient(135deg, #a7f3d0, #86efac);
+        color: #064e3b;
         padding: 16px 24px;
         border-radius: 12px;
         font-size: 14px;
         font-weight: 600;
-        box-shadow: 
-          0 10px 15px -3px rgba(0, 0, 0, 0.1),
-          0 4px 6px -2px rgba(0, 0, 0, 0.05),
-          inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,.08), 0 4px 6px -2px rgba(0,0,0,.04);
         z-index: 9999;
         transform: translateX(400px);
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all .4s cubic-bezier(.4,0,.2,1);
         backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(6, 78, 59, .08);
       `;
-      
       document.body.appendChild(toast);
-      
-      // Animate in
-      setTimeout(() => {
-        toast.style.transform = 'translateX(0)';
-      }, 100);
-      
-      // Animate out and remove
+      setTimeout(() => { toast.style.transform = 'translateX(0)'; }, 100);
       setTimeout(() => {
         toast.style.transform = 'translateX(400px)';
-        setTimeout(() => {
-          document.body.removeChild(toast);
-        }, 300);
+        setTimeout(() => { document.body.removeChild(toast); }, 300);
       }, 3000);
-      
     } catch (error: any) {
       alert(`Failed to download file: ${error.message}`);
     }
   }, [code, fileName]);
 
   const handleErrorClick = useCallback((line: number, column: number) => {
-    // This would be handled by Monaco Editor to jump to the error location
-    // Monaco will handle this automatically when we set the markers
     console.log(`Jump to line ${line}, column ${column}`);
   }, []);
 
-  // Handle keyboard shortcuts
+
+
+  // keyboard shortcuts (custom events are dispatched elsewhere in app)
   useEffect(() => {
     const handleRunCode = () => runCode();
     const handleSaveCode = () => saveCode();
-
     document.addEventListener("runCode", handleRunCode);
     document.addEventListener("saveCode", handleSaveCode);
-
     return () => {
       document.removeEventListener("runCode", handleRunCode);
       document.removeEventListener("saveCode", handleSaveCode);
     };
   }, [runCode, saveCode]);
 
-  // Handle click outside dropdown to close it
+  // close language dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -332,36 +299,38 @@ const CodeEditorPage: React.FC = () => {
         setIsDropdownOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isDropdownOpen]);
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="code-editor-spacer"></div>
-      <div className="code-editor-container">
-        <div className="vscode-editor">
-          {/* VS Code Style Header */}
+      <div className="vscode-editor">
+          {/* Header */}
           <div className="vscode-header">
             <div className="vscode-title">
               <div className="language-header">
                 <div className="language-icon">{getLanguageIcon(language)}</div>
-                <span 
-                  className="language-symbol" 
+                <span
+                  className="language-symbol"
                   style={{ backgroundColor: getLanguageColor(language) }}
                 >
                   {getLanguageSymbol(language)}
                 </span>
-                <span className="language-name">{getLanguageLabel(language)} Online Compiler</span>
+                <span className="language-name">{getLanguageLabel(language)} Compiler</span>
               </div>
             </div>
             <div className="vscode-actions">
               <div className="status-indicators">
-                <div className={`status-dot ${isInitialized ? 'ready' : 'loading'}`} title={isInitialized ? 'Editor Ready' : 'Loading...'}></div>
-                {isRunning && <div className="activity-indicator" title="Code Running">
-                  <div className="pulse"></div>
-                </div>}
+                <div
+                  className={`status-dot ${isInitialized ? "ready" : "loading"}`}
+                  title={isInitialized ? "Editor Ready" : "Loading..."}
+                ></div>
+                {isRunning && (
+                  <div className="activity-indicator" title="Code Running">
+                    <div className="pulse"></div>
+                  </div>
+                )}
               </div>
               <button className="vscode-btn" onClick={() => window.location.reload()}>
                 <RefreshCw size={16} />
@@ -373,7 +342,7 @@ const CodeEditorPage: React.FC = () => {
           </div>
 
           <div className="vscode-layout">
-            {/* Main Content Area - Full Width */}
+            {/* Main Content */}
             <div className="vscode-main vscode-main-fullwidth">
               {/* Tab Bar */}
               <div className="vscode-tabs">
@@ -400,7 +369,7 @@ const CodeEditorPage: React.FC = () => {
                       </div>
                       <ChevronDown size={16} className={clsx("dropdown-chevron", { open: isDropdownOpen })} />
                     </button>
-                    
+
                     {isDropdownOpen && (
                       <div className="language-dropdown-menu">
                         {(["javascript", "python", "c", "cpp", "java"] as Language[]).map((lang) => (
@@ -423,18 +392,18 @@ const CodeEditorPage: React.FC = () => {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="toolbar-center">
-                  <button 
+                  <button
                     className="run-btn"
-                    onClick={runCode} 
+                    onClick={runCode}
                     disabled={isRunning}
                   >
                     <Play size={16} />
                     {isRunning ? "Running..." : "Run"}
                   </button>
-                  
-                  <button 
+
+                  <button
                     className="download-btn"
                     onClick={saveCode}
                     title={`Download ${fileName}`}
@@ -442,8 +411,8 @@ const CodeEditorPage: React.FC = () => {
                     <Download size={16} />
                     Download
                   </button>
-                  
-                  <button 
+
+                  <button
                     className="demo-btn"
                     onClick={() => {
                       if (window.confirm(`Reset to ${getLanguageLabel(language)} demo code? This will discard current changes.`)) {
@@ -467,7 +436,7 @@ const CodeEditorPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Editor and Output Split */}
+              {/* Editor + Output */}
               <div className="editor-layout">
                 <div className="editor-container">
                   <EditorPane
@@ -479,30 +448,29 @@ const CodeEditorPage: React.FC = () => {
                 </div>
 
                 <div className="output-container">
-                  {/* Output Tabs */}
                   <div className="output-tabs">
-                    <div 
+                    <div
                       className={clsx("output-tab", { active: activeTab === "output" })}
                       onClick={() => setActiveTab("output")}
                     >
                       Output
                     </div>
-                    <div 
+                    <div
                       className={clsx("output-tab", { active: activeTab === "errors" })}
                       onClick={() => setActiveTab("errors")}
                     >
                       Errors {diagnostics.length > 0 && `(${diagnostics.length})`}
                     </div>
-                    <div 
+                    <div
                       className={clsx("output-tab", "terminal-toggle", { active: isTerminalOpen })}
                       onClick={() => setIsTerminalOpen(!isTerminalOpen)}
                     >
                       <Terminal size={14} />
                       Terminal
                     </div>
-                    
+
                     <div className="tab-actions">
-                      <button 
+                      <button
                         className="clear-btn"
                         onClick={() => {
                           setOutput("");
@@ -515,16 +483,10 @@ const CodeEditorPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Output Content */}
                   <div className="output-content">
-                    {activeTab === "output" && (
-                      <OutputPane output={output} />
-                    )}
+                    {activeTab === "output" && <OutputPane output={output} />}
                     {activeTab === "errors" && (
-                      <ErrorPane 
-                        errors={diagnostics} 
-                        onErrorClick={handleErrorClick}
-                      />
+                      <ErrorPane errors={diagnostics} onErrorClick={handleErrorClick} />
                     )}
                   </div>
                 </div>
@@ -532,7 +494,7 @@ const CodeEditorPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Horizontal Terminal Section */}
+          {/* Bottom Terminal */}
           {isTerminalOpen && (
             <div className="horizontal-terminal">
               <div className="terminal-header">
@@ -540,7 +502,7 @@ const CodeEditorPage: React.FC = () => {
                   <Terminal size={16} />
                   <span>Terminal</span>
                 </div>
-                <button 
+                <button
                   className="terminal-close-btn"
                   onClick={() => setIsTerminalOpen(false)}
                   title="Close Terminal"
@@ -554,7 +516,6 @@ const CodeEditorPage: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
     </DashboardLayout>
   );
 };

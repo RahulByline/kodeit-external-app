@@ -14,8 +14,28 @@ print(f"Welcome to Python programming, {name}!")`,
 console.log("Hello, World!");
 
 // You can add more code here
-const name = prompt("Enter your name:");
-console.log(\`Welcome to JavaScript programming, \${name}!\`);`,
+const name = "Student";
+console.log(\`Welcome to JavaScript programming, \${name}!\`);
+
+// Simple calculation example
+const a = 10;
+const b = 5;
+console.log(\`\${a} + \${b} = \${a + b}\`);
+console.log(\`\${a} - \${b} = \${a - b}\`);
+console.log(\`\${a} * \${b} = \${a * b}\`);
+console.log(\`\${a} / \${b} = \${a / b}\`);
+
+// Array example
+const fruits = ["Apple", "Banana", "Orange"];
+console.log("My favorite fruits:", fruits);
+console.log("First fruit:", fruits[0]);
+
+// Function example
+function greet(name) {
+    return \`Hello, \${name}! How are you today?\`;
+}
+
+console.log(greet("Friend"));`,
 
   c: `// C Online Compiler for free
 // Write, Edit and Run your C code using C Online Compiler
