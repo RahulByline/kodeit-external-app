@@ -96,6 +96,61 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Run the multi-language executor (local)
+```bash
+# 1) Start backend (local execution)
+cd backend
+cp env.example .env
+npm install
+npm start
+
+# 2) Start frontend (in another terminal)
+cd ..
+# your usual dev command, e.g.:
+npm run dev
+# Ensure VITE_RUN_PROXY_URL is set (defaults to http://localhost:5000)
+
+# Optional: Test backend execution
+cd backend
+node test-execution.js
+```
+
+**Note:** This setup uses local code execution. For secure containerized execution, install Docker and use Judge0:
+```bash
+# Install Docker first, then:
+cd infra/judge0
+docker compose up -d
+```
+
+## Sanity tests (paste in editor)
+**Python**
+```python
+print("hello python")
+```
+
+**C**
+```c
+#include <stdio.h>
+int main(){ printf("hello c\n"); return 0; }
+```
+
+**C++**
+```cpp
+#include <bits/stdc++.h>
+using namespace std;
+int main(){ cout << "hello cpp\n"; }
+```
+
+**Java**
+```java
+class Main { public static void main(String[] args){ System.out.println("hello java"); } }
+```
+
+**JavaScript (Node)**
+```js
+console.log("hello js");
+```
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/09849073-2e56-4776-a1a4-c5ffe4eb63dd) and click on Share -> Publish.

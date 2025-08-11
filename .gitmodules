@@ -1,0 +1,3 @@
+[submodule "vendor/scratch-gui"]
+	path = vendor/scratch-gui
+	url = https://github.com/scratchfoundation/scratch-gui

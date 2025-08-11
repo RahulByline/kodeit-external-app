@@ -76,12 +76,15 @@ const StudentMessages = lazy(() => import("./pages/student/Messages"));
 const StudentProgress = lazy(() => import("./pages/student/Progress"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
+const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
+const BlockyPage = lazy(() => import("./pages/student/BlockyPage"));
 
 // Settings pages - lazy loaded
 const SchoolAdminSettings = lazy(() => import("./pages/SchoolAdminSettings"));
 const TeacherSettings = lazy(() => import("./pages/TeacherSettings"));
 const StudentSettings = lazy(() => import("./pages/StudentSettings"));
 const RoleDebug = lazy(() => import("./pages/RoleDebug"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -448,11 +451,30 @@ const App = () => {
                   </ProtectedRoute>
                 } />
                 
+                <Route path="/dashboard/student/emulators/blocky" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <BlockyPage />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                
+                {/* Scratch Editor Route */}
+                <Route path="/editor" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ScratchEditor />
+                  </Suspense>
+                } />
+                
                 {/* Debug Routes */}
                 <Route path="/debug/roles" element={<RoleDebug />} />
                 
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                {/* 404 Not Found Route - Must be last */}
+                <Route path="*" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <NotFound />
+                  </Suspense>
+                } />
               </Routes>
             </div>
           </BrowserRouter>
