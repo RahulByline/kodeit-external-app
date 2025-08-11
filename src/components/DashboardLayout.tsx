@@ -367,7 +367,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
         </header>
 
         {/* Main Content Area - with proper top padding */}
-        <main className="bg-gray-50 min-h-screen pt-32 p-4 lg:p-6">
+        <main className="bg-gray-50 min-h-screen pt-32 my-10 p-4 lg:p-6">
           <div className="max-w-full mx-auto">
             <div className="mt-4">
               {children}
