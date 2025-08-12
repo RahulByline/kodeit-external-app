@@ -22,7 +22,8 @@ import {
   Clock,
   LogOut,
   Settings as SettingsIcon,
-  Play
+  Play,
+  Code
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import LogoutDialog from './ui/logout-dialog';
@@ -40,6 +41,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debug logging
+  console.log('DashboardLayout - userRole:', userRole);
+  console.log('DashboardLayout - userName:', userName);
+  console.log('DashboardLayout - current location:', location.pathname);
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -199,6 +205,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           title: 'EMULATORS',
           items: [
             { name: 'Scratch Emulator', icon: Play, path: '/dashboard/student/emulators' },
+            { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
+            { name: 'Blocky', icon: Code, path: '/dashboard/student/emulators/blocky' },
           ]
         },
         {
@@ -241,9 +249,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-64 bg-white shadow-lg">
+    <div className="min-h-screen bg-gray-50">
+      {/* Fixed Sidebar - Hidden on mobile */}
+      <div className="fixed top-0 left-0 z-30 w-64 h-full bg-white shadow-lg overflow-y-auto hidden lg:block scrollbar-hide">
         {/* Logo */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
@@ -253,7 +261,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-6">
+        <nav className="p-4 space-y-6 pb-20">
           {navigationItems.map((section, sectionIndex) => (
             <div key={sectionIndex}>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
@@ -266,7 +274,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                   return (
                     <li key={itemIndex}>
                       <button
-                        onClick={() => navigate(item.path)}
+                        onClick={() => {
+                          console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                          navigate(item.path);
+                        }}
                         className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                           isActive
                             ? 'bg-blue-50 text-blue-700 border border-blue-200'
@@ -285,86 +296,92 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
         </nav>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 max-w-md">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search courses, teachers, or resources..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+      {/* Main Content - offset by sidebar width on desktop, full width on mobile */}
+      <div className="lg:ml-64">
+        {/* Fixed Top Bar */}
+        <header className="fixed top-0 left-0 lg:left-64 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
+          <div className="px-4 lg:px-6 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search courses, teachers, or resources..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center space-x-4">
-              <button className="relative p-2 text-gray-600 hover:text-gray-900">
-                <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  3
-                </span>
-              </button>
-
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
-                <Plus className="w-4 h-4" />
-                <span>New Report</span>
-              </button>
-
-              <div className="relative" ref={profileDropdownRef}>
-                <button
-                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className="flex items-center space-x-2 hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
-                >
-                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">{userName}</span>
-                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
+              <div className="flex items-center space-x-2 lg:space-x-4">
+                <button className="relative p-2 text-gray-600 hover:text-gray-900">
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    3
+                  </span>
                 </button>
 
-                {/* Profile Dropdown */}
-                {showProfileDropdown && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                    <div className="px-4 py-2 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-900">{userName}</p>
-                      <p className="text-xs text-gray-500 capitalize">{userRole.replace('_', ' ')}</p>
+                <button className="bg-blue-600 text-white px-3 lg:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New Report</span>
+                </button>
+
+                <div className="relative" ref={profileDropdownRef}>
+                  <button
+                    onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                    className="flex items-center space-x-2 hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
+                  >
+                    <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-gray-600" />
                     </div>
-                    
-                    <button
-                      onClick={() => {
-                        setShowProfileDropdown(false);
-                        navigate(`/dashboard/${userRole}/settings`);
-                      }}
-                      className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <SettingsIcon className="w-4 h-4" />
-                      <span>Settings</span>
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        setShowProfileDropdown(false);
-                        setShowLogoutDialog(true);
-                      }}
-                      className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>Logout</span>
-                    </button>
-                  </div>
-                )}
+                    <span className="text-sm font-medium text-gray-700 hidden sm:inline">{userName}</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Profile Dropdown */}
+                  {showProfileDropdown && (
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="text-sm font-medium text-gray-900">{userName}</p>
+                        <p className="text-xs text-gray-500 capitalize">{userRole.replace('_', ' ')}</p>
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          setShowProfileDropdown(false);
+                          navigate(`/dashboard/${userRole}/settings`);
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <SettingsIcon className="w-4 h-4" />
+                        <span>Settings</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowProfileDropdown(false);
+                          setShowLogoutDialog(true);
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-auto bg-gray-50 p-6">
-          {children}
+        {/* Main Content Area - with proper top padding */}
+        <main className="bg-gray-50 min-h-screen pt-32 my-10 p-4 lg:p-6">
+          <div className="max-w-full mx-auto">
+            <div className="mt-4">
+              {children}
+            </div>
+          </div>
         </main>
       </div>
 

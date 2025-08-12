@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, BookOpen, Users, BarChart3 } from "lucide-react";
+import OptimizedImage from "@/components/ui/optimized-image";
 
 const slides = [
   {
     title: "Customized and Innovative ICT Courses for Schools",
     subtitle: "Empowering schools, teachers, and students with cutting-edge edtech solutions that transform learning experiences",
-    image: "/home-carousel-for-schools.jpg",
+    image: "/home-carousel-for-schools.webp",
     cta: "Explore",
     icon: BookOpen,
     gradient: "from-blue-500 to-purple-600"
@@ -14,7 +15,7 @@ const slides = [
   {
     title: "Aligned with International Educational Standards",
     subtitle: "Connect your existing LMS with our powerful analytics and management tools for seamless integration",
-    image: "/home-carousal-for-teachers.jpg",
+    image: "/home-carousal-for-teachers.webp",
     cta: "Explore",
     icon: Users,
     gradient: "from-purple-500 to-pink-600"
@@ -22,7 +23,7 @@ const slides = [
   {
     title: "Empower Students to Achieve Their Maximum Potential",
     subtitle: "Make informed decisions with comprehensive analytics and reporting that drive student success",
-    image: "/Innovative-ICT-Curricula.jpeg",
+    image: "/Innovative-ICT-Curricula.webp",
     cta: "Explore",
     icon: BarChart3,
     gradient: "from-cyan-500 to-blue-600"
@@ -51,10 +52,12 @@ const HeroSection = () => {
     <section className="relative min-h-screen bg-white overflow-hidden">
       {/* Background Image with Light Overlay */}
       <div className="absolute inset-0">
-        <img
+        <OptimizedImage
           src={slides[currentSlide].image}
           alt="Hero"
           className="w-full h-full object-cover transition-all duration-1000 ease-in-out"
+          priority={true}
+          sizes="100vw"
         />
         <div className={`absolute inset-0 bg-gradient-to-r ${slides[currentSlide].gradient} opacity-20`} />
         <div className="absolute inset-0 bg-white/20" />

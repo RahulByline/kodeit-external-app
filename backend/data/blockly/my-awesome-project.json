@@ -1,0 +1,54 @@
+{
+  "id": "my-awesome-project",
+  "name": "My Awesome Project",
+  "workspaceJson": {
+    "blocks": {
+      "languageVersion": 0,
+      "blocks": [
+        {
+          "type": "math_arithmetic",
+          "id": "P8,s;?/q#598zHnDEtYj",
+          "x": 50,
+          "y": 70,
+          "fields": {
+            "OP": "ADD"
+          }
+        },
+        {
+          "type": "procedures_defreturn",
+          "id": "~3*TI},9XQX/L(W5k(8T",
+          "x": 510,
+          "y": 10,
+          "icons": {
+            "comment": {
+              "text": "Describe this function...",
+              "pinned": false,
+              "height": 80,
+              "width": 160
+            }
+          },
+          "fields": {
+            "NAME": "do something"
+          },
+          "inputs": {
+            "STACK": {
+              "block": {
+                "type": "controls_if",
+                "id": ",LTH%Ft.H./ks`(L1g7(",
+                "inputs": {
+                  "DO0": {
+                    "block": {
+                      "type": "text_print",
+                      "id": "Ch]N!%O{hz[xvASz,|o]"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "updatedAt": "2025-08-11T12:10:12.526Z"
+}
