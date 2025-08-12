@@ -48,6 +48,12 @@ interface Assessment {
 
 const Assessments: React.FC = () => {
   const { currentUser } = useAuth();
+  
+  // Debug logging
+  console.log('StudentAssessments - Component rendered');
+  console.log('StudentAssessments - currentUser:', currentUser);
+  console.log('StudentAssessments - userRole:', currentUser?.role);
+  
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -192,7 +198,7 @@ const Assessments: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
@@ -205,7 +211,7 @@ const Assessments: React.FC = () => {
 
   if (error) {
     return (
-      <DashboardLayout>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 text-red-800 mb-2">
             <AlertCircle className="w-5 h-5" />
@@ -222,7 +228,7 @@ const Assessments: React.FC = () => {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">

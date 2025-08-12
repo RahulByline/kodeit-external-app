@@ -235,7 +235,7 @@ export const moodleService = {
           if (companyResponse.data && Array.isArray(companyResponse.data.companies) && companyResponse.data.companies.length > 0) {
 
             // First, detect the user's role to determine company assignment logic
-            const detectedRole = this.detectUserRoleEnhanced(username, userData, roles);
+            const detectedRole = await this.detectUserRoleEnhanced(username, userData, roles);
             
             if (detectedRole === 'school_admin') {
               // For school admins, try to find the company they manage
@@ -277,7 +277,7 @@ export const moodleService = {
 
         // Attach roles to userData for enhanced role detection
         userData.roles = roles;
-        const role = this.detectUserRoleEnhanced(username, userData, roles);
+        const role = await this.detectUserRoleEnhanced(username, userData, roles);
         console.log('🔍 Role detection for user:', username);
         console.log('📋 User roles:', roles);
         console.log('✅ Final role detected:', role);
@@ -597,7 +597,7 @@ export const moodleService = {
   },
 
   // Enhanced role detection function
-  detectUserRoleEnhanced(username: string, userData: MoodleUser, roles: MoodleRole[]): string {
+  async detectUserRoleEnhanced(username: string, userData: MoodleUser, roles: MoodleRole[]): Promise<string> {
     console.log(`🔍 Role detection for user: ${username}`);
     console.log(`📋 IOMAD roles received:`, roles);
     
@@ -662,7 +662,18 @@ export const moodleService = {
       return 'student';
     }
 
-    // Tier 4: LAST RESORT: Default to student
+    // Tier 4: Check if user has any course enrollments (students typically have courses)
+    try {
+      const userCourses = await this.getUserCourses(userData.id);
+      if (userCourses && userCourses.length > 0) {
+        console.log(`✅ User ${username} has ${userCourses.length} course enrollments - likely a student`);
+        return 'student';
+      }
+    } catch (error) {
+      console.log(`⚠️ Could not check course enrollments for user ${username}:`, error);
+    }
+
+    // Tier 5: LAST RESORT: Default to student
     console.log(`⚠️ User ${username} has no IOMAD role - defaulting to student`);
     return 'student';
   },
