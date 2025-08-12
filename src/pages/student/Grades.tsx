@@ -58,6 +58,12 @@ interface CourseGrade {
 
 const Grades: React.FC = () => {
   const { currentUser } = useAuth();
+  
+  // Debug logging
+  console.log('StudentGrades - Component rendered');
+  console.log('StudentGrades - currentUser:', currentUser);
+  console.log('StudentGrades - userRole:', currentUser?.role);
+  
   const [grades, setGrades] = useState<Grade[]>([]);
   const [courseGrades, setCourseGrades] = useState<CourseGrade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,7 +214,7 @@ const Grades: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -217,7 +223,7 @@ const Grades: React.FC = () => {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

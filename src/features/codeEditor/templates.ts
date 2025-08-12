@@ -1,4 +1,65 @@
 export const templates: Record<string, string> = {
+  "html-css": `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Web Page</title>
+</head>
+<body>
+    <header>
+        <h1>Welcome to My Website</h1>
+        <nav>
+            <ul>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <main>
+        <section id="home">
+            <h2>Hello, World!</h2>
+            <p>This is a sample HTML page. Edit the HTML and CSS to see live changes in the preview.</p>
+            
+            <div class="card">
+                <h3>Featured Content</h3>
+                <p>This is a featured content card with some sample text.</p>
+                <button class="btn">Learn More</button>
+            </div>
+        </section>
+        
+        <section id="about">
+            <h2>About Us</h2>
+            <p>We are passionate about creating amazing web experiences.</p>
+        </section>
+        
+        <section id="contact">
+            <h2>Contact Us</h2>
+            <form>
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="message">Message:</label>
+                    <textarea id="message" name="message" rows="4" required></textarea>
+                </div>
+                <button type="submit" class="btn">Send Message</button>
+            </form>
+        </section>
+    </main>
+    
+    <footer>
+        <p>&copy; 2024 My Website. All rights reserved.</p>
+    </footer>
+</body>
+</html>`,
   python: `# Python Online Compiler for free
 # Write, Edit and Run your Python code using Python Online Compiler
 

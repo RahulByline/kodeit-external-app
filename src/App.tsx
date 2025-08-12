@@ -74,6 +74,8 @@ const StudentCourses = lazy(() => import("./pages/student/Courses"));
 const StudentGrades = lazy(() => import("./pages/student/Grades"));
 const StudentMessages = lazy(() => import("./pages/student/Messages"));
 const StudentProgress = lazy(() => import("./pages/student/Progress"));
+const StudentCommunity = lazy(() => import("./pages/student/Community"));
+const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
@@ -85,6 +87,7 @@ const TeacherSettings = lazy(() => import("./pages/TeacherSettings"));
 const StudentSettings = lazy(() => import("./pages/StudentSettings"));
 const RoleDebug = lazy(() => import("./pages/RoleDebug"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const DashboardSelection = lazy(() => import("./pages/DashboardSelection"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -131,6 +134,11 @@ const App = () => {
                 <Route path="/debug/roles" element={
                   <Suspense fallback={<LoadingSpinner />}>
                     <RoleDebug />
+                  </Suspense>
+                } />
+                <Route path="/dashboards" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <DashboardSelection />
                   </Suspense>
                 } />
                 <Route path="/login" element={
@@ -458,7 +466,20 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
-                
+                <Route path="/dashboard/student/community" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentCommunity />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/enrollments" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentEnrollments />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
                 {/* Scratch Editor Route */}
                 <Route path="/editor" element={
                   <Suspense fallback={<LoadingSpinner />}>

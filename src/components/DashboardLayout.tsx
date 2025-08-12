@@ -42,6 +42,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Debug logging
+  console.log('DashboardLayout - userRole:', userRole);
+  console.log('DashboardLayout - userName:', userName);
+  console.log('DashboardLayout - current location:', location.pathname);
+
   const getNavigationItems = () => {
     const baseItems = [
       {
@@ -269,7 +274,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                   return (
                     <li key={itemIndex}>
                       <button
-                        onClick={() => navigate(item.path)}
+                        onClick={() => {
+                          console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                          navigate(item.path);
+                        }}
                         className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                           isActive
                             ? 'bg-blue-50 text-blue-700 border border-blue-200'

@@ -22,42 +22,11 @@ app.use(helmet());
 app.use(express.json({ limit: "200kb" }));
 
 // CORS middleware - Allow any localhost port dynamically
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 app.use(cors({ 
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow any localhost port
-    if (origin.match(/^https?:\/\/(localhost|127\.0\.0\.1):[0-9]+$/)) {
-      return callback(null, true);
-    }
-    
-    // Allow specific domains if needed (for production)
-    const allowedDomains = [
-      'http://localhost',
-      'https://localhost',
-      'http://127.0.0.1',
-      'https://127.0.0.1'
-    ];
-    
-    // Check if origin starts with any allowed domain
-    const isAllowed = allowedDomains.some(domain => origin.startsWith(domain));
-    
-    if (isAllowed) {
-      return callback(null, true);
-    }
-    
-    // For development, allow all origins
-    if (process.env.NODE_ENV !== 'production') {
-      return callback(null, true);
-    }
-    
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins for development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Rate limiting

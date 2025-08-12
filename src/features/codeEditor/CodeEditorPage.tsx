@@ -26,7 +26,7 @@ import { templates } from "./templates";
 import "./styles.css";
 import ResizablePanel from "../../components/ResizablePanel";
 
-type Language = "python" | "javascript" | "c" | "cpp" | "java" | "html" | "css";
+type Language = "python" | "javascript" | "c" | "cpp" | "java" | "html-css";
 type Tab = "output" | "errors" | "terminal";
 
 interface RunResult {
@@ -43,8 +43,7 @@ const getFileExtension = (lang: Language): string => {
     case "c": return "c";
     case "cpp": return "cpp";
     case "java": return "java";
-    case "html": return "html";
-    case "css": return "css";
+    case "html-css": return "html";
     default: return "txt";
   }
 };
@@ -56,8 +55,7 @@ const getLanguageLabel = (lang: Language): string => {
     case "c": return "C";
     case "cpp": return "C++";
     case "java": return "Java";
-    case "html": return "HTML";
-    case "css": return "CSS";
+    case "html-css": return "HTML & CSS";
     default: return lang;
   }
 };
@@ -106,21 +104,20 @@ const getLanguageIcon = (lang: Language): React.ReactElement => {
           style={iconStyle}
         />
       );
-    case "html":
+    case "html-css":
       return (
-        <img
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/html5/html5-original.svg"
-          alt="HTML"
-          style={iconStyle}
-        />
-      );
-    case "css":
-      return (
-        <img
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/css3/css3-original.svg"
-          alt="CSS"
-          style={iconStyle}
-        />
+        <div style={{ display: 'flex', gap: '2px' }}>
+          <img
+            src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/html5/html5-original.svg"
+            alt="HTML"
+            style={iconStyle}
+          />
+          <img
+            src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/css3/css3-original.svg"
+            alt="CSS"
+            style={iconStyle}
+          />
+        </div>
       );
     default:
       return <span style={{ fontSize: '20px' }}>📄</span>;
@@ -134,8 +131,7 @@ const getLanguageSymbol = (lang: Language): string => {
     case "c": return "C";
     case "cpp": return "C++";
     case "java": return "JAVA";
-    case "html": return "HTML";
-    case "css": return "CSS";
+    case "html-css": return "HTML+CSS";
     default: return (lang as string).toUpperCase();
   }
 };
@@ -148,15 +144,14 @@ const getLanguageColor = (lang: Language): string => {
     case "c": return "#00599c";
     case "cpp": return "#00599c";
     case "java": return "#ed8b00";
-    case "html": return "#e34f26";
-    case "css": return "#1572b6";
+    case "html-css": return "#e34f26";
     default: return "#007acc";
   }
 };
 
 const CodeEditorPage: React.FC = () => {
   const { currentUser } = useAuth();
-  const [language, setLanguage] = useState<Language>("javascript");
+  const [language, setLanguage] = useState<Language>("html-css");
   const [code, setCode] = useState<string>(templates.javascript);
   const [htmlCode, setHtmlCode] = useState<string>(templates.html);
   const [cssCode, setCssCode] = useState<string>(templates.css);
@@ -175,34 +170,39 @@ const CodeEditorPage: React.FC = () => {
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [stdinValue, setStdinValue] = useState("");
   const [executionStatus, setExecutionStatus] = useState("");
+  const [activeFileTab, setActiveFileTab] = useState<"html" | "css">("html");
 
   // Load template and update filename when language changes
   useEffect(() => {
-    const savedCode = localStorage.getItem(`codeEditor_${language}`);
-    if (savedCode && savedCode.trim() !== "") {
-      setCode(savedCode);
+    if (language === "html-css") {
+      // Load HTML and CSS from localStorage
+      const savedHtml = localStorage.getItem(`codeEditor_html`);
+      if (savedHtml && savedHtml.trim() !== "") {
+        setHtmlCode(savedHtml);
+      } else {
+        setHtmlCode(templates.html);
+      }
+      
+      const savedCss = localStorage.getItem(`codeEditor_css`);
+      if (savedCss && savedCss.trim() !== "") {
+        setCssCode(savedCss);
+      } else {
+        setCssCode(templates.css);
+      }
+      
+      setFileName("index.html");
     } else {
-      setCode(templates[language] || `// ${getLanguageLabel(language)} Demo Code\nconsole.log("Hello, World!");`);
+      const savedCode = localStorage.getItem(`codeEditor_${language}`);
+      if (savedCode && savedCode.trim() !== "") {
+        setCode(savedCode);
+      } else {
+        setCode(templates[language] || `// ${getLanguageLabel(language)} Demo Code\nconsole.log("Hello, World!");`);
+      }
+      
+      const extension = getFileExtension(language);
+      const newFileName = language === "java" ? "Main.java" : `main.${extension}`;
+      setFileName(newFileName);
     }
-    
-    // Load HTML and CSS from localStorage
-    const savedHtml = localStorage.getItem(`codeEditor_html`);
-    if (savedHtml && savedHtml.trim() !== "") {
-      setHtmlCode(savedHtml);
-    } else {
-      setHtmlCode(templates.html);
-    }
-    
-    const savedCss = localStorage.getItem(`codeEditor_css`);
-    if (savedCss && savedCss.trim() !== "") {
-      setCssCode(savedCss);
-    } else {
-      setCssCode(templates.css);
-    }
-    
-    const extension = getFileExtension(language);
-    const newFileName = language === "java" ? "Main.java" : `main.${extension}`;
-    setFileName(newFileName);
 
     const timer = setTimeout(() => setIsInitialized(true), 500);
     return () => clearTimeout(timer);
@@ -261,8 +261,8 @@ const CodeEditorPage: React.FC = () => {
     setInputValue("");
     setExecutionStatus("");
 
-    // For HTML and CSS, just refresh the preview
-    if (language === "html" || language === "css") {
+    // For HTML & CSS, just refresh the preview
+    if (language === "html-css") {
       setOutput("Preview refreshed");
       setIsRunning(false);
       return;
@@ -321,13 +321,105 @@ const CodeEditorPage: React.FC = () => {
       let contentToSave = code;
       let fileNameToSave = fileName;
       
-      // For HTML and CSS, save the current content
-      if (language === "html") {
-        contentToSave = htmlCode;
-        fileNameToSave = "index.html";
-      } else if (language === "css") {
-        contentToSave = cssCode;
-        fileNameToSave = "styles.css";
+      // For HTML & CSS, save the currently active file or both files
+      if (language === "html-css") {
+        if (activeFileTab === "html") {
+          // Save only HTML file
+          const htmlBlob = new Blob([htmlCode], { type: 'text/html' });
+          const htmlUrl = URL.createObjectURL(htmlBlob);
+          const htmlLink = document.createElement('a');
+          htmlLink.href = htmlUrl;
+          htmlLink.download = "main.html";
+          document.body.appendChild(htmlLink);
+          htmlLink.click();
+          document.body.removeChild(htmlLink);
+          URL.revokeObjectURL(htmlUrl);
+
+          const successMessage = `✅ Downloaded: main.html`;
+          const toast = document.createElement('div');
+          toast.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>${successMessage}</span>
+            </div>
+          `;
+          toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #a7f3d0, #86efac);
+            color: #064e3b;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,.08), 0 4px 6px -2px rgba(0,0,0,.04);
+            z-index: 9999;
+            transform: translateX(400px);
+            transition: all .4s cubic-bezier(.4,0,.2,1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(6, 78, 59, .08);
+          `;
+          document.body.appendChild(toast);
+          setTimeout(() => { toast.style.transform = 'translateX(0)'; }, 100);
+          setTimeout(() => {
+            toast.style.transform = 'translateX(400px)';
+            setTimeout(() => { document.body.removeChild(toast); }, 300);
+          }, 3000);
+          return;
+        } else if (activeFileTab === "css") {
+          // Save only CSS file
+          const cssBlob = new Blob([cssCode], { type: 'text/css' });
+          const cssUrl = URL.createObjectURL(cssBlob);
+          const cssLink = document.createElement('a');
+          cssLink.href = cssUrl;
+          cssLink.download = "main.css";
+          document.body.appendChild(cssLink);
+          cssLink.click();
+          document.body.removeChild(cssLink);
+          URL.revokeObjectURL(cssUrl);
+
+          const successMessage = `✅ Downloaded: main.css`;
+          const toast = document.createElement('div');
+          toast.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>${successMessage}</span>
+            </div>
+          `;
+          toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #a7f3d0, #86efac);
+            color: #064e3b;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,.08), 0 4px 6px -2px rgba(0,0,0,.04);
+            z-index: 9999;
+            transform: translateX(400px);
+            transition: all .4s cubic-bezier(.4,0,.2,1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(6, 78, 59, .08);
+          `;
+          document.body.appendChild(toast);
+          setTimeout(() => { toast.style.transform = 'translateX(0)'; }, 100);
+          setTimeout(() => {
+            toast.style.transform = 'translateX(400px)';
+            setTimeout(() => { document.body.removeChild(toast); }, 300);
+          }, 3000);
+          return;
+        }
       }
       
       const blob = new Blob([contentToSave], { type: 'text/plain' });
@@ -540,10 +632,47 @@ const CodeEditorPage: React.FC = () => {
             <div className="vscode-main vscode-main-fullwidth">
               {/* Tab Bar */}
               <div className="vscode-tabs">
-                <div className="tab-item active">
-                  <File size={14} />
-                  <span>{fileName}</span>
-                </div>
+                {language === "html-css" ? (
+                  <>
+                    <div 
+                      className={`tab-item ${activeFileTab === "html" ? "active" : ""}`}
+                      onClick={() => setActiveFileTab("html")}
+                    >
+                      <File size={14} />
+                      <span>main.html</span>
+                      <button 
+                        className="tab-close-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Don't allow closing the last tab
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div 
+                      className={`tab-item ${activeFileTab === "css" ? "active" : ""}`}
+                      onClick={() => setActiveFileTab("css")}
+                    >
+                      <File size={14} />
+                      <span>main.css</span>
+                      <button 
+                        className="tab-close-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Don't allow closing the last tab
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="tab-item active">
+                    <File size={14} />
+                    <span>{fileName}</span>
+                  </div>
+                )}
               </div>
 
               {/* Toolbar */}
@@ -566,7 +695,7 @@ const CodeEditorPage: React.FC = () => {
 
                     {isDropdownOpen && (
                       <div className="language-dropdown-menu">
-                        {(["javascript", "python", "c", "cpp", "java", "html", "css"] as Language[]).map((lang) => (
+                        {(["javascript", "python", "c", "cpp", "java", "html-css"] as Language[]).map((lang) => (
                           <button
                             key={lang}
                             className={clsx("language-option", { active: lang === language })}
@@ -600,21 +729,22 @@ const CodeEditorPage: React.FC = () => {
                   <button
                     className="download-btn"
                     onClick={saveCode}
-                    title={`Download ${fileName}`}
+                    title={`Download ${language === "html-css" ? (activeFileTab === "html" ? "main.html" : "main.css") : fileName}`}
                   >
                     <Download size={16} />
-                    Download
+                    Download {language === "html-css" ? (activeFileTab === "html" ? "HTML" : "CSS") : ""}
                   </button>
 
                   <button
                     className="demo-btn"
                     onClick={() => {
                       if (window.confirm(`Reset to ${getLanguageLabel(language)} demo code? This will discard current changes.`)) {
-                        setCode(templates[language]);
-                        if (language === "html") {
+                        if (language === "html-css") {
                           setHtmlCode(templates.html);
-                        } else if (language === "css") {
                           setCssCode(templates.css);
+                          setActiveFileTab("html"); // Reset to HTML tab
+                        } else {
+                          setCode(templates[language]);
                         }
                         setOutput("");
                         setErrors("");
@@ -637,14 +767,25 @@ const CodeEditorPage: React.FC = () => {
 
               {/* Editor + Output */}
               <div className="editor-layout">
-                <div className="editor-container">
-                  <EditorPane
-                    language={language}
-                    code={language === "html" ? htmlCode : language === "css" ? cssCode : code}
-                    onChange={language === "html" ? setHtmlCode : language === "css" ? setCssCode : setCode}
-                    markers={diagnostics}
-                  />
-                </div>
+                {language === "html-css" ? (
+                  <div className="editor-container">
+                    <EditorPane
+                      language={activeFileTab === "html" ? "html" : "css"}
+                      code={activeFileTab === "html" ? htmlCode : cssCode}
+                      onChange={activeFileTab === "html" ? setHtmlCode : setCssCode}
+                      markers={[]}
+                    />
+                  </div>
+                ) : (
+                  <div className="editor-container">
+                    <EditorPane
+                      language={language}
+                      code={code}
+                      onChange={setCode}
+                      markers={diagnostics}
+                    />
+                  </div>
+                )}
 
                 <ResizablePanel
                   className={`output-container ${isOutputExpanded ? 'expanded' : ''}`}
@@ -654,7 +795,7 @@ const CodeEditorPage: React.FC = () => {
                   handle={<GripVertical className="resize-handle" />}
                 >
                   {/* Custom Input (stdin) Section */}
-                  {language !== "html" && language !== "css" && (
+                  {language !== "html-css" && (
                     <div className="stdin-section">
                       <label htmlFor="stdin" className="stdin-label">
                         Custom Input (stdin):
@@ -720,7 +861,7 @@ const CodeEditorPage: React.FC = () => {
                   <div className="output-content">
                     {activeTab === "output" && (
                       <>
-                        {(language === "html" || language === "css") ? (
+                        {language === "html-css" ? (
                           <div className="preview-container">
                             <div className="preview-header">
                               <span>Live Preview (HTML + CSS)</span>
