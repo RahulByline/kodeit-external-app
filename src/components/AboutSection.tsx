@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import OptimizedImage from "@/components/ui/optimized-image";
 import AOS from 'aos';
 import 'aos/dist/aos.css'; // Make sure to import the CSS
 
@@ -32,7 +33,7 @@ const AboutSection = () => {
   ];
 
   return (
-    <section id="about-section" className="relative w-full py-20 lg:py-32 bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
+    <section id="about" className="relative w-full py-20 lg:py-32 bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
       {/* Decorative background shapes */}
       <div className="absolute top-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full -translate-x-16 -translate-y-16 blur-2xl"></div>
       <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-500/5 rounded-full translate-x-20 translate-y-20 blur-2xl"></div>
@@ -60,10 +61,11 @@ const AboutSection = () => {
             <div className="relative p-4">
               {/* THIS IS THE CHANGED DIV with the animation class */}
               <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-500 rounded-2xl animate-slow-rotate"></div>
-              <img 
-                src="/about/img3.jpeg" // Replace with a primary "About Us" image
+              <OptimizedImage 
+                src="/about/img3.webp" // Replace with a primary "About Us" image
                 alt="A vibrant and collaborative workspace at KODEIT" 
                 className="relative w-full h-auto object-cover rounded-2xl shadow-2xl transition-transform duration-500 hover:scale-105"
+                sizes="(max-width: 768px) 100vw, 50vw"
               />
             </div>
           </div>
