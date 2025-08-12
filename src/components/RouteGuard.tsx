@@ -76,7 +76,7 @@ const RouteGuard = () => {
         '/dashboard/school-admin', 
         '/dashboard/teacher',
         '/dashboard/student',
-        ...getDashboardSubRoutes(currentUser.role)
+        ...getDashboardSubRoutes(currentUser.role),
         ...subRoutes
       );
     }

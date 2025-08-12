@@ -463,6 +463,9 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <BlockyPage />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
                 <Route path="/dashboard/student/community" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -474,27 +477,6 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentEnrollments />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/emulators" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <Emulators />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/code-editor" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <CodeEditor />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/emulators/blocky" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <BlockyPage />
                     </Suspense>
                   </ProtectedRoute>
                 } />
