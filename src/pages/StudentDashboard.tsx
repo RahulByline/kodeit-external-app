@@ -198,6 +198,10 @@ const StudentDashboard: React.FC = () => {
     );
   }
 
+  // Debug logging
+  console.log('StudentDashboard - currentUser:', currentUser);
+  console.log('StudentDashboard - userRole being passed:', 'student');
+  
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
