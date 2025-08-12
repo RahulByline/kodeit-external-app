@@ -1,73 +1,104 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MyAIBuddy from "./components/MyAIBuddy";
+
+import RouteGuard from "./components/RouteGuard";
 import AOS from 'aos';
 import 'aos/dist/aos.css';
+
+// Optimized loading component
+const LoadingSpinner = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+  </div>
+);
+
+// Core pages - loaded immediately
 import Index from "./pages/Index";
-import LoginPage from "./pages/LoginPage";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import SchoolAdminLoginPage from "./pages/SchoolAdminLoginPage";
-import TeacherLoginPage from "./pages/TeacherLoginPage";
-import StudentLoginPage from "./pages/StudentLoginPage";
-import AdminDashboard from "./pages/AdminDashboard";
-import SchoolAdminDashboard from "./pages/SchoolAdminDashboard";
-import TeacherDashboard from "./pages/TeacherDashboard";
-import StudentDashboard from "./pages/StudentDashboard";
-import NotFound from "./pages/NotFound";
 
-// Admin pages
-import AdminTeachers from "./pages/admin/Teachers";
-import MasterTrainers from "./pages/admin/MasterTrainers";
-import AdminCourses from "./pages/admin/Courses";
-import Schools from "./pages/admin/Schools";
-import AdminAnalytics from "./pages/admin/Analytics";
-import UserManagement from "./pages/admin/UserManagement";
-import AdminSettings from "./pages/admin/Settings";
+// Login pages - lazy loaded
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
+const SchoolAdminLoginPage = lazy(() => import("./pages/SchoolAdminLoginPage"));
+const TeacherLoginPage = lazy(() => import("./pages/TeacherLoginPage"));
+const StudentLoginPage = lazy(() => import("./pages/StudentLoginPage"));
 
-// School Admin pages
-import SchoolAdminTeachers from "./pages/school-admin/Teachers";
-import Students from "./pages/school-admin/Students";
-import SchoolAdminCourses from "./pages/school-admin/Courses";
-import SchoolAdminAnalytics from "./pages/school-admin/Analytics";
-import Certifications from "./pages/school-admin/Certifications";
-import Assessments from "./pages/school-admin/Assessments";
-import Reports from "./pages/school-admin/Reports";
-import SchoolAdminUsers from "./pages/school-admin/Users";
-import SchoolManagement from "./pages/school-admin/SchoolManagement";
+// Dashboard pages - lazy loaded
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const SchoolAdminDashboard = lazy(() => import("./pages/SchoolAdminDashboard"));
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
+const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 
-// Teacher pages
-import TeacherAnalytics from "./pages/teacher/Analytics";
-import TeacherAssessments from "./pages/teacher/Assessments";
-import TeacherAssignments from "./pages/teacher/Assignments";
-import TeacherCalendar from "./pages/teacher/Calendar";
-import TeacherCourses from "./pages/teacher/Courses";
-import TeacherReports from "./pages/teacher/Reports";
-import TeacherStudents from "./pages/teacher/Students";
-import TeacherGroups from "./pages/teacher/Groups";
+// Admin pages - lazy loaded
+const AdminTeachers = lazy(() => import("./pages/admin/Teachers"));
+const MasterTrainers = lazy(() => import("./pages/admin/MasterTrainers"));
+const AdminCourses = lazy(() => import("./pages/admin/Courses"));
+const Schools = lazy(() => import("./pages/admin/Schools"));
+const AdminAnalytics = lazy(() => import("./pages/admin/Analytics"));
+const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
+const AdminSettings = lazy(() => import("./pages/admin/Settings"));
 
-// Student pages
-import StudentAssessments from "./pages/student/Assessments";
-import StudentAssignments from "./pages/student/Assignments";
-import StudentCalendar from "./pages/student/Calendar";
-import StudentCourses from "./pages/student/Courses";
-import StudentGrades from "./pages/student/Grades";
-import StudentMessages from "./pages/student/Messages";
-import StudentProgress from "./pages/student/Progress";
-import Emulators from "./pages/student/Emulators";
+// School Admin pages - lazy loaded
+const SchoolAdminTeachers = lazy(() => import("./pages/school-admin/Teachers"));
+const Students = lazy(() => import("./pages/school-admin/Students"));
+const SchoolAdminCourses = lazy(() => import("./pages/school-admin/Courses"));
+const SchoolAdminAnalytics = lazy(() => import("./pages/school-admin/Analytics"));
+const Certifications = lazy(() => import("./pages/school-admin/Certifications"));
+const Assessments = lazy(() => import("./pages/school-admin/Assessments"));
+const Reports = lazy(() => import("./pages/school-admin/Reports"));
+const SchoolAdminUsers = lazy(() => import("./pages/school-admin/Users"));
+const SchoolManagement = lazy(() => import("./pages/school-admin/SchoolManagement"));
 
-// Settings pages
-import SchoolAdminSettings from "./pages/SchoolAdminSettings";
-import TeacherSettings from "./pages/TeacherSettings";
-import StudentSettings from "./pages/StudentSettings";
-import RoleDebug from "./pages/RoleDebug";
+// Teacher pages - lazy loaded
+const TeacherAnalytics = lazy(() => import("./pages/teacher/Analytics"));
+const TeacherAssessments = lazy(() => import("./pages/teacher/Assessments"));
+const TeacherAssignments = lazy(() => import("./pages/teacher/Assignments"));
+const TeacherCalendar = lazy(() => import("./pages/teacher/Calendar"));
+const TeacherCourses = lazy(() => import("./pages/teacher/Courses"));
+const TeacherReports = lazy(() => import("./pages/teacher/Reports"));
+const TeacherStudents = lazy(() => import("./pages/teacher/Students"));
+const TeacherGroups = lazy(() => import("./pages/teacher/Groups"));
 
-const queryClient = new QueryClient();
+// Student pages - lazy loaded
+const StudentAssessments = lazy(() => import("./pages/student/Assessments"));
+const StudentAssignments = lazy(() => import("./pages/student/Assignments"));
+const StudentCalendar = lazy(() => import("./pages/student/Calendar"));
+const StudentCourses = lazy(() => import("./pages/student/Courses"));
+const StudentGrades = lazy(() => import("./pages/student/Grades"));
+const StudentMessages = lazy(() => import("./pages/student/Messages"));
+const StudentProgress = lazy(() => import("./pages/student/Progress"));
+const StudentCommunity = lazy(() => import("./pages/student/Community"));
+const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
+const Emulators = lazy(() => import("./pages/student/Emulators"));
+const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
+const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
+const BlockyPage = lazy(() => import("./pages/student/BlockyPage"));
+
+// Settings pages - lazy loaded
+const SchoolAdminSettings = lazy(() => import("./pages/SchoolAdminSettings"));
+const TeacherSettings = lazy(() => import("./pages/TeacherSettings"));
+const StudentSettings = lazy(() => import("./pages/StudentSettings"));
+const RoleDebug = lazy(() => import("./pages/RoleDebug"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const DashboardSelection = lazy(() => import("./pages/DashboardSelection"));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => {
   // This state helps prevent hydration mismatch
@@ -89,237 +120,387 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AuthProvider>
-          <BrowserRouter>
-            <div className="min-h-screen bg-gray-50 text-gray-800">
-              <MyAIBuddy />
-              <Routes>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AuthProvider>
+            <ThemeProvider>
+              <BrowserRouter>
+                <RouteGuard />
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+                  <MyAIBuddy />
+                  <Routes>
                 <Route path="/" element={<Index />} />
-                <Route path="/debug/roles" element={<RoleDebug />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/login/admin" element={<AdminLoginPage />} />
-                <Route path="/login/school-admin" element={<SchoolAdminLoginPage />} />
-                <Route path="/login/teacher" element={<TeacherLoginPage />} />
-                <Route path="/login/student" element={<StudentLoginPage />} />
+                <Route path="/debug/roles" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <RoleDebug />
+                  </Suspense>
+                } />
+                <Route path="/dashboards" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <DashboardSelection />
+                  </Suspense>
+                } />
+                <Route path="/login" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <LoginPage />
+                  </Suspense>
+                } />
+                <Route path="/login/admin" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <AdminLoginPage />
+                  </Suspense>
+                } />
+                <Route path="/login/school-admin" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <SchoolAdminLoginPage />
+                  </Suspense>
+                } />
+                <Route path="/login/teacher" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <TeacherLoginPage />
+                  </Suspense>
+                } />
+                <Route path="/login/student" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <StudentLoginPage />
+                  </Suspense>
+                } />
                 
                 {/* Protected Dashboard Routes */}
                 <Route path="/dashboard/admin" element={
                   <ProtectedRoute requiredRole="admin">
-                    <AdminDashboard />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminDashboard />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <SchoolAdminDashboard />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SchoolAdminDashboard />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherDashboard />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherDashboard />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentDashboard />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentDashboard />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 
                 {/* Protected Admin Dashboard Routes */}
                 <Route path="/dashboard/admin/teachers" element={
                   <ProtectedRoute requiredRole="admin">
-                    <AdminTeachers />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminTeachers />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/master-trainers" element={
                   <ProtectedRoute requiredRole="admin">
-                    <MasterTrainers />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <MasterTrainers />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/courses" element={
                   <ProtectedRoute requiredRole="admin">
-                    <AdminCourses />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminCourses />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/schools" element={
                   <ProtectedRoute requiredRole="admin">
-                    <Schools />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Schools />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/analytics" element={
                   <ProtectedRoute requiredRole="admin">
-                    <AdminAnalytics />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminAnalytics />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/users" element={
                   <ProtectedRoute requiredRole="admin">
-                    <UserManagement />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <UserManagement />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/settings" element={
                   <ProtectedRoute requiredRole="admin">
-                    <AdminSettings />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminSettings />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 
                 {/* School Admin Routes */}
                 <Route path="/dashboard/school-admin/teachers" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <SchoolAdminTeachers />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SchoolAdminTeachers />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/students" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <Students />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Students />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/courses" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <SchoolAdminCourses />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SchoolAdminCourses />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/certifications" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <Certifications />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Certifications />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/assessments" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <Assessments />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Assessments />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/analytics" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <SchoolAdminAnalytics />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SchoolAdminAnalytics />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/reports" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <Reports />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Reports />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/users" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <SchoolAdminUsers />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SchoolAdminUsers />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/school-admin/school-management" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <SchoolManagement />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SchoolManagement />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 
                 {/* Settings Routes */}
                 <Route path="/dashboard/school-admin/settings" element={
                   <ProtectedRoute requiredRole="school_admin">
-                    <SchoolAdminSettings />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <SchoolAdminSettings />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/settings" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherSettings />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherSettings />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/settings" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentSettings />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentSettings />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 
                 {/* Teacher Section Routes */}
                 <Route path="/dashboard/teacher/analytics" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherAnalytics />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherAnalytics />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/assessments" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherAssessments />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherAssessments />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/assignments" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherAssignments />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherAssignments />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/calendar" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherCalendar />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherCalendar />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/courses" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherCourses />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherCourses />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/reports" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherReports />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherReports />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/students" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherStudents />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherStudents />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/groups" element={
                   <ProtectedRoute requiredRole="teacher">
-                    <TeacherGroups />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TeacherGroups />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 
                 {/* Student Section Routes */}
                 <Route path="/dashboard/student/assessments" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentAssessments />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentAssessments />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/assignments" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentAssignments />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentAssignments />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/calendar" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentCalendar />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentCalendar />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/courses" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentCourses />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentCourses />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/grades" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentGrades />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentGrades />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/messages" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentMessages />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentMessages />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/progress" element={
                   <ProtectedRoute requiredRole="student">
-                    <StudentProgress />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentProgress />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/community" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentCommunity />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/enrollments" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentEnrollments />
+                    </Suspense>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/student/emulators" element={
                   <ProtectedRoute requiredRole="student">
-                    <Emulators />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Emulators />
+                    </Suspense>
                   </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/code-editor" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <CodeEditor />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/dashboard/student/emulators/blocky" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <BlockyPage />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                
+                {/* Scratch Editor Route */}
+                <Route path="/editor" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ScratchEditor />
+                  </Suspense>
                 } />
                 
                 {/* Debug Routes */}
                 <Route path="/debug/roles" element={<RoleDebug />} />
                 
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
+                {/* 404 Not Found Route - Must be last */}
+                <Route path="*" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <NotFound />
+                  </Suspense>
+                } />
               </Routes>
             </div>
           </BrowserRouter>
+          </ThemeProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

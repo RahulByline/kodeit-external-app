@@ -1,0 +1,2 @@
+# This file ensures the blockly data directory is tracked by git
+# Projects will be stored as JSON files in this directory
