@@ -54,7 +54,7 @@ const RouteGuard = () => {
     console.log('RouteGuard - currentUser.role:', currentUser?.role);
     console.log('RouteGuard - path:', path);
     console.log('RouteGuard - loading:', loading);
-    
+
     // If user is on a non-existent route, redirect to home
     const validRoutes = [
       '/',
@@ -71,12 +71,12 @@ const RouteGuard = () => {
       console.log('RouteGuard - Adding dashboard routes for role:', currentUser.role);
       const subRoutes = getDashboardSubRoutes(currentUser.role);
       console.log('RouteGuard - Sub routes:', subRoutes);
-      
       validRoutes.push(
         '/dashboard/admin',
         '/dashboard/school-admin', 
         '/dashboard/teacher',
         '/dashboard/student',
+        ...getDashboardSubRoutes(currentUser.role)
         ...subRoutes
       );
     }
@@ -118,13 +118,13 @@ const RouteGuard = () => {
   return null; // This component doesn't render anything
 };
 
+
 const getDashboardPath = (role: string | undefined | null) => {
   // Handle cases where role is undefined, null, or not a string
   if (!role || typeof role !== 'string') {
     console.warn('RouteGuard: Invalid role provided to getDashboardPath:', role);
     return '/';
   }
-  
   switch (role) {
     case 'admin': return '/dashboard/admin';
     case 'school_admin': return '/dashboard/school-admin';
@@ -133,6 +133,7 @@ const getDashboardPath = (role: string | undefined | null) => {
     default: return '/';
   }
 };
+
 
 const getDashboardSubRoutes = (role: string | undefined | null) => {
   // Handle cases where role is undefined, null, or not a string
