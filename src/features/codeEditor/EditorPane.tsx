@@ -16,6 +16,8 @@ function mapLang(lang: string): string {
     case "python": return "python";
     case "javascript": return "javascript";
     case "java": return "java";
+    case "html": return "html";
+    case "css": return "css";
     default: return "plaintext";
   }
 }
