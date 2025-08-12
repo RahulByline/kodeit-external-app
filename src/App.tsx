@@ -444,6 +444,25 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+                <Route path="/dashboard/student/emulators" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Emulators />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/code-editor" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <CodeEditor />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/dashboard/student/emulators/blocky" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <BlockyPage />
                 <Route path="/dashboard/student/community" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -472,7 +491,6 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
-                
                 <Route path="/dashboard/student/emulators/blocky" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -480,7 +498,6 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
-                
                 {/* Scratch Editor Route */}
                 <Route path="/editor" element={
                   <Suspense fallback={<LoadingSpinner />}>
