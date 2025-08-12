@@ -458,6 +458,11 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+                <Route path="/dashboard/student/emulators" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Emulators />
+                  </ProtectedRoute>
+                } />
                 
                 {/* Scratch Editor Route */}
                 <Route path="/editor" element={
