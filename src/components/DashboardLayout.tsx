@@ -22,10 +22,8 @@ import {
   Clock,
   LogOut,
   Settings as SettingsIcon,
-
   Play,
   Code
-
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import LogoutDialog from './ui/logout-dialog';
@@ -43,6 +41,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Debug logging
+  console.log('DashboardLayout - userRole:', userRole);
+  console.log('DashboardLayout - userName:', userName);
+  console.log('DashboardLayout - current location:', location.pathname);
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -202,10 +205,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           title: 'EMULATORS',
           items: [
             { name: 'Scratch Emulator', icon: Play, path: '/dashboard/student/emulators' },
-
             { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
             { name: 'Blocky', icon: Code, path: '/dashboard/student/emulators/blocky' },
-
           ]
         },
         {
@@ -273,7 +274,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                   return (
                     <li key={itemIndex}>
                       <button
-                        onClick={() => navigate(item.path)}
+                        onClick={() => {
+                          console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                          navigate(item.path);
+                        }}
                         className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                           isActive
                             ? 'bg-blue-50 text-blue-700 border border-blue-200'

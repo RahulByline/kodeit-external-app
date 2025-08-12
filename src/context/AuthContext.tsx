@@ -44,27 +44,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [isRestored, setIsRestored] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in on app start
     const token = localStorage.getItem('moodle_token') || localStorage.getItem('token');
+    const storedUser = localStorage.getItem('currentUser');
+    
+    console.log('AuthContext - Checking authentication on app start');
+    console.log('AuthContext - Token exists:', !!token);
+    console.log('AuthContext - Stored user exists:', !!storedUser);
+    console.log('AuthContext - Token value:', token);
+    console.log('AuthContext - Stored user value:', storedUser);
+    
     if (token) {
+      // Try to restore user from localStorage first for faster loading
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          console.log('AuthContext - Restoring user from localStorage:', userData);
+          setCurrentUser(userData);
+          setUserRole(userData.role || null);
+          setLoading(false);
+          
+          // Don't make API call if we have valid stored data
+          console.log('AuthContext - Using stored user data, skipping API call');
+          setIsRestored(true);
+          return;
+        } catch (error) {
+          console.error('AuthContext - Error parsing stored user:', error);
+        }
+      }
+      
+      // Then verify with API (but don't fail if API is down)
       authService.getProfile()
         .then(userData => {
           if (userData) {
+            console.log('AuthContext - API verification successful:', userData);
             setCurrentUser(userData);
             setUserRole(userData.role || null);
+            localStorage.setItem('currentUser', JSON.stringify(userData));
           }
         })
-        .catch(() => {
-          localStorage.removeItem('moodle_token');
-          localStorage.removeItem('token');
+        .catch((error) => {
+          console.error('AuthContext - API verification failed, but keeping stored user data:', error);
+          // Don't clear authentication if API fails - keep the stored user data
+          // This prevents redirects during page refresh when API might be temporarily unavailable
         })
         .finally(() => {
           setLoading(false);
+          setIsRestored(true);
         });
     } else {
+      console.log('AuthContext - No token found, user not authenticated');
       setLoading(false);
+      setIsRestored(true);
     }
   }, []);
 
@@ -132,7 +166,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }; 
