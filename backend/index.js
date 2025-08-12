@@ -10,16 +10,11 @@ import os from 'os';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import blocklyRoutes from './routes/blockly.routes.js';
-import { WebSocketServer } from 'ws';
-import { createServer } from 'http';
 // Note: Using native fetch (available in Node.js 18+)
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 const PORT = process.env.PORT || 5000;
-
-// Create HTTP server for WebSocket support
-const server = createServer(app);
 const JUDGE0_URL = process.env.JUDGE0_URL?.replace(/\/+$/, '') || 'https://judge0-ce.p.rapidapi.com';
 
 // Security middleware
@@ -103,12 +98,6 @@ const conversations = new Map();
 
 // In-memory execution storage for interactive input
 const activeExecutions = new Map();
-
-// WebSocket server for terminal communication
-const wss = new WebSocketServer({ server });
-
-// Store active terminal connections
-const terminalConnections = new Map();
 
 // POST /chat endpoint (streaming)
 app.post('/chat', async (req, res) => {
@@ -258,8 +247,7 @@ For simple questions, provide direct answers. For complex topics, use the struct
 });
 
 // Interactive Code Execution Function
-async function runCodeInteractive(language, code, stdin = '') {
-  const executionId = uuid();
+async function runCodeInteractive(language, code, executionId) {
   const tempDir = path.join(os.tmpdir(), `code-${executionId}`);
   await fs.mkdir(tempDir, { recursive: true });
 
@@ -325,7 +313,6 @@ async function runCodeInteractive(language, code, stdin = '') {
       let stdout = '';
       let stderr = '';
       let isWaitingForInput = false;
-      let prompt = '';
 
       // Set up timeout
       const timeout = 30000; // 30 seconds for interactive execution
@@ -340,57 +327,20 @@ async function runCodeInteractive(language, code, stdin = '') {
         stdout += output;
         console.log(`📤 stdout: ${output}`);
         
-        // Send output to all connected terminals
-        terminalConnections.forEach((ws) => {
-          if (ws.readyState === 1) { // WebSocket.OPEN
-            ws.send(JSON.stringify({
-              type: 'output',
-              executionId: executionId,
-              data: output
-            }));
-          }
-        });
-        
-                 // Check if the process is waiting for input
-         if (output.includes('Enter') || output.includes('input') || output.includes(':') || output.includes('?')) {
-           isWaitingForInput = true;
-           // Extract the prompt (last line that ends with ':' or '?')
-           const lines = output.split('\n');
-           for (let i = lines.length - 1; i >= 0; i--) {
-             const line = lines[i].trim();
-             if ((line.includes(':') || line.includes('?')) && 
-                 !line.includes('Error') && 
-                 !line.includes('Traceback') && 
-                 !line.includes('File') &&
-                 line.length > 0) {
-               prompt = line;
-               break;
-             }
-           }
-           
-           // Clear the timeout since we're waiting for input
-           clearTimeout(timeoutId);
-         }
+        // Check if the process is waiting for input
+        if (output.includes('Enter') || output.includes('input') || output.includes(':')) {
+          isWaitingForInput = true;
+        }
       });
 
       child.stderr.on('data', (data) => {
         const error = data.toString();
         stderr += error;
         console.log(`📤 stderr: ${error}`);
-        
-        // Send error output to all connected terminals
-        terminalConnections.forEach((ws) => {
-          if (ws.readyState === 1) { // WebSocket.OPEN
-            ws.send(JSON.stringify({
-              type: 'error',
-              executionId: executionId,
-              data: error
-            }));
-          }
-        });
       });
 
       child.on('close', (code) => {
+        clearTimeout(timeoutId);
         console.log(`✅ Interactive execution completed with exit code: ${code}`);
         
         // Clean up temp directory
@@ -419,11 +369,9 @@ async function runCodeInteractive(language, code, stdin = '') {
             waitingForInput: true,
             executionId: executionId,
             stdout: stdout,
-            stderr: stderr,
-            prompt: prompt
+            stderr: stderr
           });
         } else {
-          clearTimeout(timeoutId);
           resolve({
             stdout: stdout,
             stderr: stderr,
@@ -548,8 +496,13 @@ async function runCode(language, code, stdin = '') {
        }
     }
 
-               // No preprocessing needed - let Python handle input() naturally
-      let processedCode = code;
+         // Preprocess Python code to handle input() calls better
+     let processedCode = code;
+     if (language === 'python' && code.includes('input(')) {
+       // Add a comment to explain the input handling
+       processedCode = `# Note: This code uses input() - default value "User" will be provided automatically\n${code}`;
+       console.log('🔧 Python code preprocessed for input() handling');
+     }
      
      const filePath = path.join(tempDir, fileName);
      await fs.writeFile(filePath, processedCode, { encoding: 'utf8', flag: 'w' });
@@ -759,9 +712,13 @@ async function runCode(language, code, stdin = '') {
            // Add timeout for Python execution to prevent infinite loops
            const timeout = language === 'python' ? 10000 : 5000; // 10 seconds for Python, 5 for others
            
-                                   // For interactive execution, don't provide stdin upfront
+                       // Use provided stdin or default for Python input()
             let finalStdin = stdin;
-            if (stdin) {
+            if (language === 'python' && code.includes('input(') && !stdin) {
+              // Provide default input for common input() calls if no stdin provided
+              finalStdin = 'User\n'; // Default input for name prompts
+              console.log('📝 Python code contains input() - providing default stdin: "User"');
+            } else if (stdin) {
               // Ensure stdin ends with newline
               finalStdin = stdin.endsWith('\n') ? stdin : (stdin + '\n');
               console.log('📝 Using provided stdin:', JSON.stringify(stdin));
@@ -870,69 +827,16 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/run', async (req, res) => {
   try {
-    const { language = 'python', source = '', stdin = '', interactive = false } = req.body;
+    const { language = 'python', source = '', stdin = '' } = req.body;
 
     if (!source) {
       return res.status(400).json({ error: 'Source code is required' });
     }
 
-    console.log(`🚀 Running ${language} code with interactive: ${interactive}, stdin: "${stdin}"`);
+    console.log(`🚀 Running ${language} code with stdin: "${stdin}"`);
     
-    // Check if this is an interactive input request
-    if (req.body.interactive && req.body.executionId) {
-      const execution = activeExecutions.get(req.body.executionId);
-      if (!execution) {
-        return res.status(404).json({ error: 'Execution not found' });
-      }
-      
-      // Send input to the waiting process
-      execution.child.stdin.write(stdin + '\n');
-      return res.json({ message: 'Input sent' });
-    }
-    
-    // If interactive mode is requested OR Python code contains input(), use interactive execution
-    if (interactive || (language === 'python' && source.includes('input('))) {
-      const result = await runCodeInteractive(language, source, stdin);
-      
-      if (result.waitingForInput) {
-        return res.json({
-          waitingForInput: true,
-          executionId: result.executionId,
-          stdout: result.stdout || '',
-          stderr: result.stderr || '',
-          prompt: result.prompt || ''
-        });
-      }
-      
-      return res.json({
-        stdout: result.stdout || '',
-        stderr: result.stderr || '',
-        exitCode: result.exitCode,
-        time: 'Interactive execution',
-        status: { description: result.exitCode === 0 ? 'Accepted' : 'Runtime Error' }
-      });
-    }
-    
-    // Use regular execution
+    // Use local execution instead of Judge0
     const result = await runCode(language, source, stdin);
-    
-    // Send output to all connected terminals
-    terminalConnections.forEach((ws) => {
-      if (ws.readyState === 1) { // WebSocket.OPEN
-        if (result.stdout) {
-          ws.send(JSON.stringify({
-            type: 'output',
-            data: result.stdout
-          }));
-        }
-        if (result.stderr) {
-          ws.send(JSON.stringify({
-            type: 'error',
-            data: result.stderr
-          }));
-        }
-      }
-    });
     
     return res.json({
       stdout: result.stdout || '',
@@ -988,54 +892,13 @@ app.post('/api/input', async (req, res) => {
 // Mount Blockly routes
 app.use('/api/blockly', blocklyRoutes);
 
-// WebSocket connection handler
-wss.on('connection', (ws, req) => {
-  const connectionId = uuid();
-  console.log(`🔌 Terminal WebSocket connected: ${connectionId}`);
-  
-  terminalConnections.set(connectionId, ws);
-  
-  // Send welcome message
-  ws.send(JSON.stringify({
-    type: 'connected',
-    message: 'Terminal connected to interactive execution server'
-  }));
-  
-  ws.on('message', (data) => {
-    try {
-      const message = JSON.parse(data.toString());
-      
-      if (message.type === 'input' && message.executionId) {
-        // Handle input from terminal
-        const execution = activeExecutions.get(message.executionId);
-        if (execution && execution.child) {
-          console.log(`📝 Sending input to execution ${message.executionId}: ${message.input}`);
-          execution.child.stdin.write(message.input + '\n');
-        }
-      }
-    } catch (error) {
-      console.error('WebSocket message error:', error);
-    }
-  });
-  
-  ws.on('close', () => {
-    console.log(`🔌 Terminal WebSocket disconnected: ${connectionId}`);
-    terminalConnections.delete(connectionId);
-  });
-  
-  ws.on('error', (error) => {
-    console.error(`WebSocket error for ${connectionId}:`, error);
-    terminalConnections.delete(connectionId);
-  });
-});
-
 // GET /health endpoint for checking if server is running
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 // Start server
-server.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const actualPort = server.address().port;
   console.log(`🚀 My AI Buddy Backend running on http://localhost:${actualPort}`);
   console.log(`📡 Ready to communicate with Ollama at http://localhost:11434`);

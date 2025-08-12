@@ -18,6 +18,8 @@ import {
 
 import { useAuth } from "../../context/AuthContext";
 import EditorPane from "./EditorPane";
+import OutputPane from "./OutputPane";
+import ErrorPane from "./ErrorPane";
 import TerminalPane from "./TerminalPane";
 import PreviewPane from "./PreviewPane";
 import { templates } from "./templates";
@@ -25,7 +27,7 @@ import "./styles.css";
 import ResizablePanel from "../../components/ResizablePanel";
 
 type Language = "python" | "javascript" | "c" | "cpp" | "java" | "html" | "css";
-type Tab = "terminal";
+type Tab = "output" | "errors" | "terminal";
 
 interface RunResult {
   stdout: string;
@@ -158,22 +160,21 @@ const CodeEditorPage: React.FC = () => {
   const [code, setCode] = useState<string>(templates.javascript);
   const [htmlCode, setHtmlCode] = useState<string>(templates.html);
   const [cssCode, setCssCode] = useState<string>(templates.css);
-  const [activeTab, setActiveTab] = useState<Tab>("terminal");
+  const [activeTab, setActiveTab] = useState<Tab>("output");
   const [isRunning, setIsRunning] = useState(false);
+  const [output, setOutput] = useState("");
+  const [errors, setErrors] = useState("");
   const [diagnostics, setDiagnostics] = useState<monaco.editor.IMarkerData[]>([]);
   const [fileName, setFileName] = useState("main.js");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
-  const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isOutputExpanded, setIsOutputExpanded] = useState(false);
   const [isWaitingForInput, setIsWaitingForInput] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [stdinValue, setStdinValue] = useState("");
   const [executionStatus, setExecutionStatus] = useState("");
-  const [currentExecutionId, setCurrentExecutionId] = useState("");
-  const [currentPrompt, setCurrentPrompt] = useState("");
-  const [isInteractiveMode, setIsInteractiveMode] = useState(false);
 
   // Load template and update filename when language changes
   useEffect(() => {
@@ -243,6 +244,8 @@ const CodeEditorPage: React.FC = () => {
       if (!confirmed) return;
     }
 
+    setOutput("");
+    setErrors("");
     setDiagnostics([]);
     setLanguage(newLanguage);
   }, [code, language]);
@@ -250,20 +253,17 @@ const CodeEditorPage: React.FC = () => {
   const runCode = useCallback(async () => {
     if (isRunning) return;
     setIsRunning(true);
+    setOutput("");
+    setErrors("");
     setDiagnostics([]);
-    setActiveTab("terminal");
+    setActiveTab("output");
     setIsWaitingForInput(false);
     setInputValue("");
     setExecutionStatus("");
-    setCurrentExecutionId("");
-    setCurrentPrompt("");
-    
-    // Automatically enable interactive mode for Python code with input() calls
-    const shouldUseInteractive = language === 'python' && code.includes('input(');
-    setIsInteractiveMode(shouldUseInteractive);
 
     // For HTML and CSS, just refresh the preview
     if (language === "html" || language === "css") {
+      setOutput("Preview refreshed");
       setIsRunning(false);
       return;
     }
@@ -276,26 +276,20 @@ const CodeEditorPage: React.FC = () => {
         body: JSON.stringify({
           language,
           source: code,
-          stdin: stdinValue,
-          interactive: isInteractiveMode
+          stdin: stdinValue
         })
       });
       
           const result = await response.json();
     
     if (result.error) {
-      // Handle errors in terminal
-      setActiveTab("terminal");
-    } else if (result.waitingForInput) {
-      // Handle interactive input
-      setIsWaitingForInput(true);
-      setCurrentExecutionId(result.executionId);
-      setCurrentPrompt(result.prompt || "");
-      setActiveTab("terminal");
+      setErrors(`Error: ${result.error}`);
+      setActiveTab("errors");
     } else {
       // Check if there are compilation or runtime errors
       if (result.stderr && result.stderr.trim()) {
-        setActiveTab("terminal");
+        setErrors(result.stderr.trim());
+        setActiveTab("errors");
         
         // Parse errors for diagnostics (for supported languages)
         if (language === "python" || language === "java" || language === "c" || language === "cpp") {
@@ -303,7 +297,9 @@ const CodeEditorPage: React.FC = () => {
           setDiagnostics(errorDiagnostics);
         }
       } else {
-        setActiveTab("terminal");
+        const finalOut = result.stdout?.trim() || "No output";
+        setOutput(finalOut);
+        setActiveTab("output");
         
         // Set execution status
         const meta = `Status: ${result?.status?.description || 'OK'} | Time: ${result?.time ?? 'n/a'}`;
@@ -313,64 +309,12 @@ const CodeEditorPage: React.FC = () => {
     } catch (error: any) {
       console.error('Code execution error:', error);
       const errorMessage = error.message || "Failed to run code";
-      setActiveTab("terminal");
+      setErrors(`Error: ${errorMessage}`);
+      setActiveTab("errors");
     } finally {
       setIsRunning(false);
     }
   }, [language, code, stdinValue, isRunning]);
-
-  const sendInput = useCallback(async (input: string) => {
-    if (!currentExecutionId || !isWaitingForInput) return;
-    
-    try {
-      const response = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          interactive: true,
-          executionId: currentExecutionId,
-          stdin: input
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        // Continue with the execution
-        const continueResponse = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/run`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            language,
-            source: code,
-            stdin: ""
-          })
-        });
-
-        const continueResult = await continueResponse.json();
-
-        if (continueResponse.ok) {
-          if (continueResult.waitingForInput) {
-            // Still waiting for more input
-            setCurrentExecutionId(continueResult.executionId);
-            setCurrentPrompt(continueResult.prompt || "");
-          } else {
-            // Execution completed
-            setIsWaitingForInput(false);
-            setCurrentExecutionId("");
-            setCurrentPrompt("");
-            setExecutionStatus(continueResult.status?.description || "");
-          }
-        } else {
-          console.error('Failed to continue execution:', continueResult.error);
-        }
-      } else {
-        console.error('Failed to send input:', result.error);
-      }
-    } catch (error: any) {
-      console.error('Input sending error:', error);
-    }
-  }, [currentExecutionId, isWaitingForInput, language, code]);
 
   const saveCode = useCallback(() => {
     try {
@@ -440,11 +384,55 @@ const CodeEditorPage: React.FC = () => {
     console.log(`Jump to line ${line}, column ${column}`);
   }, []);
 
-  const toggleTerminalExpansion = useCallback(() => {
-    setIsTerminalExpanded(!isTerminalExpanded);
-  }, [isTerminalExpanded]);
+  const toggleOutputExpansion = useCallback(() => {
+    setIsOutputExpanded(!isOutputExpanded);
+  }, [isOutputExpanded]);
 
-
+  const sendInput = useCallback(async (input: string) => {
+    if (!executionId || !isWaitingForInput) return;
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/input`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          executionId,
+          input: input + '\n'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        setErrors(`Error: ${result.error}`);
+        setActiveTab("errors");
+        setIsWaitingForInput(false);
+      } else if (result.waitingForInput) {
+        // Still waiting for more input
+        setOutput(result.stdout || "");
+        setInputValue("");
+      } else {
+        // Execution completed
+        setIsWaitingForInput(false);
+        setExecutionId(null);
+        setInputValue("");
+        
+        if (result.stderr && result.stderr.trim()) {
+          setErrors(result.stderr.trim());
+          setActiveTab("errors");
+        } else {
+          const finalOut = result.stdout?.trim() || "No output";
+          setOutput(finalOut);
+          setActiveTab("output");
+        }
+      }
+    } catch (error: any) {
+      console.error('Input error:', error);
+      setErrors(`Error sending input: ${error.message}`);
+      setActiveTab("errors");
+      setIsWaitingForInput(false);
+    }
+  }, [executionId, isWaitingForInput]);
 
   // Parse error messages to extract line numbers and create diagnostics
   const parseErrors = useCallback((errorOutput: string, lang: Language): monaco.editor.IMarkerData[] => {
@@ -610,15 +598,6 @@ const CodeEditorPage: React.FC = () => {
                   </button>
 
                   <button
-                    className={clsx("interactive-btn", { active: isInteractiveMode })}
-                    onClick={() => setIsInteractiveMode(!isInteractiveMode)}
-                    title="Toggle Interactive Mode"
-                  >
-                    <Terminal size={16} />
-                    Interactive
-                  </button>
-
-                  <button
                     className="download-btn"
                     onClick={saveCode}
                     title={`Download ${fileName}`}
@@ -637,6 +616,8 @@ const CodeEditorPage: React.FC = () => {
                         } else if (language === "css") {
                           setCssCode(templates.css);
                         }
+                        setOutput("");
+                        setErrors("");
                         setDiagnostics([]);
                       }
                     }}
@@ -666,24 +647,59 @@ const CodeEditorPage: React.FC = () => {
                 </div>
 
                 <ResizablePanel
-                  className={`terminal-container ${isTerminalExpanded ? 'expanded' : ''}`}
-                  defaultSize={isTerminalExpanded ? "90%" : "400px"}
+                  className={`output-container ${isOutputExpanded ? 'expanded' : ''}`}
+                  defaultSize={isOutputExpanded ? "90%" : "400px"}
                   minSize="200px"
                   maxSize="90%"
                   handle={<GripVertical className="resize-handle" />}
                 >
-                  <div className="terminal-header">
-                    <div className="terminal-title">
-                      <Terminal size={16} />
-                      <span>Terminal</span>
+                  {/* Custom Input (stdin) Section */}
+                  {language !== "html" && language !== "css" && (
+                    <div className="stdin-section">
+                      <label htmlFor="stdin" className="stdin-label">
+                        Custom Input (stdin):
+                      </label>
+                      <textarea
+                        id="stdin"
+                        className="stdin-textarea"
+                        rows={4}
+                        placeholder="Enter inputs here. Use new lines for multiple input() calls."
+                        value={stdinValue}
+                        onChange={(e) => setStdinValue(e.target.value)}
+                      />
                     </div>
-                    <div className="terminal-actions">
+                  )}
+
+                  <div className="output-tabs">
+                    <div className="output-tabs-left">
+                      <div
+                        className={clsx("output-tab", { active: activeTab === "output" })}
+                        onClick={() => setActiveTab("output")}
+                      >
+                        Output
+                      </div>
+                      <div
+                        className={clsx("output-tab", { active: activeTab === "errors" })}
+                        onClick={() => setActiveTab("errors")}
+                      >
+                        Errors {diagnostics.length > 0 && `(${diagnostics.length})`}
+                      </div>
+                      <div
+                        className={clsx("output-tab", "terminal-toggle", { active: isTerminalOpen })}
+                        onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+                      >
+                        <Terminal size={14} />
+                        Terminal
+                      </div>
+                    </div>
+
+                    <div className="tab-actions">
                       <button
                         className="expand-btn"
-                        onClick={toggleTerminalExpansion}
-                        title={isTerminalExpanded ? "Collapse Terminal" : "Expand Terminal"}
+                        onClick={toggleOutputExpansion}
+                        title={isOutputExpanded ? "Collapse Output" : "Expand Output"}
                       >
-                        {isTerminalExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                        {isOutputExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                       </button>
                       <div className="resize-indicator">
                         <GripVertical size={12} />
@@ -691,6 +707,8 @@ const CodeEditorPage: React.FC = () => {
                       <button
                         className="clear-btn"
                         onClick={() => {
+                          setOutput("");
+                          setErrors("");
                           setDiagnostics([]);
                         }}
                       >
@@ -699,18 +717,50 @@ const CodeEditorPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="terminal-content">
-                    {(language === "html" || language === "css") ? (
-                      <div className="preview-container">
-                        <div className="preview-header">
-                          <span>Live Preview (HTML + CSS)</span>
-                        </div>
-                        <div className="preview-body">
-                          <PreviewPane html={htmlCode} css={cssCode} />
-                        </div>
-                      </div>
-                    ) : (
-                      <TerminalPane isActive={true} executionId={currentExecutionId} />
+                  <div className="output-content">
+                    {activeTab === "output" && (
+                      <>
+                        {(language === "html" || language === "css") ? (
+                          <div className="preview-container">
+                            <div className="preview-header">
+                              <span>Live Preview (HTML + CSS)</span>
+                            </div>
+                            <div className="preview-body">
+                              <PreviewPane html={htmlCode} css={cssCode} />
+                            </div>
+                            <div className="preview-status">
+                              {output}
+                            </div>
+                          </div>
+                        ) : (
+                          <OutputPane 
+                            output={output} 
+                            isWaitingForInput={isWaitingForInput}
+                            inputValue={inputValue}
+                            onInputChange={setInputValue}
+                            onInputSubmit={sendInput}
+                            status={executionStatus}
+                          />
+                        )}
+                      </>
+                    )}
+                    {activeTab === "errors" && (
+                      <>
+                        {diagnostics.length > 0 ? (
+                          <ErrorPane errors={diagnostics} onErrorClick={handleErrorClick} />
+                        ) : (
+                          <div className="errorsList">
+                            <div className="item">
+                              <div style={{ fontWeight: "bold", color: "#d32f2f" }}>
+                                Execution Error
+                              </div>
+                              <div style={{ marginTop: "4px", whiteSpace: "pre-wrap" }}>
+                                {errors}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </ResizablePanel>
@@ -718,7 +768,27 @@ const CodeEditorPage: React.FC = () => {
             </div>
           </div>
 
-
+          {/* Bottom Terminal */}
+          {isTerminalOpen && (
+            <div className="horizontal-terminal">
+              <div className="terminal-header">
+                <div className="terminal-title">
+                  <Terminal size={16} />
+                  <span>Terminal</span>
+                </div>
+                <button
+                  className="terminal-close-btn"
+                  onClick={() => setIsTerminalOpen(false)}
+                  title="Close Terminal"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="terminal-content">
+                <TerminalPane isActive={isTerminalOpen} />
+              </div>
+            </div>
+          )}
         </div>
     </DashboardLayout>
   );
