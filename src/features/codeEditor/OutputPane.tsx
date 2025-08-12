@@ -9,7 +9,6 @@ type Props = {
   onInputChange?: (value: string) => void;
   onInputSubmit?: (input: string) => void;
   status?: string;
-  prompt?: string;
 };
 
 export default function OutputPane({ 
@@ -19,8 +18,7 @@ export default function OutputPane({
   inputValue = "",
   onInputChange,
   onInputSubmit,
-  status,
-  prompt
+  status
 }: Props) {
   const [localInputValue, setLocalInputValue] = useState("");
 
@@ -52,7 +50,7 @@ export default function OutputPane({
       {isWaitingForInput && (
         <div className="input-prompt">
           <form onSubmit={handleInputSubmit} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-            <span style={{ color: '#4ade80' }}>{prompt || '▶'}</span>
+            <span style={{ color: '#4ade80' }}>▶</span>
             <input
               type="text"
               value={inputValue || localInputValue}

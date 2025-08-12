@@ -6,10 +6,9 @@ import "./styles.css";
 
 type Props = {
   isActive: boolean;
-  executionId?: string;
 };
 
-export default function TerminalPane({ isActive, executionId }: Props) {
+export default function TerminalPane({ isActive }: Props) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
@@ -54,33 +53,15 @@ export default function TerminalPane({ isActive, executionId }: Props) {
     if (!terminal.current) return;
 
     try {
-      // Connect to our interactive execution WebSocket server
-      ws.current = new WebSocket("ws://localhost:5000");
+      ws.current = new WebSocket("ws://localhost:5050/api/terminal");
       
       ws.current.onopen = () => {
         setIsConnected(true);
-        terminal.current?.write("Interactive execution terminal connected.\r\n");
-        if (executionId) {
-          terminal.current?.write(`Execution ID: ${executionId}\r\n`);
-        }
-        terminal.current?.write("Type your input when prompted:\r\n\r\n");
+        terminal.current?.write("Terminal connected. Type commands below:\r\n$ ");
       };
 
       ws.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          
-                     if (message.type === 'connected') {
-             terminal.current?.write(`${message.message}\r\n`);
-           } else if (message.type === 'output') {
-             terminal.current?.write(message.data);
-           } else if (message.type === 'error') {
-             terminal.current?.write(`\x1b[31m${message.data}\x1b[0m`); // Red color for errors
-           }
-        } catch (error) {
-          // Fallback for non-JSON messages
-          terminal.current?.write(event.data);
-        }
+        terminal.current?.write(event.data);
       };
 
       ws.current.onclose = () => {
@@ -95,17 +76,7 @@ export default function TerminalPane({ isActive, executionId }: Props) {
 
       terminal.current.onData((data) => {
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-          if (executionId) {
-            // Send input to the interactive execution
-            ws.current.send(JSON.stringify({
-              type: 'input',
-              executionId: executionId,
-              input: data
-            }));
-          } else {
-            // For regular terminal input, just echo it back
-            terminal.current?.write(data);
-          }
+          ws.current.send(data);
         }
       });
     } catch (error) {

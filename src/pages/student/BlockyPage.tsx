@@ -7,16 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../hooks/use-toast';
 
-// Import Blockly with proper error handling
+// Import Blockly
 import * as Blockly from 'blockly';
-import 'blockly/blocks';
-import 'blockly/javascript';
-
-// Fallback import for Blockly
-let BlocklyInstance: any = Blockly;
-if (typeof window !== 'undefined' && (window as any).Blockly) {
-  BlocklyInstance = (window as any).Blockly;
-}
 
 const BlockyPage: React.FC = () => {
   const { currentUser } = useAuth();
@@ -31,7 +23,6 @@ const BlockyPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [isBlocklyLoading, setIsBlocklyLoading] = useState(true);
 
   // Project templates for kids
   const projectTemplates = [
@@ -118,47 +109,15 @@ const BlockyPage: React.FC = () => {
   useEffect(() => {
     if (!blocklyDivRef.current) return;
 
-    const initializeBlockly = async () => {
-      setIsBlocklyLoading(true);
-      // Check if Blockly is properly loaded
-      if (typeof BlocklyInstance === 'undefined' || !BlocklyInstance.inject) {
-        console.log('Blockly not found, trying dynamic import...');
-        try {
-          const dynamicBlockly = await import('blockly');
-          BlocklyInstance = dynamicBlockly;
-        } catch (error) {
-          console.error('Failed to load Blockly dynamically:', error);
-          toast({
-            title: 'Error! 😅',
-            description: 'Blockly library failed to load. Please refresh the page.',
-            variant: 'destructive',
-          });
-          setIsBlocklyLoading(false);
-          return;
-        }
-      }
-
-      if (typeof BlocklyInstance === 'undefined' || !BlocklyInstance.inject) {
-        console.error('Blockly is not properly loaded');
-        toast({
-          title: 'Error! 😅',
-          description: 'Blockly library failed to load. Please refresh the page.',
-          variant: 'destructive',
-        });
-        setIsBlocklyLoading(false);
-        return;
-      }
-
-    try {
-      // Create the workspace with kid-friendly colors and blocks
-      workspaceRef.current = BlocklyInstance.inject(blocklyDivRef.current, {
+    // Create the workspace with kid-friendly colors and blocks
+    workspaceRef.current = Blockly.inject(blocklyDivRef.current, {
       toolbox: {
         kind: 'categoryToolbox',
         contents: [
           {
             kind: 'category',
             name: '🎯 Events',
-            colour: '65',
+            colour: 65,
             contents: [
               { kind: 'block', type: 'controls_if' },
               { kind: 'block', type: 'controls_repeat_ext' },
@@ -169,7 +128,7 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '🔢 Math',
-            colour: '230',
+            colour: 230,
             contents: [
               { kind: 'block', type: 'math_number' },
               { kind: 'block', type: 'math_arithmetic' },
@@ -180,7 +139,7 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '💬 Text',
-            colour: '160',
+            colour: 160,
             contents: [
               { kind: 'block', type: 'text' },
               { kind: 'block', type: 'text_join' },
@@ -191,7 +150,7 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '🔍 Logic',
-            colour: '210',
+            colour: 210,
             contents: [
               { kind: 'block', type: 'logic_compare' },
               { kind: 'block', type: 'logic_operation' },
@@ -202,13 +161,13 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '📦 Variables',
-            colour: '330',
+            colour: 330,
             custom: 'VARIABLE'
           },
           {
             kind: 'category',
             name: '⚙️ Functions',
-            colour: '290',
+            colour: 290,
             custom: 'PROCEDURE'
           }
         ]
@@ -240,21 +199,10 @@ const BlockyPage: React.FC = () => {
       }
     });
 
-    } catch (error) {
-      console.error('Error initializing Blockly:', error);
-      toast({
-        title: 'Error! 😅',
-        description: 'Failed to initialize Blockly. Please refresh the page.',
-        variant: 'destructive',
-      });
-      setIsBlocklyLoading(false);
-      return;
-    }
-
     // Handle window resize
     const handleResize = () => {
       if (workspaceRef.current) {
-        BlocklyInstance.svgResize(workspaceRef.current);
+        Blockly.svgResize(workspaceRef.current);
       }
     };
 
@@ -262,9 +210,6 @@ const BlockyPage: React.FC = () => {
 
     // Load projects on mount
     loadProjects();
-    
-    // Set loading to false when everything is ready
-    setIsBlocklyLoading(false);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -272,10 +217,6 @@ const BlockyPage: React.FC = () => {
         workspaceRef.current.dispose();
       }
     };
-    };
-
-    // Call the initialization function
-    initializeBlockly();
   }, []);
 
   // Load projects from backend
@@ -301,7 +242,7 @@ const BlockyPage: React.FC = () => {
     workspaceRef.current.clear();
     
     // Load the template
-    BlocklyInstance.serialization.workspaces.load(template.workspace, workspaceRef.current);
+    Blockly.serialization.workspaces.load(template.workspace, workspaceRef.current);
     
     setProjectName(template.name);
     setSelectedProjectId('');
@@ -320,7 +261,7 @@ const BlockyPage: React.FC = () => {
     try {
       setIsLoading(true);
       
-      const workspaceJson = BlocklyInstance.serialization.workspaces.save(workspaceRef.current);
+      const workspaceJson = Blockly.serialization.workspaces.save(workspaceRef.current);
       
       const response = await fetch('/api/blockly/projects', {
         method: 'POST',
@@ -373,7 +314,7 @@ const BlockyPage: React.FC = () => {
         workspaceRef.current.clear();
         
         // Load the project
-        BlocklyInstance.serialization.workspaces.load(project.workspaceJson, workspaceRef.current);
+        Blockly.serialization.workspaces.load(project.workspaceJson, workspaceRef.current);
         
         setProjectName(project.name);
         setSelectedProjectId(project.id);
@@ -405,7 +346,7 @@ const BlockyPage: React.FC = () => {
       setIsRunning(true);
       
       // Generate JavaScript code from workspace
-      const code = BlocklyInstance.JavaScript.workspaceToCode(workspaceRef.current);
+      const code = Blockly.JavaScript.workspaceToCode(workspaceRef.current);
       
       if (!code.trim()) {
         toast({
@@ -730,20 +671,11 @@ const BlockyPage: React.FC = () => {
                 Drag blocks here to create your program
               </h3>
             </div>
-            {isBlocklyLoading ? (
-              <div className="flex items-center justify-center h-full min-h-[600px]">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading Blockly Editor...</p>
-                </div>
-              </div>
-            ) : (
-              <div 
-                ref={blocklyDivRef} 
-                className="w-full h-full"
-                style={{ minHeight: '600px' }}
-              />
-            )}
+            <div 
+              ref={blocklyDivRef} 
+              className="w-full h-full"
+              style={{ minHeight: '600px' }}
+            />
           </div>
 
           {/* Output Panel */}
