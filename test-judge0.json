@@ -1,0 +1,5 @@
+{
+  "language": "python",
+  "source": "n = int(input(\"Enter a number: \"))\nprint(n*2)",
+  "stdin": "7"
+}

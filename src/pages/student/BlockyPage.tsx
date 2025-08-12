@@ -117,7 +117,7 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '🎯 Events',
-            colour: 65,
+            colour: '65',
             contents: [
               { kind: 'block', type: 'controls_if' },
               { kind: 'block', type: 'controls_repeat_ext' },
@@ -128,7 +128,7 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '🔢 Math',
-            colour: 230,
+            colour: '230',
             contents: [
               { kind: 'block', type: 'math_number' },
               { kind: 'block', type: 'math_arithmetic' },
@@ -139,7 +139,7 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '💬 Text',
-            colour: 160,
+            colour: '160',
             contents: [
               { kind: 'block', type: 'text' },
               { kind: 'block', type: 'text_join' },
@@ -150,7 +150,7 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '🔍 Logic',
-            colour: 210,
+            colour: '210',
             contents: [
               { kind: 'block', type: 'logic_compare' },
               { kind: 'block', type: 'logic_operation' },
@@ -161,13 +161,13 @@ const BlockyPage: React.FC = () => {
           {
             kind: 'category',
             name: '📦 Variables',
-            colour: 330,
+            colour: '330',
             custom: 'VARIABLE'
           },
           {
             kind: 'category',
             name: '⚙️ Functions',
-            colour: 290,
+            colour: '290',
             custom: 'PROCEDURE'
           }
         ]

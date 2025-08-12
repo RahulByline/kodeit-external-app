@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
@@ -8,26 +9,24 @@ import { v4 as uuid } from 'uuid';
 import os from 'os';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import blocklyRoutes from './routes/blockly.routes.js';
 // Note: Using native fetch (available in Node.js 18+)
 
-dotenv.config();
-
 const app = express();
+app.use(express.json({ limit: '1mb' }));
 const PORT = process.env.PORT || 5000;
+const JUDGE0_URL = process.env.JUDGE0_URL?.replace(/\/+$/, '') || 'https://judge0-ce.p.rapidapi.com';
 
 // Security middleware
 app.use(helmet());
 app.use(express.json({ limit: "200kb" }));
 
-// CORS middleware
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+// CORS middleware - Allow any localhost port dynamically
 app.use(cors({ 
-  origin: ['http://localhost:8080', 'http://localhost:8081', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081'],
+  origin: true, // Allow all origins for development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Rate limiting
@@ -37,17 +36,19 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Judge0 configuration
-const JUDGE0 = process.env.JUDGE0_URL || "http://localhost:2358";
+// Language ID cache and helper
+let cachedLangIds = { python3: null };
 
-// Judge0 CE language IDs (v1.13+). Updated for better compatibility.
-const LANG = {
-  javascript: 63, // Node.js
-  python: 71,     // Python 3.x
-  c: 50,          // GCC C
-  cpp: 54,        // GCC C++
-  java: 62        // Java OpenJDK
-};
+async function getPython3LanguageId() {
+  if (cachedLangIds.python3) return cachedLangIds.python3;
+  const r = await fetch(`${JUDGE0_URL}/languages`);
+  if (!r.ok) throw new Error(`Failed to fetch languages: ${r.status}`);
+  const langs = await r.json();
+  const py = langs.find(l => /python/i.test(l.name) && /(^|[^0-9])3([^0-9]|$)/.test(l.name));
+  if (!py) throw new Error('Python 3 language not found on Judge0 instance');
+  cachedLangIds.python3 = py.id;
+  return py.id;
+}
 
 // Helper function to get language labels
 function getLanguageLabel(language) {
@@ -63,6 +64,9 @@ function getLanguageLabel(language) {
 
 // In-memory conversation storage (in production, use a database)
 const conversations = new Map();
+
+// In-memory execution storage for interactive input
+const activeExecutions = new Map();
 
 // POST /chat endpoint (streaming)
 app.post('/chat', async (req, res) => {
@@ -211,8 +215,160 @@ For simple questions, provide direct answers. For complex topics, use the struct
   }
 });
 
+// Interactive Code Execution Function
+async function runCodeInteractive(language, code, executionId) {
+  const tempDir = path.join(os.tmpdir(), `code-${executionId}`);
+  await fs.mkdir(tempDir, { recursive: true });
+
+  try {
+    let fileName, command, args;
+    
+    switch (language) {
+      case 'python':
+        fileName = 'main.py';
+        command = 'py';
+        args = ['main.py'];
+        break;
+      default:
+        throw new Error(`Interactive execution not supported for ${language}`);
+    }
+
+    // Check if command is available
+    let commandPath = command;
+    try {
+      const { execSync } = await import('child_process');
+      execSync(`where ${command}`, { stdio: 'ignore' });
+      console.log(`✅ ${command} found in PATH`);
+    } catch (error) {
+      // For Python, try alternative commands
+      if (language === 'python') {
+        try {
+          execSync(`where py`, { stdio: 'ignore' });
+          console.log('✅ Python (py) found in PATH');
+          commandPath = 'py';
+        } catch (pyError) {
+          try {
+            execSync(`where python3`, { stdio: 'ignore' });
+            console.log('✅ Python (python3) found in PATH');
+            commandPath = 'python3';
+          } catch (python3Error) {
+            try {
+              execSync(`where python`, { stdio: 'ignore' });
+              console.log('✅ Python (python) found in PATH');
+              commandPath = 'python';
+            } catch (pythonError) {
+              throw new Error(`Python is not installed or not found in PATH. Please install Python to run Python code.`);
+            }
+          }
+        }
+      } else {
+        throw new Error(`${getLanguageLabel(language)} is not installed or not in PATH. Please install ${getLanguageLabel(language)} to run ${language} code.`);
+      }
+    }
+
+    const filePath = path.join(tempDir, fileName);
+    await fs.writeFile(filePath, code, { encoding: 'utf8', flag: 'w' });
+    
+    console.log(`Created file: ${filePath}`);
+    console.log(`Working directory: ${tempDir}`);
+
+    return new Promise((resolve, reject) => {
+      const child = spawn(commandPath, args, { 
+        cwd: tempDir,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let isWaitingForInput = false;
+
+      // Set up timeout
+      const timeout = 30000; // 30 seconds for interactive execution
+      const timeoutId = setTimeout(() => {
+        child.kill('SIGTERM');
+        setTimeout(() => child.kill('SIGKILL'), 1000);
+        reject(new Error(`Execution timed out after ${timeout}ms`));
+      }, timeout);
+
+      child.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        console.log(`📤 stdout: ${output}`);
+        
+        // Check if the process is waiting for input
+        if (output.includes('Enter') || output.includes('input') || output.includes(':')) {
+          isWaitingForInput = true;
+        }
+      });
+
+      child.stderr.on('data', (data) => {
+        const error = data.toString();
+        stderr += error;
+        console.log(`📤 stderr: ${error}`);
+      });
+
+      child.on('close', (code) => {
+        clearTimeout(timeoutId);
+        console.log(`✅ Interactive execution completed with exit code: ${code}`);
+        
+        // Clean up temp directory
+        fs.rm(tempDir, { recursive: true, force: true }).catch(err => 
+          console.warn('Failed to clean up temp directory:', err)
+        );
+
+        if (isWaitingForInput) {
+          // Store execution for later input
+          activeExecutions.set(executionId, {
+            child,
+            promise: new Promise((res, rej) => {
+              child.on('close', (finalCode) => {
+                res({
+                  stdout: stdout,
+                  stderr: stderr,
+                  exitCode: finalCode,
+                  diagnostics: []
+                });
+              });
+              child.on('error', rej);
+            })
+          });
+          
+          resolve({
+            waitingForInput: true,
+            executionId: executionId,
+            stdout: stdout,
+            stderr: stderr
+          });
+        } else {
+          resolve({
+            stdout: stdout,
+            stderr: stderr,
+            exitCode: code,
+            diagnostics: []
+          });
+        }
+      });
+
+      child.on('error', (error) => {
+        clearTimeout(timeoutId);
+        console.error(`💥 Interactive execution error:`, error);
+        reject(error);
+      });
+    });
+  } catch (error) {
+    // Clean up temp directory
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn('Failed to clean up temp directory:', err);
+    }
+    throw error;
+  }
+}
+
 // Code Execution Function
-async function runCode(language, code) {
+async function runCode(language, code, stdin = '') {
   const tempDir = path.join(os.tmpdir(), `code-${uuid()}`);
   await fs.mkdir(tempDir, { recursive: true });
 
@@ -227,7 +383,7 @@ async function runCode(language, code) {
         break;
       case 'python':
         fileName = 'main.py';
-        command = 'python';
+        command = 'py'; // Use 'py' for Windows Python
         args = ['main.py'];
         break;
       case 'java':
@@ -266,19 +422,59 @@ async function runCode(language, code) {
         console.log('✅ Java JDK found at:', javaPaths.javac);
       } catch (error) {
         console.log('❌ Java JDK not found at expected path:', javaPaths.javac);
-        throw new Error(`Java JDK is not installed or not found at expected path. Please install Java JDK to run Java code.`);
+        // Try to find Java in PATH as fallback
+        try {
+          const { execSync } = await import('child_process');
+          execSync(`where javac`, { stdio: 'ignore' });
+          console.log('✅ Java found in PATH');
+          commandPath = 'javac';
+        } catch (pathError) {
+          throw new Error(`Java JDK is not installed or not found. Please install Java JDK to run Java code.`);
+        }
       }
     } else {
       try {
         const { execSync } = await import('child_process');
         execSync(`where ${command}`, { stdio: 'ignore' });
-      } catch (error) {
-        throw new Error(`${getLanguageLabel(language)} is not installed or not in PATH. Please install ${getLanguageLabel(language)} to run ${language} code.`);
-      }
+        console.log(`✅ ${command} found in PATH`);
+             } catch (error) {
+         // For Python, try alternative commands
+         if (language === 'python') {
+           try {
+             execSync(`where py`, { stdio: 'ignore' });
+             console.log('✅ Python (py) found in PATH');
+             commandPath = 'py';
+           } catch (pyError) {
+             try {
+               execSync(`where python3`, { stdio: 'ignore' });
+               console.log('✅ Python (python3) found in PATH');
+               commandPath = 'python3';
+             } catch (python3Error) {
+               try {
+                 execSync(`where python`, { stdio: 'ignore' });
+                 console.log('✅ Python (python) found in PATH');
+                 commandPath = 'python';
+               } catch (pythonError) {
+                 throw new Error(`Python is not installed or not found in PATH. Please install Python to run Python code.`);
+               }
+             }
+           }
+         } else {
+           throw new Error(`${getLanguageLabel(language)} is not installed or not in PATH. Please install ${getLanguageLabel(language)} to run ${language} code.`);
+         }
+       }
     }
 
-    const filePath = path.join(tempDir, fileName);
-    await fs.writeFile(filePath, code, { encoding: 'utf8', flag: 'w' });
+         // Preprocess Python code to handle input() calls better
+     let processedCode = code;
+     if (language === 'python' && code.includes('input(')) {
+       // Add a comment to explain the input handling
+       processedCode = `# Note: This code uses input() - default value "User" will be provided automatically\n${code}`;
+       console.log('🔧 Python code preprocessed for input() handling');
+     }
+     
+     const filePath = path.join(tempDir, fileName);
+     await fs.writeFile(filePath, processedCode, { encoding: 'utf8', flag: 'w' });
     
     // Verify file was created and has content
     const fileExists = await fs.access(filePath).then(() => true).catch(() => false);
@@ -305,7 +501,7 @@ async function runCode(language, code) {
           // Compile Java
           console.log('Starting Java compilation...');
           const compileResult = await new Promise((compileResolve, compileReject) => {
-            const compileChild = spawn(javaPaths.javac, ['Main.java'], { 
+            const compileChild = spawn(commandPath, ['Main.java'], { 
               cwd: tempDir,
               stdio: ['pipe', 'pipe', 'pipe']
             });
@@ -353,7 +549,7 @@ async function runCode(language, code) {
 
           // Run compiled Java
           console.log('Starting Java execution...');
-          const runChild = spawn(javaPaths.java, ['Main'], { 
+          const runChild = spawn('java', ['Main'], { 
             cwd: tempDir,
             stdio: ['pipe', 'pipe', 'pipe']
           });
@@ -478,48 +674,101 @@ async function runCode(language, code) {
             console.log(`${language.toUpperCase()} process exited with code:`, code);
           });
 
-        } else {
-          // For interpreted languages (JavaScript, Python)
-          console.log(`Starting ${language} execution...`);
-          const child = spawn(command, args, { 
-            cwd: tempDir,
-            stdio: ['pipe', 'pipe', 'pipe'],
-            shell: true // Use shell for better path resolution
-          });
+                 } else {
+           // For interpreted languages (JavaScript, Python)
+           console.log(`Starting ${language} execution with command: ${commandPath} ${args.join(' ')}`);
+           
+           // Add timeout for Python execution to prevent infinite loops
+           const timeout = language === 'python' ? 10000 : 5000; // 10 seconds for Python, 5 for others
+           
+                       // Use provided stdin or default for Python input()
+            let finalStdin = stdin;
+            if (language === 'python' && code.includes('input(') && !stdin) {
+              // Provide default input for common input() calls if no stdin provided
+              finalStdin = 'User\n'; // Default input for name prompts
+              console.log('📝 Python code contains input() - providing default stdin: "User"');
+            } else if (stdin) {
+              // Ensure stdin ends with newline
+              finalStdin = stdin.endsWith('\n') ? stdin : (stdin + '\n');
+              console.log('📝 Using provided stdin:', JSON.stringify(stdin));
+            }
+           
+           const child = spawn(commandPath, args, { 
+             cwd: tempDir,
+             stdio: ['pipe', 'pipe', 'pipe'],
+             shell: true // Use shell for better path resolution
+           });
 
-          let stdout = '';
-          let stderr = '';
+           let stdout = '';
+           let stderr = '';
+           let isResolved = false;
 
-          child.stdout.on('data', (data) => {
-            stdout += data.toString();
-          });
+           // Set up timeout
+           const timeoutId = setTimeout(() => {
+             if (!isResolved) {
+               console.log(`${language} execution timed out after ${timeout}ms`);
+               child.kill('SIGTERM'); // Try graceful termination first
+               
+               setTimeout(() => {
+                 if (!isResolved) {
+                   child.kill('SIGKILL'); // Force kill if still running
+                 }
+               }, 1000);
+               
+               isResolved = true;
+               resolve({
+                 stdout: stdout,
+                 stderr: stderr + `\n[Execution timed out after ${timeout}ms]`,
+                 exitCode: -1,
+                 diagnostics: []
+               });
+             }
+           }, timeout);
 
-          child.stderr.on('data', (data) => {
-            stderr += data.toString();
-          });
+                       // Send stdin if provided
+            if (finalStdin) {
+              child.stdin.write(finalStdin);
+              child.stdin.end();
+            }
 
-          child.on('close', (code) => {
-            console.log(`${language} execution completed with exit code:`, code);
-            console.log(`${language} stdout:`, stdout);
-            console.log(`${language} stderr:`, stderr);
-            resolve({
-              stdout: stdout,
-              stderr: stderr,
-              exitCode: code,
-              diagnostics: []
-            });
-          });
+           child.stdout.on('data', (data) => {
+             stdout += data.toString();
+           });
 
-          child.on('error', (error) => {
-            console.error(`${language} execution error:`, error);
-            reject(error);
-          });
+           child.stderr.on('data', (data) => {
+             stderr += data.toString();
+           });
 
-          // Ensure process cleanup
-          child.on('exit', (code) => {
-            console.log(`${language} process exited with code:`, code);
-          });
-        }
+           child.on('close', (code) => {
+             if (!isResolved) {
+               clearTimeout(timeoutId);
+               isResolved = true;
+               console.log(`${language} execution completed with exit code:`, code);
+               console.log(`${language} stdout:`, stdout);
+               console.log(`${language} stderr:`, stderr);
+               resolve({
+                 stdout: stdout,
+                 stderr: stderr,
+                 exitCode: code,
+                 diagnostics: []
+               });
+             }
+           });
+
+           child.on('error', (error) => {
+             if (!isResolved) {
+               clearTimeout(timeoutId);
+               isResolved = true;
+               console.error(`${language} execution error:`, error);
+               reject(error);
+             }
+           });
+
+           // Ensure process cleanup
+           child.on('exit', (code) => {
+             console.log(`${language} process exited with code:`, code);
+           });
+         }
 
         // Removed timeout to prevent execution failures
         // Code execution will complete naturally without artificial time limits
@@ -538,95 +787,7 @@ async function runCode(language, code) {
   }
 }
 
-// Judge0 Proxy Endpoint
-app.post('/api/judge0/run', async (req, res) => {
-  try {
-    console.log('🔍 Judge0 request received:', { 
-      language: req.body?.language, 
-      sourceLength: req.body?.source?.length,
-      timestamp: new Date().toISOString()
-    });
 
-    const { language, source, stdin } = req.body || {};
-    if (!language || !source) {
-      console.log('❌ Missing language or source');
-      return res.status(400).json({ error: "Missing 'language' or 'source'." });
-    }
-    
-    const language_id = LANG[language];
-    if (!language_id) {
-      console.log('❌ Unsupported language:', language);
-      return res.status(400).json({ error: `Unsupported language: ${language}` });
-    }
-
-    console.log('📡 Connecting to Judge0 at:', JUDGE0);
-    console.log('🔧 Language ID:', language_id);
-
-    // Test Judge0 connection first
-    try {
-      const healthCheck = await axios.get(`${JUDGE0}/languages`, { timeout: 5000 });
-      console.log('✅ Judge0 is reachable, available languages:', healthCheck.data.length);
-    } catch (healthError) {
-      console.log('❌ Judge0 health check failed:', healthError.message);
-      console.log('💡 Make sure Judge0 is running: cd infra/judge0 && docker compose up -d');
-      return res.status(503).json({ 
-        error: "Judge0 service is not available. Please start Judge0 first.",
-        details: healthError.message
-      });
-    }
-
-    // Create submission and wait synchronously for result
-    console.log('🚀 Submitting code to Judge0...');
-    const { data: sub } = await axios.post(
-      `${JUDGE0}/submissions?wait=true`,
-      {
-        source_code: source,
-        language_id,
-        stdin: stdin || ""
-      },
-      { timeout: 30_000 }
-    );
-
-    console.log('✅ Judge0 response received:', {
-      status: sub.status?.description,
-      hasOutput: !!sub.stdout,
-      hasErrors: !!sub.stderr,
-      hasCompileOutput: !!sub.compile_output
-    });
-
-    res.json({
-      status: sub.status,            // { id, description }
-      stdout: sub.stdout,
-      stderr: sub.stderr,
-      compile_output: sub.compile_output,
-      time: sub.time,
-      memory: sub.memory
-    });
-  } catch (err) {
-    console.error('💥 Judge0 execution error:', {
-      message: err.message,
-      code: err.code,
-      response: err.response?.data,
-      status: err.response?.status
-    });
-    
-    let errorMessage = "Execution failed";
-    if (err.code === 'ECONNREFUSED') {
-      errorMessage = "Cannot connect to Judge0. Please ensure Judge0 is running.";
-    } else if (err.code === 'ETIMEDOUT') {
-      errorMessage = "Judge0 request timed out. Please try again.";
-    } else if (err.response?.status === 422) {
-      errorMessage = "Invalid code submission. Please check your code.";
-    } else {
-      errorMessage = err.message || "Execution failed";
-    }
-    
-    res.status(500).json({ 
-      error: errorMessage,
-      details: err.response?.data || err.message
-    });
-  }
-});
 
 // Code Editor Endpoints (Legacy - using local execution)
 app.get('/api/health', (req, res) => {
@@ -635,38 +796,64 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/run', async (req, res) => {
   try {
-    console.log('🔍 Local execution request received:', { 
-      language: req.body?.language, 
-      codeLength: req.body?.code?.length,
-      timestamp: new Date().toISOString()
-    });
+    const { language = 'python', source = '', stdin = '' } = req.body;
 
-    const { language, code } = req.body;
-    
-    if (!language || !code) {
-      console.log('❌ Missing language or code');
-      return res.status(400).json({ error: 'Missing language or code' });
+    if (!source) {
+      return res.status(400).json({ error: 'Source code is required' });
     }
 
-    console.log(`🚀 Running ${language} code...`);
-    const result = await runCode(language, code);
-    console.log(`✅ ${language} execution completed successfully:`, {
+    console.log(`🚀 Running ${language} code with stdin: "${stdin}"`);
+    
+    // Use local execution instead of Judge0
+    const result = await runCode(language, source, stdin);
+    
+    return res.json({
+      stdout: result.stdout || '',
+      stderr: result.stderr || '',
       exitCode: result.exitCode,
-      hasOutput: !!result.stdout,
-      hasErrors: !!result.stderr,
-      outputLength: result.stdout?.length || 0
+      time: 'Local execution',
+      status: { description: result.exitCode === 0 ? 'Accepted' : 'Runtime Error' }
     });
+  } catch (err) {
+    console.error('💥 Code execution error:', err);
+    return res.status(500).json({ 
+      error: err.message, 
+      stack: err.stack,
+      stdout: '',
+      stderr: err.message
+    });
+  }
+});
+
+// Interactive input endpoint
+app.post('/api/input', async (req, res) => {
+  try {
+    const { executionId, input } = req.body;
+    
+    if (!executionId || !input) {
+      return res.status(400).json({ error: 'Missing executionId or input' });
+    }
+
+    const execution = activeExecutions.get(executionId);
+    if (!execution) {
+      return res.status(404).json({ error: 'Execution not found' });
+    }
+
+    console.log(`📝 Sending input to execution ${executionId}:`, input);
+    
+    // Send input to the process
+    execution.child.stdin.write(input);
+    
+    // Wait for response
+    const result = await execution.promise;
+    activeExecutions.delete(executionId);
+    
     res.json(result);
   } catch (error) {
-    console.error(`💥 Error running ${req.body.language} code:`, {
-      message: error.message,
-      stack: error.stack,
-      language: req.body.language 
-    });
+    console.error('💥 Error sending input:', error);
     res.status(500).json({ 
       error: error.message,
-      details: error.stack,
-      language: req.body.language 
+      details: error.stack
     });
   }
 });
@@ -680,9 +867,11 @@ app.get('/health', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 My AI Buddy Backend running on http://localhost:${PORT}`);
+const server = app.listen(PORT, () => {
+  const actualPort = server.address().port;
+  console.log(`🚀 My AI Buddy Backend running on http://localhost:${actualPort}`);
   console.log(`📡 Ready to communicate with Ollama at http://localhost:11434`);
-  console.log(`💻 Legacy Code Editor API available at http://localhost:${PORT}/api/run`);
-  console.log(`⚡ Judge0 Proxy API available at http://localhost:${PORT}/api/judge0/run`);
+  console.log(`💻 Legacy Code Editor API available at http://localhost:${actualPort}/api/run`);
+  console.log(`⚡ Judge0 Proxy API available at http://localhost:${actualPort}/api/judge0/run`);
+  console.log(`🌐 CORS enabled for any localhost port (dynamic port detection)`);
 }); 
