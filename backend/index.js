@@ -410,7 +410,7 @@ async function runCode(language, code, stdin = '') {
       java: 'C:\\Program Files\\Microsoft\\jdk-17.0.16.8-hotspot\\bin\\java.exe'
     };
  
-    // Check if command is available (skip for Python - we'll handle it directly)
+    // Check if command is available (skip for Python and JavaScript - we'll handle them directly)
     let commandPath = command;
     if (language === 'java') {
       commandPath = javaPaths.javac;
@@ -431,8 +431,12 @@ async function runCode(language, code, stdin = '') {
           throw new Error(`Java JDK is not installed or not found. Please install Java JDK to run Java code.`);
         }
       }
+    } else if (language === 'javascript') {
+      // Use absolute path for Node.js on server
+      commandPath = '/home/bylinelm/.nvm/versions/node/v22.13.0/bin/node';
+      console.log('✅ Using Node.js at:', commandPath);
     } else if (language !== 'python') {
-      // Only check PATH for non-Python languages
+      // Only check PATH for other languages
       try {
         const { execSync } = await import('child_process');
         execSync(`where ${command}`, { stdio: 'ignore' });
@@ -450,8 +454,8 @@ async function runCode(language, code, stdin = '') {
        console.log('🔧 Python code preprocessed for input() handling');
      }
      
-     // Skip file creation for Python since we're using inline execution
-     if (language !== 'python') {
+     // Skip file creation for Python and JavaScript since we're using inline execution
+     if (language !== 'python' && language !== 'javascript') {
        const filePath = path.join(tempDir, fileName);
        await fs.writeFile(filePath, processedCode, { encoding: 'utf8', flag: 'w' });
      
@@ -474,7 +478,7 @@ async function runCode(language, code, stdin = '') {
       // Give file system time to sync
       await new Promise(resolve => setTimeout(resolve, 200));
      } else {
-       console.log(`🐍 Skipping file creation for Python (using inline execution)`);
+       console.log(`🐍 Skipping file creation for ${language} (using inline execution)`);
      }
  
     return new Promise(async (resolve, reject) => {
@@ -727,8 +731,69 @@ async function runCode(language, code, stdin = '') {
                });
              }
            }, 5000);
+         } else if (language === 'javascript') {
+           // Simple JavaScript execution using vm module (no spawning needed)
+           console.log(`Starting JavaScript execution with vm module`);
+           
+           try {
+             const vm = await import('vm');
+             let stdout = '';
+             let stderr = '';
+             
+             // Create a safe context with console.log captured
+             const context = {
+               console: {
+                 log: (...args) => {
+                   stdout += args.join(' ') + '\n';
+                 },
+                 error: (...args) => {
+                   stderr += args.join(' ') + '\n';
+                 },
+                 warn: (...args) => {
+                   stderr += args.join(' ') + '\n';
+                 }
+               },
+               setTimeout,
+               setInterval,
+               clearTimeout,
+               clearInterval,
+               Buffer,
+               process: {
+                 env: process.env,
+                 version: process.version,
+                 platform: process.platform
+               }
+             };
+             
+             // Create sandboxed context
+             const sandbox = vm.createContext(context);
+             
+             // Execute the code with timeout
+             const script = new vm.Script(processedCode);
+             script.runInContext(sandbox, { timeout: 5000 });
+             
+             console.log(`JavaScript execution completed successfully`);
+             console.log(`JavaScript stdout:`, stdout);
+             console.log(`JavaScript stderr:`, stderr);
+             
+             resolve({
+               stdout: stdout,
+               stderr: stderr,
+               exitCode: 0,
+               diagnostics: []
+             });
+             
+           } catch (error) {
+             console.error(`JavaScript execution error:`, error);
+             resolve({
+               stdout: '',
+               stderr: `Execution error: ${error.message}`,
+               exitCode: -1,
+               diagnostics: []
+             });
+           }
          } else {
-           // For other interpreted languages (JavaScript)
+           // For other interpreted languages
            console.log(`Starting ${language} execution with command: ${commandPath} ${args.join(' ')}`);
            
            // Add timeout for execution to prevent infinite loops
