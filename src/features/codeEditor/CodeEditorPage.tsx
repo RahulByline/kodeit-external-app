@@ -270,7 +270,8 @@ const CodeEditorPage: React.FC = () => {
 
     try {
       console.log('🚀 Running code with Judge0 execution...');
-      const response = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/run`, {
+      console.log('📝 Request payload:', { language, source: code, stdin: stdinValue });
+      const response = await fetch(`https://kodeit-lms-backend.bylinelms.com/api/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -484,7 +485,7 @@ const CodeEditorPage: React.FC = () => {
     if (!executionId || !isWaitingForInput) return;
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/input`, {
+      const response = await fetch(`https://kodeit-lms-backend.bylinelms.com/api/input`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -799,6 +800,11 @@ const CodeEditorPage: React.FC = () => {
                     <div className="stdin-section">
                       <label htmlFor="stdin" className="stdin-label">
                         Custom Input (stdin):
+                        {language === "python" && code.includes("input(") && (
+                          <span style={{ color: "#ff6b6b", marginLeft: "8px", fontSize: "12px" }}>
+                            ⚠️ Your Python code uses input() - enter values here!
+                          </span>
+                        )}
                       </label>
                       <textarea
                         id="stdin"
