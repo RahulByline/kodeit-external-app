@@ -151,6 +151,32 @@ class Main { public static void main(String[] args){ System.out.println("hello j
 console.log("hello js");
 ```
 
+## Build & Deploy
+
+### Production Build
+```bash
+# Install dependencies
+npm ci
+
+# Build for production with verification
+npm run build:prod
+
+# The build output will be in the dist/ directory
+# Deploy ONLY the contents of dist/ to your hosting provider
+```
+
+### Development
+```bash
+# Start development server
+npm run dev
+
+# Build for development
+npm run build:dev
+```
+
+### Build Verification
+The build process includes automatic verification to ensure no webpack loader specifiers leak into the browser. If verification fails, the build will be aborted.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/09849073-2e56-4776-a1a4-c5ffe4eb63dd) and click on Share -> Publish.

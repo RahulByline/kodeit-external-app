@@ -6,8 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { ChatProvider } from "./context/ChatContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MyAIBuddy from "./components/MyAIBuddy";
+import TextSelectionPopupWrapper from "./components/TextSelectionPopupWrapper";
 
 import RouteGuard from "./components/RouteGuard";
 import AOS from 'aos';
@@ -78,8 +80,9 @@ const StudentCommunity = lazy(() => import("./pages/student/Community"));
 const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
+const Compiler = lazy(() => import("./pages/student/Compiler"));
 const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
-const BlockyPage = lazy(() => import("./pages/student/BlockyPage"));
+const ScratchCodeEditor = lazy(() => import("./pages/student/ScratchCodeEditor"));
 
 // Settings pages - lazy loaded
 const SchoolAdminSettings = lazy(() => import("./pages/SchoolAdminSettings"));
@@ -125,10 +128,12 @@ const App = () => {
           <Sonner />
           <AuthProvider>
             <ThemeProvider>
-              <BrowserRouter>
-                <RouteGuard />
-                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-                  <MyAIBuddy />
+              <ChatProvider>
+                <BrowserRouter>
+                  <RouteGuard />
+                  <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+                    <MyAIBuddy />
+                    <TextSelectionPopupWrapper />
                   <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/debug/roles" element={
@@ -458,14 +463,22 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
-                
-                <Route path="/dashboard/student/emulators/blocky" element={
+                <Route path="/dashboard/student/compiler" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
-                      <BlockyPage />
+                      <Compiler />
                     </Suspense>
                   </ProtectedRoute>
                 } />
+                <Route path="/dashboard/student/scratch-editor" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <ScratchCodeEditor />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                
+
                 <Route path="/dashboard/student/community" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -499,6 +512,7 @@ const App = () => {
               </Routes>
             </div>
           </BrowserRouter>
+                </ChatProvider>
           </ThemeProvider>
         </AuthProvider>
       </TooltipProvider>

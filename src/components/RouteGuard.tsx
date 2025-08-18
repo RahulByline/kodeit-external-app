@@ -195,10 +195,11 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/student/progress',
         '/dashboard/student/emulators',
         '/dashboard/student/code-editor',
+        '/dashboard/student/compiler',
         '/dashboard/student/settings',
         '/dashboard/student/community',
         '/dashboard/student/enrollments',
-        '/dashboard/student/emulators/blocky'
+  
       ];
     default:
       return [];

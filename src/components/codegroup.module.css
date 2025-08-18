@@ -1,0 +1,28 @@
+.group {
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: color-mix(in oklab, Canvas, CanvasText 5%);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  overflow-x: auto;
+}
+
+.tab, .tabActive {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  font: 500 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+.tabActive {
+  border-color: color-mix(in oklab, CanvasText 15%, transparent);
+  background: color-mix(in oklab, CanvasText 6%, transparent);
+}

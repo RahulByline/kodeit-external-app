@@ -1,0 +1,80 @@
+.container {
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f6f8fa;
+  border-bottom: 1px solid #e1e4e8;
+  font: 500 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.languageLabel { 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  max-width: 60%; 
+  font-weight: 500;
+  color: #666;
+  text-transform: lowercase;
+}
+.spacer { flex: 1; }
+
+.iconButton {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #666;
+  padding: 6px;
+  margin-left: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.iconButton:hover { 
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+.body { max-height: none; overflow: auto; }
+.collapsed { max-height: 360px; }
+
+.toggle {
+  width: 100%;
+  border: 0;
+  padding: 8px 0;
+  cursor: pointer;
+  background: color-mix(in oklab, Canvas, CanvasText 5%);
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+pre.shiki { 
+  margin: 0; 
+  padding: 16px 0; 
+  overflow: auto; 
+  background: #ffffff;
+}
+pre.shiki .line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  padding: 0 16px;
+  white-space: pre;
+  line-height: 1.5;
+}
+pre.shiki .ln {
+  text-align: right;
+  opacity: 0.55;
+  user-select: none;
+  width: 3ch;
+}
+
+pre.shiki.diff .line code { display: block; }

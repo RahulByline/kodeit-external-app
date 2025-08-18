@@ -9,7 +9,8 @@ import { v4 as uuid } from 'uuid';
 import os from 'os';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import blocklyRoutes from './routes/blockly.routes.js';
+import compilerRoutes from './routes/compiler.js';
+
 // Note: Using native fetch (available in Node.js 18+)
 
 const app = express();
@@ -858,8 +859,13 @@ app.post('/api/input', async (req, res) => {
   }
 });
 
-// Mount Blockly routes
-app.use('/api/blockly', blocklyRoutes);
+
+
+// --- Compiler API routes
+app.use('/api/compiler', compilerRoutes);
+
+// --- Static files: serves /editor/* and other public assets
+app.use(express.static(path.join(process.cwd(), '..', 'public')));
 
 // GET /health endpoint for checking if server is running
 app.get('/health', (req, res) => {
@@ -872,6 +878,6 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 My AI Buddy Backend running on http://localhost:${actualPort}`);
   console.log(`📡 Ready to communicate with Ollama at http://localhost:11434`);
   console.log(`💻 Legacy Code Editor API available at http://localhost:${actualPort}/api/run`);
-  console.log(`⚡ Judge0 Proxy API available at http://localhost:${actualPort}/api/judge0/run`);
+  console.log(`⚡ Judge0 Proxy API available at http://localhost:${actualPort}/api/run`);
   console.log(`🌐 CORS enabled for any localhost port (dynamic port detection)`);
 }); 

@@ -10,7 +10,8 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        // target: 'http://localhost:5000',
+        target: 'https://prek-lms-backend.bylinelms.com/api',
         changeOrigin: true,
         secure: false,
       }
@@ -64,6 +65,8 @@ export default defineConfig(({ mode }) => ({
     ]
   },
   build: {
+    outDir: 'dist',
+    sourcemap: false,
     rollupOptions: {
       external: ['fs', 'path'],
       output: {
@@ -72,7 +75,6 @@ export default defineConfig(({ mode }) => ({
           router: ['react-router-dom'],
           ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-tabs'],
           charts: ['recharts'],
-          scratch: ['scratch-vm', 'scratch-blocks', 'scratch-render', 'scratch-audio', 'scratch-storage'],
           icons: ['lucide-react'],
           utils: ['clsx', 'class-variance-authority', 'tailwind-merge'],
         },

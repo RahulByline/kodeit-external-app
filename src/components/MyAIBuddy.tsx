@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import MarkdownRenderer from './MarkdownRenderer';
+import { useChat } from '../context/ChatContext';
 import './MyAIBuddy.css';
 
 interface Message {
@@ -34,10 +36,15 @@ interface ChatResponse {
 }
 
 const MyAIBuddy: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { 
+    messages, 
+    isLoading, 
+    isOpen, 
+    setIsOpen, 
+    setIsLoading, 
+    sendMessageToOllama 
+  } = useChat();
   const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -60,136 +67,13 @@ const MyAIBuddy: React.FC = () => {
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputMessage.trim(),
-      sender: 'user',
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const messageContent = inputMessage.trim();
     setInputMessage('');
-    setIsLoading(true);
-
-    // Create a temporary bot message for streaming
-    const tempBotMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      content: '',
-      sender: 'bot',
-      timestamp: new Date().toISOString(),
-      source: 'My AI Buddy (Kodeit)',
-      language: 'en',
-    };
-
-    setMessages(prev => [...prev, tempBotMessage]);
-
+    
     try {
-      const response = await fetch('http://localhost:5000/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: userMessage.content,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                
-                if (data.type === 'start') {
-                  // Update the bot message with source info
-                  setMessages(prev => prev.map(msg => 
-                    msg.id === tempBotMessage.id 
-                      ? { ...msg, source: data.source, language: data.language }
-                      : msg
-                  ));
-                                 } else if (data.type === 'chunk') {
-                   // Append chunk to the current bot message
-                   setMessages(prev => prev.map(msg => 
-                     msg.id === tempBotMessage.id 
-                       ? { ...msg, content: msg.content + data.content }
-                       : msg
-                   ));
-                   
-                   // Auto-scroll to bottom as content streams
-                   setTimeout(() => {
-                     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-                   }, 100);
-                                 } else if (data.type === 'end') {
-                   // Finalize the bot message with structured content
-                   console.log('Final response:', data.response);
-                   const structured = parseStructuredContent(data.response);
-                   console.log('Parsed structured content:', structured);
-                   
-                   setMessages(prev => prev.map(msg => 
-                     msg.id === tempBotMessage.id 
-                       ? { 
-                           ...msg, 
-                           content: data.response,
-                           timestamp: data.timestamp,
-                           source: data.source,
-                           language: data.language,
-                           structured: structured
-                         }
-                       : msg
-                   ));
-                } else if (data.type === 'error') {
-                  // Handle error
-                  setMessages(prev => prev.map(msg => 
-                    msg.id === tempBotMessage.id 
-                      ? { 
-                          ...msg, 
-                          content: 'Sorry, I encountered an error. Please try again.',
-                          timestamp: new Date().toISOString()
-                        }
-                      : msg
-                  ));
-                }
-              } catch (parseError) {
-                console.error('Error parsing SSE data:', parseError);
-              }
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
+      await sendMessageToOllama(messageContent);
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempBotMessage.id 
-          ? { 
-              ...msg, 
-              content: 'Sorry, I encountered an error. Please try again.',
-              timestamp: new Date().toISOString()
-            }
-          : msg
-      ));
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -226,24 +110,120 @@ const MyAIBuddy: React.FC = () => {
       console.log('Found title:', structured.title);
     }
     
-    // Extract key points (lines starting with ✅)
-    const keyPoints = content.match(/✅\s*(.+)/g);
-    if (keyPoints) {
-      structured.keyPoints = keyPoints.map(point => point.replace('✅ ', ''));
-      console.log('Found key points:', structured.keyPoints);
+    // Extract key points with multi-line support including code blocks
+    const keyPoints: string[] = [];
+    const lines = content.split('\n');
+    let currentKeyPoint = '';
+    let inCodeBlock = false;
+    let codeBlockContent = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Check if we're entering a code block
+      if (line.trim().startsWith('```')) {
+        if (!inCodeBlock) {
+          // Starting a code block
+          inCodeBlock = true;
+          codeBlockContent = '';
+        } else {
+          // Ending a code block
+          inCodeBlock = false;
+          if (currentKeyPoint) {
+            // Add the code block to the current key point
+            currentKeyPoint += '\n' + codeBlockContent;
+          }
+          continue;
+        }
+      }
+      
+      // If we're in a code block, collect the content
+      if (inCodeBlock) {
+        codeBlockContent += line + '\n';
+        continue;
+      }
+      
+      // Check for key point markers
+      if (line.includes('✅') || line.includes('✓') || line.includes('✔') || line.includes('☑')) {
+        // If we have a previous key point, save it
+        if (currentKeyPoint.trim()) {
+          keyPoints.push(currentKeyPoint.trim());
+        }
+        // Start a new key point
+        currentKeyPoint = line.replace(/[✅✓✔☑]\s*/, '').trim();
+      } else if (currentKeyPoint && line.trim()) {
+        // Continue the current key point
+        currentKeyPoint += '\n' + line.trim();
+      } else if (currentKeyPoint && !line.trim()) {
+        // Empty line, but we have content, so continue
+        currentKeyPoint += '\n';
+      }
     }
     
-    // Extract tips (lines starting with 🧠)
-    const tips = content.match(/🧠\s*(.+)/g);
-    if (tips) {
-      structured.tips = tips.map(tip => tip.replace('🧠 ', ''));
+    // Don't forget the last key point
+    if (currentKeyPoint.trim()) {
+      keyPoints.push(currentKeyPoint.trim());
+    }
+    
+    if (keyPoints.length > 0) {
+      structured.keyPoints = keyPoints;
+      console.log('Found key points count:', structured.keyPoints.length);
+      console.log('Found key points:', structured.keyPoints);
+    } else {
+      console.log('No key points found in content');
+    }
+    
+    // Extract tips (lines starting with 🧠) - also handle multi-line
+    const tips: string[] = [];
+    let currentTip = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      if (line.includes('🧠')) {
+        if (currentTip.trim()) {
+          tips.push(currentTip.trim());
+        }
+        currentTip = line.replace(/🧠\s*/, '').trim();
+      } else if (currentTip && line.trim()) {
+        currentTip += '\n' + line.trim();
+      }
+    }
+    
+    if (currentTip.trim()) {
+      tips.push(currentTip.trim());
+    }
+    
+    if (tips.length > 0) {
+      structured.tips = tips;
+      console.log('Found tips count:', structured.tips.length);
       console.log('Found tips:', structured.tips);
     }
     
-    // Extract sources (lines starting with 📎)
-    const sources = content.match(/📎\s*(.+)/g);
-    if (sources) {
-      structured.sources = sources.map(source => source.replace('📎 ', ''));
+    // Extract sources (lines starting with 📎) - also handle multi-line
+    const sources: string[] = [];
+    let currentSource = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      if (line.includes('📎')) {
+        if (currentSource.trim()) {
+          sources.push(currentSource.trim());
+        }
+        currentSource = line.replace(/📎\s*/, '').trim();
+      } else if (currentSource && line.trim()) {
+        currentSource += '\n' + line.trim();
+      }
+    }
+    
+    if (currentSource.trim()) {
+      sources.push(currentSource.trim());
+    }
+    
+    if (sources.length > 0) {
+      structured.sources = sources;
+      console.log('Found sources count:', structured.sources.length);
       console.log('Found sources:', structured.sources);
     }
     
@@ -269,9 +249,17 @@ const MyAIBuddy: React.FC = () => {
       );
     }
 
-    // If we have structured content, render it
+        // If we have structured content, render it
     if (message.structured) {
       const { title, keyPoints, tips, sources, images } = message.structured;
+      
+      console.log('Rendering structured message with:', {
+        title,
+        keyPointsCount: keyPoints?.length || 0,
+        tipsCount: tips?.length || 0,
+        sourcesCount: sources?.length || 0,
+        imagesCount: images?.length || 0
+      });
 
       return (
         <div className="space-y-4">
@@ -305,15 +293,24 @@ const MyAIBuddy: React.FC = () => {
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="font-medium text-gray-900 dark:text-gray-100">Key Points</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  Key Points ({keyPoints.length})
+                </span>
               </div>
-              <ul className="space-y-1 pl-6">
-                {keyPoints.map((point, index) => (
-                  <li key={index} className="text-sm text-gray-700 dark:text-gray-300 flex items-start space-x-2 key-point">
-                    <span className="text-green-500 mt-1">•</span>
-                    <span>{point}</span>
-                  </li>
-                ))}
+              <ul className="space-y-3 pl-6">
+                {keyPoints.map((point, index) => {
+                  console.log(`Rendering key point ${index + 1}:`, point);
+                  
+                  // Always use MarkdownRenderer for consistent structured formatting
+                  return (
+                    <li key={index} className="text-sm text-gray-700 dark:text-gray-300 flex items-start space-x-2 key-point">
+                      <span className="text-green-500 mt-1">•</span>
+                      <div className="flex-1">
+                        <MarkdownRenderer markdown={point} />
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -329,7 +326,9 @@ const MyAIBuddy: React.FC = () => {
                 {tips.map((tip, index) => (
                   <li key={index} className="text-sm text-gray-700 dark:text-gray-300 flex items-start space-x-2 key-point">
                     <span className="text-yellow-500 mt-1">💡</span>
-                    <span>{tip}</span>
+                    <div className="flex-1">
+                      <MarkdownRenderer markdown={tip} />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -347,19 +346,35 @@ const MyAIBuddy: React.FC = () => {
                 {sources.map((source, index) => (
                   <li key={index} className="text-sm text-gray-600 dark:text-gray-400 flex items-start space-x-2">
                     <span className="text-gray-400 mt-1">📎</span>
-                    <span>{source}</span>
+                    <div className="flex-1">
+                      <MarkdownRenderer markdown={source} />
+                    </div>
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+          
+          {/* Fallback: If no structured content was parsed but we have raw content, show it */}
+          {(!keyPoints || keyPoints.length === 0) && 
+           (!tips || tips.length === 0) && 
+           (!sources || sources.length === 0) && 
+           (!title) && 
+           message.content && (
+            <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Raw content (structured parsing failed):</p>
+              <MarkdownRenderer markdown={message.content} />
             </div>
           )}
         </div>
       );
     }
 
-    // If no structured content, show regular text
+    // If no structured content, show regular text with markdown support
     return (
-      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+      <div className="text-sm">
+        <MarkdownRenderer markdown={message.content} />
+      </div>
     );
   };
 

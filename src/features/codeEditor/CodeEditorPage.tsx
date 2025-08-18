@@ -269,8 +269,10 @@ const CodeEditorPage: React.FC = () => {
     }
 
     try {
-      console.log('🚀 Running code with Judge0 execution...');
-      const response = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/run`, {
+      console.log('🚀 Running code with interactive execution...');
+      console.log('📝 Request payload:', { language, source: code, stdin: stdinValue });
+      const response = await fetch(`https://kodeit-lms-backend.bylinelms.com/api/run-interactive`, {
+      // const response = await fetch(`http://localhost:5000/api/run-interactive`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -280,32 +282,42 @@ const CodeEditorPage: React.FC = () => {
         })
       });
       
-          const result = await response.json();
+      const result = await response.json();
     
-    if (result.error) {
-      setErrors(`Error: ${result.error}`);
-      setActiveTab("errors");
-    } else {
-      // Check if there are compilation or runtime errors
-      if (result.stderr && result.stderr.trim()) {
-        setErrors(result.stderr.trim());
+      if (result.error) {
+        setErrors(`Error: ${result.error}`);
         setActiveTab("errors");
-        
-        // Parse errors for diagnostics (for supported languages)
-        if (language === "python" || language === "java" || language === "c" || language === "cpp") {
-          const errorDiagnostics = parseErrors(result.stderr, language);
-          setDiagnostics(errorDiagnostics);
-        }
       } else {
-        const finalOut = result.stdout?.trim() || "No output";
-        setOutput(finalOut);
-        setActiveTab("output");
+        // Check if waiting for input
+        if (result.waitingForInput) {
+          setIsWaitingForInput(true);
+          setExecutionId(result.executionId);
+          setOutput(result.stdout || "");
+          setActiveTab("output");
+          setExecutionStatus("Waiting for input...");
+          return; // Don't set isRunning to false yet
+        }
         
-        // Set execution status
-        const meta = `Status: ${result?.status?.description || 'OK'} | Time: ${result?.time ?? 'n/a'}`;
-        setExecutionStatus(meta);
+        // Check if there are compilation or runtime errors
+        if (result.stderr && result.stderr.trim()) {
+          setErrors(result.stderr.trim());
+          setActiveTab("errors");
+          
+          // Parse errors for diagnostics (for supported languages)
+          if (language === "python" || language === "java" || language === "c" || language === "cpp") {
+            const errorDiagnostics = parseErrors(result.stderr, language);
+            setDiagnostics(errorDiagnostics);
+          }
+        } else {
+          const finalOut = result.stdout?.trim() || "No output";
+          setOutput(finalOut);
+          setActiveTab("output");
+          
+          // Set execution status
+          const meta = `Status: ${result?.status?.description || 'OK'} | Time: ${result?.time ?? 'n/a'}`;
+          setExecutionStatus(meta);
+        }
       }
-    }
     } catch (error: any) {
       console.error('Code execution error:', error);
       const errorMessage = error.message || "Failed to run code";
@@ -484,12 +496,14 @@ const CodeEditorPage: React.FC = () => {
     if (!executionId || !isWaitingForInput) return;
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:5000"}/api/input`, {
+      console.log('📝 Sending input:', input);
+      const response = await fetch(`https://kodeit-lms-backend.bylinelms.com/api/input`, {
+        // const response = await fetch(`http://localhost:5000/api/input`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           executionId,
-          input: input + '\n'
+          input: input
         })
       });
       
@@ -499,23 +513,26 @@ const CodeEditorPage: React.FC = () => {
         setErrors(`Error: ${result.error}`);
         setActiveTab("errors");
         setIsWaitingForInput(false);
+        setIsRunning(false);
       } else if (result.waitingForInput) {
         // Still waiting for more input
-        setOutput(result.stdout || "");
+        setOutput(prev => prev + result.stdout || "");
         setInputValue("");
       } else {
         // Execution completed
         setIsWaitingForInput(false);
         setExecutionId(null);
         setInputValue("");
+        setIsRunning(false);
         
         if (result.stderr && result.stderr.trim()) {
           setErrors(result.stderr.trim());
           setActiveTab("errors");
         } else {
           const finalOut = result.stdout?.trim() || "No output";
-          setOutput(finalOut);
+          setOutput(prev => prev + finalOut);
           setActiveTab("output");
+          setExecutionStatus("Completed");
         }
       }
     } catch (error: any) {
@@ -523,6 +540,7 @@ const CodeEditorPage: React.FC = () => {
       setErrors(`Error sending input: ${error.message}`);
       setActiveTab("errors");
       setIsWaitingForInput(false);
+      setIsRunning(false);
     }
   }, [executionId, isWaitingForInput]);
 
@@ -795,10 +813,15 @@ const CodeEditorPage: React.FC = () => {
                   handle={<GripVertical className="resize-handle" />}
                 >
                   {/* Custom Input (stdin) Section */}
-                  {language !== "html-css" && (
+                  {/* {language !== "html-css" && (
                     <div className="stdin-section">
                       <label htmlFor="stdin" className="stdin-label">
                         Custom Input (stdin):
+                        {language === "python" && code.includes("input(") && (
+                          <span style={{ color: "#ff6b6b", marginLeft: "8px", fontSize: "12px" }}>
+                            ⚠️ Your Python code uses input() - enter values here!
+                          </span>
+                        )}
                       </label>
                       <textarea
                         id="stdin"
@@ -809,7 +832,7 @@ const CodeEditorPage: React.FC = () => {
                         onChange={(e) => setStdinValue(e.target.value)}
                       />
                     </div>
-                  )}
+                  )} */}
 
                   <div className="output-tabs">
                     <div className="output-tabs-left">
