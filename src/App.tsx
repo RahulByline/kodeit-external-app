@@ -28,6 +28,13 @@ import Schools from "./pages/admin/Schools";
 import AdminAnalytics from "./pages/admin/Analytics";
 import UserManagement from "./pages/admin/UserManagement";
 import AdminSettings from "./pages/admin/Settings";
+import Community from "./pages/admin/Community";
+import Enrollments from "./pages/admin/Enrollments";
+import AdminCertifications from "./pages/admin/Certifications";
+import AdminAssessments from "./pages/admin/Assessments";
+import AdminReports from "./pages/admin/Reports";
+import Predictive from "./pages/admin/Predictive";
+import ROI from "./pages/admin/ROI";
 
 // School Admin pages
 import SchoolAdminTeachers from "./pages/school-admin/Teachers";
@@ -154,6 +161,41 @@ const App = () => {
                 <Route path="/dashboard/admin/settings" element={
                   <ProtectedRoute requiredRole="admin">
                     <AdminSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/community" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Community />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/enrollments" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Enrollments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/certifications" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminCertifications />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/assessments" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminAssessments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/reports" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminReports />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/predictive" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Predictive />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/roi" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ROI />
                   </ProtectedRoute>
                 } />
                 
