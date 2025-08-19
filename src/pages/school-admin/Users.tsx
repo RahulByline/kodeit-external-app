@@ -43,24 +43,39 @@ const Users: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      
+      // Get current user's company first - this is the key filter
+      const currentUserCompany = await moodleService.getCurrentUserCompany();
+      console.log('Current user company for users:', currentUserCompany);
+      
+      if (!currentUserCompany) {
+        console.error('No company found for school admin');
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+      
       const allUsers = await moodleService.getAllUsers();
       
-      // Convert to our User interface format
-      const processedUsers: User[] = allUsers.map((user: any) => ({
-        id: parseInt(user.id),
-        username: user.username,
-        firstname: user.firstname,
-        lastname: user.lastname,
-        email: user.email,
-        role: detectUserRole(user.username, user),
-        status: user.suspended === '1' ? 'suspended' : 'active',
-        lastAccess: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : new Date().toISOString(),
-        department: user.department || 'General',
-        courses: Math.floor(Math.random() * 10) + 1,
-        phone: user.phone1 || user.phone2,
-        company: user.institution || 'Default Company'
-      }));
+      // Convert to our User interface format and filter by company
+      const processedUsers: User[] = allUsers
+        .filter((user: any) => (user as any).companyid === currentUserCompany.id) // Filter by company
+        .map((user: any) => ({
+          id: parseInt(user.id),
+          username: user.username,
+          firstname: user.firstname,
+          lastname: user.lastname,
+          email: user.email,
+          role: detectUserRole(user.username, user),
+          status: user.suspended === '1' ? 'suspended' : 'active',
+          lastAccess: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : new Date().toISOString(),
+          department: user.department || 'General',
+          courses: Math.floor(Math.random() * 10) + 1,
+          phone: user.phone1 || user.phone2,
+          company: currentUserCompany.name // Use the school's name
+        }));
 
+      console.log(`✅ School users: ${processedUsers.length} users out of ${allUsers.length} total`);
       setUsers(processedUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -185,8 +200,8 @@ const Users: React.FC = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-            <p className="text-muted-foreground">Manage all users in the system</p>
+            <h1 className="text-3xl font-bold tracking-tight">School User Management</h1>
+            <p className="text-muted-foreground">Manage users in your school</p>
           </div>
           <Button>
             <Plus className="w-4 h-4 mr-2" />

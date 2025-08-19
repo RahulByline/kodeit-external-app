@@ -60,106 +60,49 @@ const Messages: React.FC = () => {
       
       console.log('🔍 Fetching real student messages from Moodle API...');
       
-      // Get user profile and courses
-      const userProfile = await moodleService.getProfile();
-      const userCourses = await moodleService.getUserCourses(userProfile?.id || '1');
+      const realMessages = await moodleService.getRealStudentMessages();
       
-      console.log('📊 Real messages data fetched:', {
-        userProfile,
-        courses: userCourses.length
-      });
-
-      // Generate realistic messages based on courses
-      const processedMessages: Message[] = userCourses.flatMap(course => {
-        const courseMessages: Message[] = [];
+      if (realMessages && realMessages.length > 0) {
+        console.log('📊 Real messages data fetched successfully:', {
+          totalMessages: realMessages.length
+        });
         
-        // Course announcements
-        const announcementCount = Math.floor(Math.random() * 3) + 1; // 1-3 announcements
-        for (let i = 1; i <= announcementCount; i++) {
-          courseMessages.push({
-            id: `${course.id}-announcement-${i}`,
-            subject: `${course.shortname} - Important Announcement ${i}`,
-            content: `This is an important announcement for ${course.fullname}. Please review the course materials and complete any pending assignments.`,
-            sender: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-            senderRole: 'Instructor',
-            courseName: course.fullname,
-            date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-            status: Math.random() > 0.3 ? 'read' : 'unread',
-            priority: Math.random() > 0.7 ? 'high' : 'medium',
-            type: 'announcement'
-          });
-        }
-        
-        // Assignment notifications
-        const assignmentCount = Math.floor(Math.random() * 4) + 2; // 2-5 assignments
-        for (let i = 1; i <= assignmentCount; i++) {
-          courseMessages.push({
-            id: `${course.id}-assignment-${i}`,
-            subject: `${course.shortname} Assignment ${i} - New Assignment Available`,
-            content: `A new assignment has been posted for ${course.fullname}. Please review the requirements and submit before the deadline.`,
-            sender: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-            senderRole: 'Instructor',
-            courseName: course.fullname,
-            date: new Date(Date.now() - Math.random() * 14 * 24 * 60 * 60 * 1000).toISOString(),
-            status: Math.random() > 0.4 ? 'read' : 'unread',
-            priority: 'medium',
-            type: 'assignment'
-          });
-        }
-        
-        // Grade notifications
-        const gradeCount = Math.floor(Math.random() * 3) + 1; // 1-3 grade notifications
-        for (let i = 1; i <= gradeCount; i++) {
-          courseMessages.push({
-            id: `${course.id}-grade-${i}`,
-            subject: `${course.shortname} - Grade Posted for Assignment ${i}`,
-            content: `Your grade for ${course.shortname} Assignment ${i} has been posted. Please review your feedback and let me know if you have any questions.`,
-            sender: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-            senderRole: 'Instructor',
-            courseName: course.fullname,
-            date: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-            status: Math.random() > 0.5 ? 'read' : 'unread',
-            priority: 'medium',
-            type: 'grade'
-          });
-        }
-        
-        return courseMessages;
-      });
-
-      // Add some general messages
-      const generalMessages: Message[] = [
-        {
-          id: 'general-1',
-          subject: 'Welcome to the Learning Platform',
-          content: 'Welcome to our learning platform! We hope you have a great academic experience. If you need any assistance, please don\'t hesitate to contact support.',
-          sender: 'System Administrator',
-          senderRole: 'Administrator',
-          date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-          status: 'read',
-          priority: 'low',
-          type: 'general'
-        },
-        {
-          id: 'general-2',
-          subject: 'Academic Calendar Update',
-          content: 'The academic calendar has been updated for the current semester. Please review the new dates and deadlines.',
-          sender: 'Academic Affairs',
-          senderRole: 'Administrator',
-          date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-          status: 'unread',
-          priority: 'high',
-          type: 'general'
-        }
-      ];
-
-      const allMessages = [...processedMessages, ...generalMessages];
-      setMessages(allMessages);
-      console.log('✅ Messages processed successfully:', allMessages.length);
+        setMessages(realMessages);
+      } else {
+        console.warn('No real messages found, using fallback data');
+        // Set fallback data
+        setMessages([
+          {
+            id: 'fallback-1',
+            subject: 'Welcome to the Learning Platform',
+            content: 'Welcome to our learning platform! We hope you have a great academic experience.',
+            sender: 'System Administrator',
+            senderRole: 'Administrator',
+            date: new Date().toISOString(),
+            status: 'read',
+            priority: 'low',
+            type: 'general'
+          }
+        ]);
+      }
 
     } catch (error) {
       console.error('❌ Error fetching messages:', error);
       setError('Failed to load messages. Please check your connection and try again.');
+      // Set fallback data
+      setMessages([
+        {
+          id: 'error-1',
+          subject: 'System Message',
+          content: 'Unable to load messages at this time. Please try again later.',
+          sender: 'System',
+          senderRole: 'System',
+          date: new Date().toISOString(),
+          status: 'read',
+          priority: 'low',
+          type: 'general'
+        }
+      ]);
     } finally {
       setLoading(false);
     }

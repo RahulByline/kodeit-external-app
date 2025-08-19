@@ -43,8 +43,24 @@ const Assessments: React.FC = () => {
   const fetchAssessments = async () => {
     try {
       setLoading(true);
+      
+      // Get current user's company first - this is the key filter
+      const currentUserCompany = await moodleService.getCurrentUserCompany();
+      console.log('Current user company for assessments:', currentUserCompany);
+      
+      if (!currentUserCompany) {
+        console.error('No company found for school admin');
+        setAssessments([]);
+        setLoading(false);
+        return;
+      }
+      
       // Since there's no direct API for assessments, we'll create mock data based on courses
       const courses = await moodleService.getAllCourses();
+      
+      // TODO: Filter courses by company when API supports it
+      // For now, we'll use all courses but this should be filtered
+      console.log(`✅ School assessments: ${courses.length} courses (Note: Company filtering not yet implemented)`);
       
       // Convert courses to assessments format
       const mockAssessments: Assessment[] = courses.slice(0, 8).map((course, index) => ({
@@ -166,8 +182,8 @@ const Assessments: React.FC = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Assessments</h1>
-            <p className="text-muted-foreground">Manage course assessments and track student performance</p>
+            <h1 className="text-3xl font-bold tracking-tight">School Assessments</h1>
+            <p className="text-muted-foreground">Manage course assessments and track student performance in your school</p>
           </div>
           <Button>
             <Plus className="w-4 h-4 mr-2" />

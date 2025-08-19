@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Filter, Download, Eye, FileText, Calendar, User, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Search, Filter, Download, Eye, FileText, Calendar, User, AlertCircle, CheckCircle, Clock, Plus, BarChart3, Edit } from 'lucide-react';
 import { moodleService } from '@/services/moodleApi';
 import { useAuth } from '@/context/AuthContext';
 
@@ -43,6 +43,17 @@ const Reports: React.FC = () => {
     try {
       setLoading(true);
       
+      // Get current user's company first - this is the key filter
+      const currentUserCompany = await moodleService.getCurrentUserCompany();
+      console.log('Current user company for reports:', currentUserCompany);
+      
+      if (!currentUserCompany) {
+        console.error('No company found for school admin');
+        setReports([]);
+        setLoading(false);
+        return;
+      }
+      
       // Fetch real data from Moodle API
       const [allUsers, allCourses, companies] = await Promise.all([
         moodleService.getAllUsers(),
@@ -50,50 +61,54 @@ const Reports: React.FC = () => {
         moodleService.getCompanies()
       ]);
 
-      // Calculate real statistics
-      const totalStudents = allUsers.filter(user => user.isStudent).length;
-      const totalTeachers = allUsers.filter(user => user.isTeacher).length;
-      const totalCourses = allCourses.length;
-      const totalCompanies = companies.length;
+      // Filter users by company
+      const schoolUsers = allUsers.filter((user: any) => (user as any).companyid === currentUserCompany.id);
+      console.log(`✅ School reports: ${schoolUsers.length} users out of ${allUsers.length} total`);
 
-      // Generate reports based on real data
+      // Calculate school-specific statistics
+      const totalStudents = schoolUsers.filter(user => user.isStudent).length;
+      const totalTeachers = schoolUsers.filter(user => user.isTeacher).length;
+      const totalCourses = allCourses.length; // TODO: Filter by company when API supports it
+      const totalCompanies = 1; // Only their school
+
+      // Generate school-specific reports based on real data
       const realReports: Report[] = [
         {
           id: 1,
-          name: `Student Performance Report - ${totalStudents} Students`,
+          name: `School Student Performance Report - ${totalStudents} Students`,
           type: 'performance',
           status: 'generated',
           generatedBy: currentUser?.fullname || 'School Admin',
           generatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: `${(totalStudents * 0.015).toFixed(1)} MB`,
           recordCount: totalStudents,
-          description: `Comprehensive analysis of ${totalStudents} students across ${totalCourses} courses`
+          description: `School-specific analysis of ${totalStudents} students across ${totalCourses} courses`
         },
         {
           id: 2,
-          name: `Course Enrollment Summary - ${totalCourses} Courses`,
+          name: `School Course Enrollment Summary - ${totalCourses} Courses`,
           type: 'enrollment',
           status: 'generated',
           generatedBy: 'System',
           generatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: `${(totalCourses * 0.008).toFixed(1)} MB`,
           recordCount: totalCourses,
-          description: `Enrollment statistics for ${totalCourses} active courses`
+          description: `School enrollment statistics for ${totalCourses} active courses`
         },
         {
           id: 3,
-          name: `Teacher Performance Report - ${totalTeachers} Teachers`,
+          name: `School Teacher Performance Report - ${totalTeachers} Teachers`,
           type: 'attendance',
           status: 'generated',
           generatedBy: currentUser?.fullname || 'School Admin',
           generatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: `${(totalTeachers * 0.012).toFixed(1)} MB`,
           recordCount: totalTeachers,
-          description: `Performance metrics for ${totalTeachers} teachers`
+          description: `School performance metrics for ${totalTeachers} teachers`
         },
         {
           id: 4,
-          name: `Academic Progress Report - Q1 2024`,
+          name: `School Academic Progress Report - Q1 2024`,
           type: 'academic',
           status: 'generated',
           generatedBy: 'System',
@@ -104,25 +119,25 @@ const Reports: React.FC = () => {
         },
         {
           id: 5,
-          name: `Company Overview Report - ${totalCompanies} Companies`,
+          name: `School Overview Report - ${currentUserCompany.name}`,
           type: 'financial',
           status: 'generated',
           generatedBy: currentUser?.fullname || 'School Admin',
           generatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: `${(totalCompanies * 0.005).toFixed(1)} MB`,
           recordCount: totalCompanies,
-          description: `Financial overview for ${totalCompanies} registered companies`
+          description: `School overview for ${currentUserCompany.name}`
         },
         {
           id: 6,
-          name: 'System Health Report',
+          name: 'School Health Report',
           type: 'performance',
           status: 'pending',
           generatedBy: 'System',
           generatedAt: new Date(Date.now() - 0.5 * 24 * 60 * 60 * 1000).toISOString(),
           fileSize: '0.8 MB',
           recordCount: 15,
-          description: 'System performance and health metrics'
+          description: 'School performance and health metrics'
         }
       ];
 
@@ -232,8 +247,8 @@ const Reports: React.FC = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-            <p className="text-muted-foreground">Generate and manage school reports</p>
+            <h1 className="text-3xl font-bold tracking-tight">School Reports</h1>
+            <p className="text-muted-foreground">Generate and manage school-specific reports</p>
           </div>
           <Button>
             <Plus className="w-4 h-4 mr-2" />

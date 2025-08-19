@@ -77,86 +77,83 @@ const StudentProgress: React.FC = () => {
       
       console.log('🔍 Fetching real student progress from Moodle API...');
       
-      // Get user profile and courses
-      const userProfile = await moodleService.getProfile();
-      const userCourses = await moodleService.getUserCourses(userProfile?.id || '1');
+      // Get current user data
+      const userProfile = currentUser || await moodleService.getProfile();
+      
+      // Get real progress data from Moodle API
+      const realProgressData = await moodleService.getRealProgressData(userProfile?.id);
       
       console.log('📊 Real progress data fetched:', {
         userProfile,
-        courses: userCourses.length
+        progressData: realProgressData.length
       });
 
-      // Generate realistic progress data based on courses
-      const processedProgress: ProgressData[] = userCourses.map(course => {
-        const overallProgress = Math.floor(Math.random() * 40) + 60; // 60-100%
-        const weeklyProgress = Math.floor(Math.random() * 20) + 5; // 5-25%
-        const monthlyProgress = Math.floor(Math.random() * 30) + 15; // 15-45%
-        const totalModules = Math.floor(Math.random() * 10) + 5;
-        const completedModules = Math.floor(overallProgress / 100 * totalModules);
-        const totalAssignments = Math.floor(Math.random() * 8) + 3;
-        const completedAssignments = Math.floor(Math.random() * totalAssignments);
-        const averageGrade = Math.floor(Math.random() * 20) + 75; // 75-95
-        const timeSpent = Math.floor(Math.random() * 50) + 10; // 10-60 hours
-        const streak = Math.floor(Math.random() * 14) + 1; // 1-15 days
-        const targetCompletion = Math.floor(Math.random() * 20) + 80; // 80-100%
+      // Process real progress data
+      const processedProgress: ProgressData[] = realProgressData.map(progress => {
+        const totalModules = progress.totalActivities;
+        const completedModules = progress.completedActivities;
+        const weeklyProgress = Math.floor(Math.random() * 20) + 5; // Not available in API
+        const monthlyProgress = Math.floor(Math.random() * 30) + 15; // Not available in API
+        const totalAssignments = Math.floor(totalModules * 0.3); // Estimate based on activities
+        const completedAssignments = Math.floor(completedModules * 0.3);
+        const averageGrade = Math.floor(Math.random() * 20) + 75; // Not available in API
+        const timeSpent = progress.timeSpent || Math.floor(Math.random() * 50) + 10;
+        const streak = Math.floor(Math.random() * 14) + 1; // Not available in API
+        const targetCompletion = 85; // Default target
         
         let status: 'on_track' | 'ahead' | 'behind' | 'completed';
-        if (overallProgress >= 100) {
+        if (progress.progress >= 100) {
           status = 'completed';
-        } else if (overallProgress >= targetCompletion) {
+        } else if (progress.progress >= targetCompletion) {
           status = 'ahead';
-        } else if (overallProgress >= targetCompletion - 10) {
+        } else if (progress.progress >= targetCompletion - 10) {
           status = 'on_track';
         } else {
           status = 'behind';
         }
         
-        const estimatedCompletion = new Date(Date.now() + (100 - overallProgress) * 24 * 60 * 60 * 1000).toISOString();
-        
         return {
-          id: course.id,
-          courseName: course.fullname,
-          courseId: course.id,
-          overallProgress,
+          id: progress.courseId,
+          courseName: progress.courseName,
+          overallProgress: progress.progress,
           weeklyProgress,
           monthlyProgress,
-          completedModules,
           totalModules,
-          completedAssignments,
+          completedModules,
           totalAssignments,
+          completedAssignments,
           averageGrade,
           timeSpent,
-          lastActivity: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
           streak,
           targetCompletion,
-          estimatedCompletion,
-          status
+          status,
+          lastActivity: new Date(progress.lastActivity * 1000).toISOString(),
+          estimatedCompletion: progress.estimatedCompletion
         };
       });
 
-      // Generate weekly progress data for the last 8 weeks
-      const weeklyData: WeeklyProgress[] = [];
-      for (let i = 7; i >= 0; i--) {
-        const weekStart = new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000);
-        weeklyData.push({
-          week: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          progress: Math.floor(Math.random() * 15) + 5, // 5-20%
-          assignments: Math.floor(Math.random() * 5) + 1, // 1-5 assignments
-          timeSpent: Math.floor(Math.random() * 10) + 2, // 2-12 hours
-          grade: Math.floor(Math.random() * 20) + 75 // 75-95
+      // Generate weekly progress data (mock since not available in API)
+      const weeklyProgressData: WeeklyProgress[] = [];
+      for (let i = 0; i < 8; i++) {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - (7 * i));
+        
+        weeklyProgressData.push({
+          week: `Week ${8 - i}`,
+          date: weekStart.toISOString().split('T')[0],
+          progress: Math.floor(Math.random() * 20) + 5,
+          assignments: Math.floor(Math.random() * 5) + 1,
+          timeSpent: Math.floor(Math.random() * 10) + 2,
+          grade: Math.floor(Math.random() * 20) + 75
         });
       }
 
+      console.log(`✅ Processed progress data for ${processedProgress.length} courses`);
       setProgressData(processedProgress);
-      setWeeklyProgress(weeklyData);
-      console.log('✅ Progress data processed successfully:', {
-        courses: processedProgress.length,
-        weeks: weeklyData.length
-      });
-
+      setWeeklyProgress(weeklyProgressData);
     } catch (error) {
-      console.error('❌ Error fetching progress data:', error);
-      setError('Failed to load progress data. Please check your connection and try again.');
+      console.error('❌ Error fetching student progress:', error);
+      setError('Failed to fetch progress data. Please try again.');
     } finally {
       setLoading(false);
     }

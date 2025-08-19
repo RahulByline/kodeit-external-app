@@ -93,75 +93,90 @@ const Assessments: React.FC = () => {
       setLoading(true);
       setError('');
 
-      // Fetch all users and courses for assessment data
-      const [users, courses, categories] = await Promise.all([
+      // Fetch real assessment data from Moodle API
+      const [realAssessments, users, courses, categories] = await Promise.all([
+        moodleService.getRealAssessments(),
         moodleService.getAllUsers(),
         moodleService.getAllCourses(),
         moodleService.getCourseCategories()
       ]);
 
-      // Filter students for assessment results
-      const students = users.filter(user => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'student';
+      console.log('📊 Real assessments data fetched:', {
+        assessments: realAssessments.length,
+        users: users.length,
+        courses: courses.length,
+        categories: categories.length
       });
 
-      // Generate assessments based on courses
-      const assessmentsData: Assessment[] = courses.slice(0, 12).map((course, index) => {
-        const category = categories.find(cat => cat.id === course.categoryid)?.name || 'General';
-        const totalParticipants = Math.floor(Math.random() * 50) + 10;
-        const completedParticipants = Math.floor(totalParticipants * (Math.random() * 0.8 + 0.2));
-        const averageScore = Math.floor(Math.random() * 30) + 70; // 70-100
-        const passRate = Math.floor(Math.random() * 30) + 70; // 70-100
+      // Process real assessments
+      const assessmentsData: Assessment[] = realAssessments.map(assessment => {
+        const course = courses.find(c => c.id === assessment.courseId);
+        const category = categories.find(cat => cat.id === course?.categoryid)?.name || 'General';
         
         return {
-          assessmentId: course.id,
-          assessmentName: `${course.fullname} Assessment`,
-          courseName: course.fullname,
+          assessmentId: assessment.id.toString(),
+          assessmentName: assessment.name,
+          courseName: assessment.courseName || course?.fullname || 'Unknown Course',
           category,
-          totalQuestions: Math.floor(Math.random() * 20) + 10, // 10-30 questions
-          timeLimit: Math.floor(Math.random() * 60) + 30, // 30-90 minutes
-          totalParticipants,
-          completedParticipants,
-          averageScore,
-          passRate,
-          lastTaken: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-          status: index % 4 === 0 ? 'draft' : index % 4 === 1 ? 'archived' : 'active'
+          type: assessment.type === 'quiz' ? 'quiz' : 
+                assessment.type === 'assign' ? 'assignment' : 
+                assessment.type === 'workshop' ? 'workshop' : 'survey',
+          status: assessment.visible ? 'active' : 'inactive',
+          totalParticipants: 0, // Will be calculated from results
+          completedParticipants: 0, // Will be calculated from results
+          averageScore: 0, // Will be calculated from results
+          passRate: 0, // Will be calculated from results
+          totalQuestions: 0, // Not available in basic module data
+          timeLimit: assessment.timeLimit || 0,
+          lastTaken: new Date(assessment.timemodified * 1000).toISOString(),
+          createdAt: new Date(assessment.timecreated * 1000).toISOString()
         };
       });
 
-      // Generate assessment results
+      // Get assessment results for each assessment
       const resultsData: AssessmentResult[] = [];
       
-      assessmentsData.forEach(assessment => {
-        const numResults = Math.floor(assessment.completedParticipants * 0.9); // 90% of participants have results
-        
-        for (let i = 0; i < numResults; i++) {
-          const student = students[Math.floor(Math.random() * students.length)];
-          const score = Math.floor(Math.random() * 30) + 70; // 70-100
-          const maxScore = 100;
-          const percentage = Math.round((score / maxScore) * 100);
-          const status = percentage >= 70 ? 'passed' : 'failed';
-          const timeTaken = Math.floor(Math.random() * assessment.timeLimit) + 10;
-          const attempts = Math.floor(Math.random() * 3) + 1;
+      for (const assessment of realAssessments) {
+        try {
+          let assessmentResults = [];
           
-          resultsData.push({
-            resultId: `RESULT-${assessment.assessmentId}-${i + 1}`,
-            studentName: student.fullname,
-            assessmentName: assessment.assessmentName,
-            courseName: assessment.courseName,
-            score,
-            maxScore,
-            percentage,
-            status,
-            timeTaken,
-            completedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-            attempts
-          });
-        }
-      });
+          if (assessment.type === 'quiz') {
+            assessmentResults = await moodleService.getAssessmentResults(assessment.id.toString());
+          } else if (assessment.type === 'assign') {
+            assessmentResults = await moodleService.getAssignmentSubmissions(assessment.id.toString());
+          }
 
-      // Calculate overall statistics
+          // Process results
+          assessmentResults.forEach((result, index) => {
+            const user = users.find(u => u.id === result.userid);
+            const score = result.sumgrades || 0;
+            const maxScore = 100; // Default max score
+            const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+            const status = percentage >= 70 ? 'passed' : 'failed';
+            
+            resultsData.push({
+              resultId: `RESULT-${assessment.id}-${index + 1}`,
+              studentName: user?.fullname || 'Unknown Student',
+              assessmentName: assessment.name,
+              courseName: assessment.courseName,
+              score,
+              maxScore,
+              percentage,
+              status,
+              timeTaken: result.timefinish && result.timestart ? 
+                (result.timefinish - result.timestart) / 60 : 0, // Convert to minutes
+              completedAt: result.timefinish ? 
+                new Date(result.timefinish * 1000).toISOString() : 
+                new Date().toISOString(),
+              attempts: result.attempt || 1
+            });
+          });
+        } catch (error) {
+          console.warn(`Failed to get results for assessment ${assessment.id}:`, error);
+        }
+      }
+
+      // Calculate overall statistics from real data
       const totalAssessments = assessmentsData.length;
       const activeAssessments = assessmentsData.filter(a => a.status === 'active').length;
       const completedAssessments = resultsData.length;
@@ -170,99 +185,40 @@ const Assessments: React.FC = () => {
         new Date(a.lastTaken).getTime() > oneMonthAgo
       ).length;
 
-      const totalParticipants = assessmentsData.reduce((sum, a) => sum + a.totalParticipants, 0);
-      const averageScore = Math.round(resultsData.reduce((sum, r) => sum + r.percentage, 0) / resultsData.length);
-      const passRate = Math.round((resultsData.filter(r => r.status === 'passed').length / resultsData.length) * 100);
+      const totalParticipants = resultsData.length;
+      const averageScore = totalParticipants > 0 ? 
+        Math.round(resultsData.reduce((sum, r) => sum + r.percentage, 0) / totalParticipants) : 0;
+      const passRate = totalParticipants > 0 ? 
+        Math.round((resultsData.filter(r => r.status === 'passed').length / totalParticipants) * 100) : 0;
+
+      // Update assessment data with calculated statistics
+      assessmentsData.forEach(assessment => {
+        const assessmentResults = resultsData.filter(r => r.assessmentName === assessment.assessmentName);
+        assessment.totalParticipants = assessmentResults.length;
+        assessment.completedParticipants = assessmentResults.length;
+        assessment.averageScore = assessmentResults.length > 0 ? 
+          Math.round(assessmentResults.reduce((sum, r) => sum + r.percentage, 0) / assessmentResults.length) : 0;
+        assessment.passRate = assessmentResults.length > 0 ? 
+          Math.round((assessmentResults.filter(r => r.status === 'passed').length / assessmentResults.length) * 100) : 0;
+      });
 
       setStats({
         totalAssessments,
         activeAssessments,
         completedAssessments,
-        averageScore,
-        passRate,
         newAssessmentsThisMonth,
         totalParticipants,
-        averageCompletionTime: Math.floor(Math.random() * 30) + 45 // 45-75 minutes
+        averageScore,
+        passRate,
+        averageCompletionTime: 45 // Default value since not available in API
       });
 
       setAssessments(assessmentsData);
-      setAssessmentResults(resultsData.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()));
+      setAssessmentResults(resultsData);
 
     } catch (error) {
       console.error('Error fetching assessment data:', error);
-      setError('Failed to load assessment data. Using fallback data.');
-      
-      // Set fallback data
-      setStats({
-        totalAssessments: 25,
-        activeAssessments: 18,
-        completedAssessments: 320,
-        averageScore: 82,
-        passRate: 78,
-        newAssessmentsThisMonth: 5,
-        totalParticipants: 450,
-        averageCompletionTime: 55
-      });
-
-      setAssessments([
-        {
-          assessmentId: '1',
-          assessmentName: 'Advanced Teaching Methods Assessment',
-          courseName: 'Advanced Teaching Methods',
-          category: 'Teaching Methods',
-          totalQuestions: 25,
-          timeLimit: 60,
-          totalParticipants: 45,
-          completedParticipants: 38,
-          averageScore: 85,
-          passRate: 82,
-          lastTaken: new Date().toISOString(),
-          status: 'active'
-        },
-        {
-          assessmentId: '2',
-          assessmentName: 'Digital Learning Fundamentals Quiz',
-          courseName: 'Digital Learning Fundamentals',
-          category: 'Technology Integration',
-          totalQuestions: 20,
-          timeLimit: 45,
-          totalParticipants: 32,
-          completedParticipants: 28,
-          averageScore: 78,
-          passRate: 75,
-          lastTaken: new Date().toISOString(),
-          status: 'active'
-        }
-      ]);
-
-      setAssessmentResults([
-        {
-          resultId: 'RESULT-1-001',
-          studentName: 'John Smith',
-          assessmentName: 'Advanced Teaching Methods Assessment',
-          courseName: 'Advanced Teaching Methods',
-          score: 85,
-          maxScore: 100,
-          percentage: 85,
-          status: 'passed',
-          timeTaken: 45,
-          completedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          attempts: 1
-        },
-        {
-          resultId: 'RESULT-2-001',
-          studentName: 'Sarah Johnson',
-          assessmentName: 'Digital Learning Fundamentals Quiz',
-          courseName: 'Digital Learning Fundamentals',
-          score: 72,
-          maxScore: 100,
-          percentage: 72,
-          status: 'passed',
-          timeTaken: 38,
-          completedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          attempts: 2
-        }
-      ]);
+      setError('Failed to fetch assessment data. Please try again.');
     } finally {
       setLoading(false);
     }

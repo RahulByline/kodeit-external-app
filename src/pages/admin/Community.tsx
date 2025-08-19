@@ -82,10 +82,20 @@ const Community: React.FC = () => {
       setLoading(true);
       setError('');
 
-      // Fetch all users for community statistics
-      const users = await moodleService.getAllUsers();
+      console.log('🔍 Fetching real community data from Moodle API...');
       
-      // Calculate community statistics
+      // Get real community data from Moodle API
+      const [realCommunityData, users] = await Promise.all([
+        moodleService.getRealCommunityData(),
+        moodleService.getAllUsers()
+      ]);
+
+      console.log('📊 Real community data fetched:', {
+        forums: realCommunityData.length,
+        users: users.length
+      });
+
+      // Calculate community statistics from real data
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
       const activeUsers = users.filter(user => 
         user.lastaccess && (user.lastaccess * 1000) > thirtyDaysAgo
@@ -96,141 +106,72 @@ const Community: React.FC = () => {
         user.lastaccess && (user.lastaccess * 1000) > oneMonthAgo
       ).length;
 
-      // Generate mock engagement data based on real user data
-      const engagementData: UserEngagement[] = users.slice(0, 20).map((user, index) => ({
-        userId: user.id,
-        userName: user.fullname,
-        userRole: user.role || 'student',
-        postsCount: Math.floor(Math.random() * 50) + 1,
-        commentsCount: Math.floor(Math.random() * 200) + 5,
-        lastActivity: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-        engagementScore: Math.floor(Math.random() * 100) + 20,
-        isActive: user.lastaccess && (user.lastaccess * 1000) > thirtyDaysAgo
-      }));
-
-      // Generate mock community activity
-      const activityData: CommunityActivity[] = [
-        {
-          type: 'post',
-          title: 'Best Practices for Online Teaching',
-          description: 'Shared some insights about effective online teaching methods',
-          user: users[Math.floor(Math.random() * users.length)]?.fullname || 'John Doe',
-          timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
-          likes: Math.floor(Math.random() * 50) + 5,
-          comments: Math.floor(Math.random() * 20) + 1
-        },
-        {
-          type: 'course_completion',
-          title: 'Course Completed',
-          description: 'Successfully completed "Advanced Teaching Methods" course',
-          user: users[Math.floor(Math.random() * users.length)]?.fullname || 'Sarah Johnson',
-          timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          type: 'certification',
-          title: 'New Certification',
-          description: 'Earned Master Trainer certification',
-          user: users[Math.floor(Math.random() * users.length)]?.fullname || 'Mike Davis',
-          timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          type: 'enrollment',
-          title: 'New Course Enrollment',
-          description: 'Enrolled in "Digital Learning Fundamentals"',
-          user: users[Math.floor(Math.random() * users.length)]?.fullname || 'Lisa Wilson',
-          timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          type: 'comment',
-          title: 'Replied to Discussion',
-          description: 'Added valuable insights to the teaching strategies discussion',
-          user: users[Math.floor(Math.random() * users.length)]?.fullname || 'David Brown',
-          timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
-          likes: Math.floor(Math.random() * 15) + 1
+      // Get forum discussions for each forum
+      const allDiscussions = [];
+      for (const forum of realCommunityData) {
+        try {
+          const discussions = await moodleService.getForumDiscussions(forum.id.toString());
+          allDiscussions.push(...discussions.map(discussion => ({
+            ...discussion,
+            forumName: forum.name,
+            courseName: forum.courseName
+          })));
+        } catch (error) {
+          console.warn(`Failed to get discussions for forum ${forum.id}:`, error);
         }
-      ];
+      }
+
+      // Calculate total posts and comments from real discussions
+      const totalPosts = allDiscussions.length;
+      const totalComments = allDiscussions.reduce((sum, d) => sum + (d.numreplies || 0), 0);
+
+      // Generate user engagement data from real users and discussions
+      const engagementData: UserEngagement[] = users.slice(0, 20).map((user, index) => {
+        const userDiscussions = allDiscussions.filter(d => d.userid === user.id);
+        return {
+          userId: user.id,
+          userName: user.fullname,
+          userRole: user.role || 'student',
+          postsCount: userDiscussions.length,
+          commentsCount: userDiscussions.reduce((sum, d) => sum + (d.numreplies || 0), 0),
+          lastActivity: new Date(user.lastaccess * 1000).toISOString(),
+          engagementScore: Math.floor(Math.random() * 100) + 20, // Not available in API
+          isActive: user.lastaccess && (user.lastaccess * 1000) > thirtyDaysAgo
+        };
+      });
+
+      // Generate community activity from real discussions
+      const activityData: CommunityActivity[] = allDiscussions.slice(0, 10).map(discussion => {
+        const user = users.find(u => u.id === discussion.userid);
+        return {
+          type: 'post',
+          title: discussion.name,
+          description: `Discussion in ${discussion.courseName}`,
+          user: user?.fullname || 'Unknown User',
+          timestamp: new Date(discussion.timemodified * 1000).toISOString(),
+          likes: Math.floor(Math.random() * 50) + 5, // Not available in API
+          comments: discussion.numreplies || 0
+        };
+      });
 
       setStats({
         totalMembers: users.length,
         activeMembers: activeUsers.length,
         newMembersThisMonth: newUsersThisMonth,
         engagementRate: Math.round((activeUsers.length / users.length) * 100),
-        totalPosts: engagementData.reduce((sum, user) => sum + user.postsCount, 0),
-        totalComments: engagementData.reduce((sum, user) => sum + user.commentsCount, 0),
-        averageResponseTime: Math.floor(Math.random() * 120) + 30, // minutes
+        totalPosts,
+        totalComments,
+        averageResponseTime: Math.floor(Math.random() * 120) + 30, // Not available in API
         topContributors: engagementData.filter(user => user.engagementScore > 80).length
       });
 
       setUserEngagement(engagementData);
       setCommunityActivity(activityData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
 
+      console.log(`✅ Processed ${realCommunityData.length} forums and ${allDiscussions.length} discussions`);
     } catch (error) {
-      console.error('Error fetching community data:', error);
-      setError('Failed to load community data. Using fallback data.');
-      
-      // Set fallback data
-      setStats({
-        totalMembers: 150,
-        activeMembers: 120,
-        newMembersThisMonth: 25,
-        engagementRate: 80,
-        totalPosts: 450,
-        totalComments: 1200,
-        averageResponseTime: 45,
-        topContributors: 15
-      });
-
-      setUserEngagement([
-        {
-          userId: '1',
-          userName: 'John Smith',
-          userRole: 'teacher',
-          postsCount: 25,
-          commentsCount: 150,
-          lastActivity: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          engagementScore: 95,
-          isActive: true
-        },
-        {
-          userId: '2',
-          userName: 'Sarah Johnson',
-          userRole: 'teacher',
-          postsCount: 18,
-          commentsCount: 120,
-          lastActivity: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-          engagementScore: 88,
-          isActive: true
-        },
-        {
-          userId: '3',
-          userName: 'Mike Davis',
-          userRole: 'student',
-          postsCount: 12,
-          commentsCount: 80,
-          lastActivity: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-          engagementScore: 75,
-          isActive: true
-        }
-      ]);
-
-      setCommunityActivity([
-        {
-          type: 'post',
-          title: 'Best Practices for Online Teaching',
-          description: 'Shared some insights about effective online teaching methods',
-          user: 'John Smith',
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          likes: 25,
-          comments: 8
-        },
-        {
-          type: 'course_completion',
-          title: 'Course Completed',
-          description: 'Successfully completed "Advanced Teaching Methods" course',
-          user: 'Sarah Johnson',
-          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
-        }
-      ]);
+      console.error('❌ Error fetching community data:', error);
+      setError('Failed to fetch community data. Please try again.');
     } finally {
       setLoading(false);
     }

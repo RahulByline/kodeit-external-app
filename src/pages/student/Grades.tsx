@@ -79,64 +79,111 @@ const Grades: React.FC = () => {
       
       console.log('🔍 Fetching real student grades from Moodle API...');
       
-      // Use current user data if available, otherwise get from API
+      // Get user profile and real assessment data
       const userProfile = currentUser || await moodleService.getProfile();
+      const realAssessments = await moodleService.getRealAssessments();
       const userCourses = await moodleService.getUserCourses(userProfile?.id || '1');
       
       console.log('📊 Real grades data fetched:', {
         userProfile,
+        assessments: realAssessments.length,
         courses: userCourses.length
       });
 
-      // Generate realistic grades based on courses
-      const processedGrades: Grade[] = userCourses.flatMap(course => {
-        const courseGrades: Grade[] = [];
-        
-        // Generate different types of assessments with grades
-        const assessmentTypes: ('quiz' | 'exam' | 'project' | 'presentation' | 'lab' | 'assignment' | 'participation')[] = 
-          ['quiz', 'exam', 'project', 'presentation', 'lab', 'assignment', 'participation'];
-        
-        assessmentTypes.forEach((type, index) => {
-          const maxGrade = type === 'exam' ? 100 : type === 'project' ? 150 : type === 'presentation' ? 50 : 75;
-          const grade = Math.floor(Math.random() * maxGrade * 0.4) + Math.floor(maxGrade * 0.6); // 60-100% range
-          const percentage = (grade / maxGrade) * 100;
+      // Filter assessments for user's courses
+      const userCourseIds = userCourses.map(course => course.id);
+      const userAssessments = realAssessments.filter(assessment => 
+        userCourseIds.includes(assessment.courseId)
+      );
+
+      // Process real assessments and fetch grades
+      const processedGrades: Grade[] = [];
+      
+      for (const assessment of userAssessments) {
+        try {
+          let grade: number | undefined;
+          let maxGrade: number = 100;
+          let percentage: number = 0;
+          let letterGrade: string = 'N/A';
+          let submittedAt: string | undefined;
+          let gradedAt: string | undefined;
+          let feedback: string | undefined;
           
-          const letterGrade = percentage >= 90 ? 'A' : 
+          // Get assessment results based on type
+          if (assessment.type === 'quiz') {
+            const results = await moodleService.getAssessmentResults(assessment.id.toString());
+            if (results && results.length > 0) {
+              const result = results[0]; // Get the latest attempt
+              grade = result.sumgrades || 0;
+              maxGrade = result.sumgrades || 100;
+              percentage = maxGrade > 0 ? (grade / maxGrade) * 100 : 0;
+              letterGrade = percentage >= 90 ? 'A' : 
+                           percentage >= 80 ? 'B' : 
+                           percentage >= 70 ? 'C' : 
+                           percentage >= 60 ? 'D' : 'F';
+              submittedAt = new Date(result.timefinish * 1000).toISOString();
+              gradedAt = new Date(result.timefinish * 1000).toISOString();
+              feedback = 'Quiz completed successfully.';
+            }
+          } else if (assessment.type === 'assign') {
+            const submissions = await moodleService.getAssignmentSubmissions(assessment.id.toString());
+            const grades = await moodleService.getAssignmentGrades(assessment.id.toString());
+            
+            if (submissions && submissions.length > 0) {
+              const submission = submissions[0];
+              submittedAt = new Date(submission.timemodified * 1000).toISOString();
+            }
+            
+            if (grades && grades.length > 0) {
+              const gradeData = grades[0];
+              if (gradeData.grade !== null && gradeData.grade !== undefined) {
+                grade = Math.round(gradeData.grade);
+                maxGrade = assessment.grade || 100;
+                percentage = maxGrade > 0 ? (grade / maxGrade) * 100 : 0;
+                letterGrade = percentage >= 90 ? 'A' : 
                              percentage >= 80 ? 'B' : 
                              percentage >= 70 ? 'C' : 
                              percentage >= 60 ? 'D' : 'F';
+                gradedAt = new Date(gradeData.timemodified * 1000).toISOString();
+                feedback = 'Assignment graded successfully.';
+              }
+            }
+          }
           
-          const submittedAt = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000); // Last 30 days
-          const gradedAt = new Date(submittedAt.getTime() + Math.random() * 7 * 24 * 60 * 60 * 1000); // 1-7 days later
-          
-          courseGrades.push({
-            id: `${course.id}-${type}-${index}`,
-            courseName: course.fullname,
-            courseId: course.id,
-            assessmentName: `${type.charAt(0).toUpperCase() + type.slice(1)} ${index + 1}`,
-            assessmentType: type,
-            grade,
-            maxGrade,
-            percentage,
-            letterGrade,
-            submittedAt: submittedAt.toISOString(),
-            gradedAt: gradedAt.toISOString(),
-            instructor: 'Instructor',
-            feedback: Math.random() > 0.3 ? 'Good work! Keep up the excellent progress.' : undefined,
-            weight: type === 'exam' ? 30 : type === 'project' ? 25 : type === 'presentation' ? 15 : 10,
-            category: type === 'participation' ? 'Participation' : 'Assessment'
-          });
-        });
-        
-        return courseGrades;
-      });
+          // Only add grades that have been graded
+          if (grade !== undefined && percentage > 0) {
+            processedGrades.push({
+              id: assessment.id.toString(),
+              courseName: assessment.courseName,
+              courseId: assessment.courseId.toString(),
+              assessmentName: assessment.name,
+              assessmentType: assessment.type === 'quiz' ? 'quiz' : 
+                             assessment.type === 'assign' ? 'assignment' : 'project',
+              grade: grade || 0,
+              maxGrade,
+              percentage,
+              letterGrade,
+              submittedAt: submittedAt || new Date().toISOString(),
+              gradedAt: gradedAt || new Date().toISOString(),
+              instructor: 'Course Instructor',
+              feedback,
+              weight: assessment.type === 'quiz' ? 20 : assessment.type === 'assign' ? 30 : 25,
+              category: 'Assessment'
+            });
+          }
+        } catch (assessmentError) {
+          console.warn(`Failed to process assessment ${assessment.id}:`, assessmentError);
+        }
+      }
 
       setGrades(processedGrades);
       
       // Calculate course summary grades
       const courseSummary: CourseGrade[] = userCourses.map(course => {
         const courseGradeList = processedGrades.filter(g => g.courseId === course.id);
-        const totalGrade = courseGradeList.reduce((sum, grade) => sum + grade.percentage, 0) / courseGradeList.length;
+        const totalGrade = courseGradeList.length > 0 
+          ? courseGradeList.reduce((sum, grade) => sum + grade.percentage, 0) / courseGradeList.length 
+          : 0;
         const letterGrade = totalGrade >= 90 ? 'A' : 
                            totalGrade >= 80 ? 'B' : 
                            totalGrade >= 70 ? 'C' : 
@@ -148,7 +195,7 @@ const Grades: React.FC = () => {
           totalGrade: Math.round(totalGrade * 100) / 100,
           letterGrade,
           assessments: courseGradeList,
-          progress: Math.min(100, courseGradeList.length * 20), // Simplified progress calculation
+          progress: courseGradeList.length > 0 ? Math.min(100, courseGradeList.length * 25) : 0,
           lastUpdated: new Date().toISOString()
         };
       });
@@ -208,16 +255,19 @@ const Grades: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
+            <span className="text-gray-600">Loading real grades from Moodle API...</span>
+          </div>
         </div>
       </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

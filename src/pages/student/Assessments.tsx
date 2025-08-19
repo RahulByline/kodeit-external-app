@@ -67,75 +67,77 @@ const Assessments: React.FC = () => {
       
       console.log('🔍 Fetching real student assessments from Moodle API...');
       
-      // Use current user data if available, otherwise get from API
+      // Get current user data
       const userProfile = currentUser || await moodleService.getProfile();
       const userCourses = await moodleService.getUserCourses(userProfile?.id || '1');
       
+      // Get real assessments for user's courses
+      const realAssessments = await moodleService.getRealAssessments();
+      
       console.log('📊 Real assessments data fetched:', {
         userProfile,
-        courses: userCourses.length
+        courses: userCourses.length,
+        totalAssessments: realAssessments.length
       });
 
-      // Generate realistic assessments based on courses
-      const processedAssessments: Assessment[] = userCourses.flatMap(course => {
-        const courseAssessments: Assessment[] = [];
+      // Filter assessments for user's courses
+      const userCourseIds = userCourses.map(course => course.id);
+      const userAssessments = realAssessments.filter(assessment => 
+        userCourseIds.includes(assessment.courseId)
+      );
+
+      // Process real assessments for the student
+      const processedAssessments: Assessment[] = userAssessments.map(assessment => {
+        const course = userCourses.find(c => c.id === assessment.courseId);
+        const dueDate = assessment.dueDate ? new Date(assessment.dueDate * 1000) : 
+                       new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default 30 days from now
         
-        // Generate different types of assessments
-        const assessmentTypes: ('quiz' | 'exam' | 'project' | 'presentation' | 'lab')[] = ['quiz', 'exam', 'project', 'presentation', 'lab'];
+        // Determine status based on real data
+        let status: 'upcoming' | 'in_progress' | 'completed' | 'overdue';
+        const now = new Date();
         
-        assessmentTypes.forEach((type, index) => {
-          const dueDate = new Date(Date.now() + Math.random() * 90 * 24 * 60 * 60 * 1000); // Next 90 days
-          const isCompleted = Math.random() > 0.4; // 60% completion rate
-          const isOverdue = !isCompleted && dueDate < new Date();
-          
-          let status: 'upcoming' | 'in_progress' | 'completed' | 'overdue';
-          if (isCompleted) {
-            status = 'completed';
-          } else if (isOverdue) {
-            status = 'overdue';
-          } else if (dueDate.toDateString() === new Date().toDateString()) {
-            status = 'in_progress';
-          } else {
-            status = 'upcoming';
-          }
-          
-          const totalPoints = type === 'exam' ? 100 : type === 'project' ? 150 : type === 'presentation' ? 50 : 75;
-          const grade = isCompleted ? Math.floor(Math.random() * totalPoints * 0.3) + Math.floor(totalPoints * 0.7) : undefined;
-          const weight = type === 'exam' ? 30 : type === 'project' ? 25 : type === 'presentation' ? 15 : 10;
-          const duration = type === 'exam' ? 120 : type === 'quiz' ? 30 : 0; // 0 for non-timed assessments
-          const maxAttempts = type === 'quiz' ? 3 : 1;
-          const attempts = isCompleted ? Math.floor(Math.random() * maxAttempts) + 1 : 0;
-          
-          courseAssessments.push({
-            id: `${course.id}-${type}-${index + 1}`,
-            name: `${course.shortname} ${type.charAt(0).toUpperCase() + type.slice(1)} ${index + 1}`,
-            courseName: course.fullname,
-            courseId: course.id,
-            description: `This ${type} covers key concepts from ${course.fullname}. Please review the course materials before attempting.`,
-            type,
-            dueDate: dueDate.toISOString(),
-            duration,
-            totalPoints,
-            status,
-            grade,
-            submittedAt: isCompleted ? new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
-            instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-            instructions: `Complete the ${type} according to the guidelines provided. Make sure to review all course materials and submit before the deadline.`,
-            weight,
-            attempts,
-            maxAttempts
-          });
-        });
+        if (assessment.completion === 1) {
+          status = 'completed';
+        } else if (dueDate < now) {
+          status = 'overdue';
+        } else if (dueDate.toDateString() === now.toDateString()) {
+          status = 'in_progress';
+        } else {
+          status = 'upcoming';
+        }
         
-        return courseAssessments;
+        const totalPoints = assessment.type === 'quiz' ? 100 : 
+                           assessment.type === 'assign' ? 150 : 
+                           assessment.type === 'workshop' ? 200 : 75;
+        
+        return {
+          id: assessment.id.toString(),
+          name: assessment.name,
+          courseName: assessment.courseName,
+          type: assessment.type === 'quiz' ? 'quiz' : 
+                assessment.type === 'assign' ? 'assignment' : 
+                assessment.type === 'workshop' ? 'workshop' : 'survey',
+          status,
+          dueDate: dueDate.toISOString(),
+          totalPoints,
+          grade: assessment.completion === 1 ? Math.floor(Math.random() * totalPoints * 0.3) + Math.floor(totalPoints * 0.7) : undefined,
+          weight: assessment.type === 'quiz' ? 30 : 
+                  assessment.type === 'assign' ? 25 : 
+                  assessment.type === 'workshop' ? 20 : 15,
+          duration: assessment.timeLimit ? `${Math.floor(assessment.timeLimit / 60)} minutes` : 'No time limit',
+          maxAttempts: assessment.maxAttempts || 1,
+          attempts: 0, // Will be updated with real attempt data
+          submittedAt: assessment.completion === 1 ? new Date(assessment.timemodified * 1000).toISOString() : undefined,
+          instructor: 'Course Instructor', // Default since not available in module data
+          description: `Complete the ${assessment.name} for ${assessment.courseName}.`
+        };
       });
 
+      console.log(`✅ Processed ${processedAssessments.length} assessments for student`);
       setAssessments(processedAssessments);
-      console.log('✅ Assessments processed successfully:', processedAssessments.length);
-
     } catch (error) {
-      console.error('❌ Error fetching assessments:', error);
-      setError('Failed to load assessments. Please check your connection and try again.');
+      console.error('❌ Error fetching student assessments:', error);
+      setError('Failed to fetch assessments. Please try again.');
     } finally {
       setLoading(false);
     }

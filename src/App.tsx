@@ -30,6 +30,12 @@ import UserManagement from "./pages/admin/UserManagement";
 import AdminSettings from "./pages/admin/Settings";
 import Community from "./pages/admin/Community";
 import Enrollments from "./pages/admin/Enrollments";
+import SchoolCommunity from "./pages/school-admin/Community";
+import SchoolEnrollments from "./pages/school-admin/Enrollments";
+import TeacherCommunity from "./pages/teacher/Community";
+import TeacherEnrollments from "./pages/teacher/Enrollments";
+import StudentCommunity from "./pages/student/Community";
+import StudentEnrollments from "./pages/student/Enrollments";
 import AdminCertifications from "./pages/admin/Certifications";
 import AdminAssessments from "./pages/admin/Assessments";
 import AdminReports from "./pages/admin/Reports";
@@ -199,6 +205,16 @@ const App = () => {
                   </ProtectedRoute>
                 } />
                 
+                {/* Missing Admin Routes */}
+                <Route path="/dashboard/admin/enrollments" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <div className="p-6">
+                      <h1 className="text-2xl font-bold mb-4">Enrollment Management</h1>
+                      <p className="text-gray-600">Enrollment management features coming soon...</p>
+                    </div>
+                  </ProtectedRoute>
+                } />
+                
                 {/* School Admin Routes */}
                 <Route path="/dashboard/school-admin/teachers" element={
                   <ProtectedRoute requiredRole="school_admin">
@@ -246,6 +262,18 @@ const App = () => {
                   </ProtectedRoute>
                 } />
                 
+                {/* Missing School Admin Routes */}
+                <Route path="/dashboard/school-admin/community" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolCommunity />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/enrollments" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <SchoolEnrollments />
+                  </ProtectedRoute>
+                } />
+                
                 {/* Settings Routes */}
                 <Route path="/dashboard/school-admin/settings" element={
                   <ProtectedRoute requiredRole="school_admin">
@@ -257,9 +285,24 @@ const App = () => {
                     <TeacherSettings />
                   </ProtectedRoute>
                 } />
+                <Route path="/dashboard/teacher/enrollments" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherEnrollments />
+                  </ProtectedRoute>
+                } />
                 <Route path="/dashboard/student/settings" element={
                   <ProtectedRoute requiredRole="student">
                     <StudentSettings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/enrollments" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentEnrollments />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/community" element={
+                  <ProtectedRoute requiredRole="student">
+                    <StudentCommunity />
                   </ProtectedRoute>
                 } />
                 
@@ -297,6 +340,19 @@ const App = () => {
                 <Route path="/dashboard/teacher/students" element={
                   <ProtectedRoute requiredRole="teacher">
                     <TeacherStudents />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/community" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <TeacherCommunity />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/teacher/performance" element={
+                  <ProtectedRoute requiredRole="teacher">
+                    <div className="p-6">
+                      <h1 className="text-2xl font-bold mb-4">Performance Analytics</h1>
+                      <p className="text-gray-600">Performance analytics features coming soon...</p>
+                    </div>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/teacher/groups" element={

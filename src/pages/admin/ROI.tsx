@@ -87,124 +87,23 @@ const ROI: React.FC = () => {
       setLoading(true);
       setError('');
 
-      // Fetch all users and courses for ROI data
-      const [users, courses, categories] = await Promise.all([
-        moodleService.getAllUsers(),
-        moodleService.getAllCourses(),
-        moodleService.getCourseCategories()
-      ]);
-
-      // Calculate base metrics
-      const totalStudents = users.filter(user => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'student';
-      }).length;
-
-      const totalTeachers = users.filter(user => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher' || role === 'trainer';
-      }).length;
-
-      // Generate ROI categories
-      const categoriesData: ROICategory[] = [
-        {
-          categoryId: '1',
-          categoryName: 'Infrastructure & Technology',
-          investment: 125000,
-          return: 180000,
-          roi: 44,
-          percentage: 33,
-          description: 'Platform development, servers, and technical infrastructure',
-          trend: 'up'
-        },
-        {
-          categoryId: '2',
-          categoryName: 'Content Development',
-          investment: 85000,
-          return: 140000,
-          roi: 65,
-          percentage: 23,
-          description: 'Course creation, multimedia content, and learning materials',
-          trend: 'up'
-        },
-        {
-          categoryId: '3',
-          categoryName: 'Training & Certification',
-          investment: 95000,
-          return: 220000,
-          roi: 132,
-          percentage: 25,
-          description: 'Teacher training programs and certification systems',
-          trend: 'up'
-        },
-        {
-          categoryId: '4',
-          categoryName: 'Marketing & Outreach',
-          investment: 45000,
-          return: 120000,
-          roi: 167,
-          percentage: 12,
-          description: 'Marketing campaigns, partnerships, and student acquisition',
-          trend: 'stable'
-        },
-        {
-          categoryId: '5',
-          categoryName: 'Support & Operations',
-          investment: 25000,
-          return: 80000,
-          roi: 220,
-          percentage: 7,
-          description: 'Customer support, administrative costs, and operations',
-          trend: 'down'
-        }
-      ];
-
-      // Generate ROI timeline
-      const timelineData: ROITimeline[] = [];
-      let cumulativeInvestment = 0;
-      let cumulativeReturn = 0;
-
-      for (let i = 0; i < 12; i++) {
-        const monthInvestment = Math.floor(Math.random() * 50000) + 20000;
-        const monthReturn = Math.floor(monthInvestment * (1.2 + Math.random() * 0.8));
-        
-        cumulativeInvestment += monthInvestment;
-        cumulativeReturn += monthReturn;
-        
-        timelineData.push({
-          periodId: `period-${i + 1}`,
-          period: `Month ${i + 1}`,
-          investment: monthInvestment,
-          return: monthReturn,
-          roi: Math.round(((monthReturn - monthInvestment) / monthInvestment) * 100),
-          cumulativeROI: Math.round(((cumulativeReturn - cumulativeInvestment) / cumulativeInvestment) * 100),
-          date: new Date(Date.now() - (11 - i) * 30 * 24 * 60 * 60 * 1000).toISOString()
+      console.log('🔍 Fetching real ROI data from Moodle API...');
+      
+      const realROIData = await moodleService.getRealROIData();
+      
+      if (realROIData) {
+        console.log('📊 Real ROI data fetched successfully:', {
+          stats: realROIData.stats,
+          categories: realROIData.categories.length,
+          timeline: realROIData.timeline.length
         });
+        
+        setStats(realROIData.stats);
+        setCategories(realROIData.categories);
+        setTimeline(realROIData.timeline);
+      } else {
+        throw new Error('Failed to fetch real ROI data');
       }
-
-      // Calculate overall statistics
-      const totalInvestment = categoriesData.reduce((sum, cat) => sum + cat.investment, 0);
-      const totalReturn = categoriesData.reduce((sum, cat) => sum + cat.return, 0);
-      const overallROI = Math.round(((totalReturn - totalInvestment) / totalInvestment) * 100);
-      const monthlyROI = Math.round(overallROI / 12);
-      const costPerStudent = Math.round(totalInvestment / totalStudents);
-      const revenuePerStudent = Math.round(totalReturn / totalStudents);
-      const breakEvenPoint = Math.round(totalInvestment / (revenuePerStudent - costPerStudent));
-      const paybackPeriod = Math.round(totalInvestment / (totalReturn / 12));
-
-      setStats({
-        totalInvestment,
-        totalReturn,
-        overallROI,
-        monthlyROI,
-        costPerStudent,
-        revenuePerStudent,
-        breakEvenPoint,
-        paybackPeriod
-      });
-
-      setCategories(categoriesData);
-      setTimeline(timelineData);
 
     } catch (error) {
       console.error('Error fetching ROI data:', error);

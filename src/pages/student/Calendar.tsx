@@ -52,113 +52,70 @@ const StudentCalendar: React.FC = () => {
     try {
       setLoading(true);
       setError('');
+
+      console.log('🔍 Fetching real calendar events from Moodle API...');
       
-      console.log('🔍 Fetching real student calendar from Moodle API...');
+      // Get current user data
+      const userProfile = currentUser || await moodleService.getProfile();
       
-      // Get user profile and courses
-      const userProfile = await moodleService.getProfile();
-      const userCourses = await moodleService.getUserCourses(userProfile?.id || '1');
+      // Get real calendar events from Moodle API
+      const realCalendarEvents = await moodleService.getRealCalendarEvents(userProfile?.id);
       
       console.log('📊 Real calendar data fetched:', {
         userProfile,
-        courses: userCourses.length
+        events: realCalendarEvents.length
       });
 
-      // Generate realistic calendar events based on courses
-      const processedEvents: CalendarEvent[] = userCourses.flatMap(course => {
-        const courseEvents: CalendarEvent[] = [];
+      // Process real calendar events
+      const processedEvents: CalendarEvent[] = realCalendarEvents.map(event => {
+        const eventDate = new Date(event.timestart * 1000);
+        const now = new Date();
         
-        // Course start and end dates
-        if (course.startdate) {
-          courseEvents.push({
-            id: `${course.id}-start`,
-            title: `${course.shortname} Course Start`,
-            type: 'course_start',
-            courseName: course.fullname,
-            date: new Date(course.startdate * 1000).toISOString(),
-            description: `Start of ${course.fullname} course`,
-            status: new Date(course.startdate * 1000) > new Date() ? 'upcoming' : 'completed',
-            priority: 'medium',
-            instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)]
-          });
+        let status: 'upcoming' | 'today' | 'overdue' | 'completed';
+        if (eventDate < now) {
+          status = 'completed';
+        } else if (eventDate.toDateString() === now.toDateString()) {
+          status = 'today';
+        } else if (eventDate < now) {
+          status = 'overdue';
+        } else {
+          status = 'upcoming';
         }
-        
-        if (course.enddate) {
-          courseEvents.push({
-            id: `${course.id}-end`,
-            title: `${course.shortname} Course End`,
-            type: 'course_end',
-            courseName: course.fullname,
-            date: new Date(course.enddate * 1000).toISOString(),
-            description: `End of ${course.fullname} course`,
-            status: new Date(course.enddate * 1000) > new Date() ? 'upcoming' : 'completed',
-            priority: 'high',
-            instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)]
-          });
+
+        // Determine event type based on modulename
+        let eventType: 'assignment' | 'exam' | 'quiz' | 'meeting' | 'deadline';
+        if (event.modulename === 'assign') {
+          eventType = 'assignment';
+        } else if (event.modulename === 'quiz') {
+          eventType = 'quiz';
+        } else if (event.eventtype === 'due') {
+          eventType = 'deadline';
+        } else {
+          eventType = 'meeting';
         }
-        
-        // Generate assignments and exams
-        const assignmentCount = Math.floor(Math.random() * 5) + 3; // 3-7 assignments
-        for (let i = 1; i <= assignmentCount; i++) {
-          const dueDate = new Date(Date.now() + Math.random() * 60 * 24 * 60 * 60 * 1000); // Next 60 days
-          const isCompleted = Math.random() > 0.3; // 70% completion rate
-          const isOverdue = !isCompleted && dueDate < new Date();
-          
-          let status: 'upcoming' | 'today' | 'overdue' | 'completed';
-          if (isCompleted) {
-            status = 'completed';
-          } else if (isOverdue) {
-            status = 'overdue';
-          } else if (dueDate.toDateString() === new Date().toDateString()) {
-            status = 'today';
-          } else {
-            status = 'upcoming';
-          }
-          
-          courseEvents.push({
-            id: `${course.id}-assignment-${i}`,
-            title: `${course.shortname} Assignment ${i}`,
-            type: 'assignment',
-            courseName: course.fullname,
-            date: dueDate.toISOString(),
-            time: '23:59',
-            description: `Submit ${course.shortname} Assignment ${i}. This assignment covers key concepts and practical applications.`,
-            status,
-            priority: isOverdue ? 'high' : Math.random() > 0.5 ? 'medium' : 'low',
-            instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)]
-          });
-        }
-        
-        // Generate exams
-        const examCount = Math.floor(Math.random() * 2) + 1; // 1-2 exams
-        for (let i = 1; i <= examCount; i++) {
-          const examDate = new Date(Date.now() + Math.random() * 90 * 24 * 60 * 60 * 1000); // Next 90 days
-          const isCompleted = Math.random() > 0.5; // 50% completion rate
-          
-          courseEvents.push({
-            id: `${course.id}-exam-${i}`,
-            title: `${course.shortname} Exam ${i}`,
-            type: 'exam',
-            courseName: course.fullname,
-            date: examDate.toISOString(),
-            time: '14:00',
-            description: `${course.shortname} Exam ${i} covering course material. Duration: 2 hours.`,
-            status: isCompleted ? 'completed' : examDate.toDateString() === new Date().toDateString() ? 'today' : 'upcoming',
-            priority: 'high',
-            location: ['Room 101', 'Room 202', 'Room 303', 'Online'][Math.floor(Math.random() * 4)],
-            instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)]
-          });
-        }
-        
-        return courseEvents;
+
+        return {
+          id: event.id.toString(),
+          title: event.name,
+          type: eventType,
+          courseName: event.course?.fullname || 'General',
+          date: eventDate.toISOString(),
+          time: eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          description: event.description || `Event: ${event.name}`,
+          status,
+          priority: status === 'overdue' ? 'high' : status === 'today' ? 'medium' : 'low',
+          instructor: 'Course Instructor' // Default since not available in event data
+        };
       });
 
+      // Sort events by date
+      processedEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      console.log(`✅ Processed ${processedEvents.length} calendar events`);
       setEvents(processedEvents);
-      console.log('✅ Calendar data processed successfully:', processedEvents.length);
-
     } catch (error) {
-      console.error('❌ Error fetching calendar data:', error);
-      setError('Failed to load calendar data. Please check your connection and try again.');
+      console.error('❌ Error fetching calendar events:', error);
+      setError('Failed to fetch calendar events. Please try again.');
     } finally {
       setLoading(false);
     }

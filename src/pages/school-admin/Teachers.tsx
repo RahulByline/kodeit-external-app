@@ -13,6 +13,7 @@ interface Teacher {
   courses?: number;
   students?: number;
   performance?: number;
+  assignedCourses?: any[];
 }
 
 const Teachers: React.FC = () => {
@@ -28,28 +29,38 @@ const Teachers: React.FC = () => {
   const fetchTeachers = async () => {
     try {
       setLoading(true);
-      const allUsers = await moodleService.getAllUsers();
+      console.log('🔍 Fetching teachers using enhanced school data...');
       
-      const teacherUsers = allUsers
-        .map(user => ({
-          id: user.id,
-          username: user.username,
-          fullname: user.fullname,
-          email: user.email,
-          lastaccess: user.lastaccess,
-          role: moodleService.detectUserRoleEnhanced(user.username, user, user.roles || [])
-        }))
-        .filter(user => user.role === 'teacher' || user.role === 'trainer')
-        .map(teacher => ({
-          ...teacher,
-          courses: Math.floor(Math.random() * 5) + 1,
-          students: Math.floor(Math.random() * 50) + 10,
-          performance: Math.floor(Math.random() * 30) + 70
-        }));
+      // Use enhanced school data fetching
+      const schoolData = await moodleService.getSchoolDataEnhanced();
+      console.log('📊 Enhanced school data:', schoolData);
+      
+      if (!schoolData.company) {
+        console.error('❌ No company found');
+        setTeachers([]);
+        setLoading(false);
+        return;
+      }
+      
+      // Transform the data to match the component's expected format
+      const teacherUsers = schoolData.teachers.map(teacher => ({
+        id: teacher.id,
+        username: teacher.username,
+        fullname: teacher.fullname,
+        email: teacher.email,
+        lastaccess: teacher.lastaccess,
+        role: teacher.role,
+        courses: teacher.courses || 0,
+        students: teacher.students || 0,
+        performance: teacher.performance || 0,
+        assignedCourses: teacher.assignedCourses || []
+      }));
 
+      console.log(`✅ Found ${teacherUsers.length} teachers for company ${schoolData.company.name}`);
       setTeachers(teacherUsers);
     } catch (error) {
-      console.error('Error fetching teachers:', error);
+      console.error('❌ Error fetching teachers:', error);
+      setTeachers([]);
     } finally {
       setLoading(false);
     }
@@ -89,13 +100,102 @@ const Teachers: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Teachers Management</h1>
-            <p className="text-gray-600 mt-1">Manage and monitor teacher performance</p>
+            <h1 className="text-2xl font-bold text-gray-900">School Teachers Management</h1>
+            <p className="text-gray-600 mt-1">Manage and monitor teachers in your school</p>
           </div>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2">
-            <Plus className="w-4 h-4" />
-            <span>Add Teacher</span>
-          </button>
+          <div className="flex space-x-2">
+            <button 
+              onClick={async () => {
+                try {
+                  console.log('🧪 Starting comprehensive debug test for teachers...');
+                  
+                  // Test 0: Basic API connection
+                  console.log('🧪 Test 0: Testing basic API connection...');
+                  try {
+                    const siteInfoResponse = await moodleService.testApiConnection();
+                    console.log('✅ API connection test completed');
+                  } catch (error) {
+                    console.error('❌ API connection failed:', error);
+                  }
+                  
+                  // Test 0.5: Check current user data
+                  console.log('🧪 Test 0.5: Checking current user data...');
+                  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                  console.log('📋 Current user from localStorage:', currentUser);
+                  
+                  // Test 1: Get current user company
+                  const currentUserCompany = await moodleService.getCurrentUserCompany();
+                  console.log('🏢 Current user company:', currentUserCompany);
+                  
+                  if (!currentUserCompany) {
+                    alert('No company found for current user');
+                    return;
+                  }
+                  
+                  // Test 2: Get all users
+                  console.log('🧪 Test 2: Getting all users...');
+                  const allUsers = await moodleService.getAllUsers();
+                  console.log(`✅ Total users: ${allUsers.length}`);
+                  
+                  // Test 3: Get company users
+                  console.log('🧪 Test 3: Getting company users...');
+                  const companyUsers = await moodleService.getUsersByCompany(currentUserCompany.id);
+                  console.log(`✅ Company users: ${companyUsers.length}`, companyUsers);
+                  
+                  // Test 4: Get teachers
+                  console.log('🧪 Test 4: Getting teachers...');
+                  const teachers = await moodleService.getTeachersByCompany(currentUserCompany.id);
+                  console.log(`✅ Teachers: ${teachers.length}`, teachers);
+                  
+                  // Test 5: Get real teacher data
+                  console.log('🧪 Test 5: Getting real teacher data...');
+                  const realTeacherData = await moodleService.getRealTeacherDataByCompany(currentUserCompany.id);
+                  console.log(`✅ Real teacher data: ${realTeacherData.length}`, realTeacherData);
+                  
+                  alert(`Debug test completed! Check console for details.\nCompany: ${currentUserCompany.name}\nTotal Users: ${allUsers.length}\nCompany Users: ${companyUsers.length}\nTeachers: ${teachers.length}\nReal Teacher Data: ${realTeacherData.length}`);
+                  
+                } catch (error) {
+                  console.error('Debug test failed:', error);
+                  alert(`Debug test failed: ${error.message}`);
+                }
+              }}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+            >
+              <span>Debug API</span>
+            </button>
+            
+            <button 
+              onClick={async () => {
+                console.log('🔍 Running full diagnostic for Teachers page...');
+                const diagnostic = await moodleService.runFullDiagnostic();
+                console.log('Full diagnostic result:', diagnostic);
+                
+                // Show results in an alert for easy viewing
+                const summary = diagnostic.summary;
+                const issues = diagnostic.results.specificIssues;
+                let message = `Teachers Page Diagnostic:\n\nTests Passed: ${summary.passedTests}/${summary.totalTests}\nSuccess Rate: ${summary.successRate}%\n\n`;
+                
+                if (issues.length > 0) {
+                  message += 'Issues Found:\n';
+                  issues.forEach((issue, index) => {
+                    message += `${index + 1}. ${issue}\n`;
+                  });
+                } else {
+                  message += '✅ All tests passed!';
+                }
+                
+                alert(message);
+              }}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center space-x-2"
+            >
+              <span>Full Diagnostic</span>
+            </button>
+            
+            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2">
+              <Plus className="w-4 h-4" />
+              <span>Add Teacher</span>
+            </button>
+          </div>
         </div>
 
         {/* Stats Cards */}

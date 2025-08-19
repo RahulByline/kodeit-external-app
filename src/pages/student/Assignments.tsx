@@ -65,62 +65,80 @@ const Assignments: React.FC = () => {
       
       console.log('🔍 Fetching real student assignments from Moodle API...');
       
-      // Get user profile and courses
-      const userProfile = await moodleService.getProfile();
-      const userCourses = await moodleService.getUserCourses(userProfile?.id || '1');
+      // Get user profile and real assignments
+      const userProfile = currentUser || await moodleService.getProfile();
+      const realAssignments = await moodleService.getRealAssignments(userProfile?.id);
       
       console.log('📊 Real assignments data fetched:', {
         userProfile,
-        courses: userCourses.length
+        assignments: realAssignments.length
       });
 
-      // Generate realistic assignments based on courses
-      const processedAssignments: Assignment[] = userCourses.flatMap(course => {
-        const assignmentCount = Math.floor(Math.random() * 4) + 2; // 2-5 assignments per course
-        const courseAssignments: Assignment[] = [];
-        
-        for (let i = 1; i <= assignmentCount; i++) {
-          const isCompleted = Math.random() > 0.3; // 70% completion rate
-          const dueDate = new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000);
-          const isOverdue = !isCompleted && dueDate < new Date();
-          const isSubmitted = isCompleted || Math.random() > 0.5; // 50% submission rate
+      // Process real assignments and fetch additional data
+      const processedAssignments: Assignment[] = [];
+      
+      for (const assignment of realAssignments) {
+        try {
+          // Get submission data for this assignment
+          const submissions = await moodleService.getAssignmentSubmissions(assignment.id.toString());
+          const grades = await moodleService.getAssignmentGrades(assignment.id.toString());
           
-          const totalPoints = [50, 75, 100, 150, 200][Math.floor(Math.random() * 5)];
-          const earnedPoints = isCompleted ? Math.floor(Math.random() * totalPoints * 0.3) + Math.floor(totalPoints * 0.7) : undefined;
-          const grade = earnedPoints ? Math.round((earnedPoints / totalPoints) * 100) : undefined;
+          // Determine status based on real data
+          let status: 'completed' | 'pending' | 'overdue' | 'submitted' = 'pending';
+          let grade: number | undefined;
+          let earnedPoints: number | undefined;
+          let submittedAt: string | undefined;
+          let feedback: string | undefined;
           
-          let status: 'completed' | 'pending' | 'overdue' | 'submitted';
-          if (isCompleted) {
-            status = 'completed';
-          } else if (isOverdue) {
-            status = 'overdue';
-          } else if (isSubmitted) {
-            status = 'submitted';
-          } else {
-            status = 'pending';
+          if (submissions && submissions.length > 0) {
+            const submission = submissions[0]; // Get the latest submission
+            if (submission.status === 'submitted') {
+              status = 'submitted';
+              submittedAt = new Date(submission.timemodified * 1000).toISOString();
+            }
           }
           
-          courseAssignments.push({
-            id: `${course.id}-assignment-${i}`,
-            name: `${course.shortname} Assignment ${i}`,
-            courseName: course.fullname,
-            courseId: course.id,
-            description: `Complete the assigned tasks for ${course.shortname} module ${i}. This assignment covers key concepts and practical applications.`,
-            dueDate: dueDate.toISOString(),
+          if (grades && grades.length > 0) {
+            const gradeData = grades[0];
+            if (gradeData.grade !== null && gradeData.grade !== undefined) {
+              status = 'completed';
+              grade = Math.round(gradeData.grade);
+              earnedPoints = Math.round(gradeData.grade);
+              feedback = 'Assignment graded successfully.';
+            }
+          }
+          
+          // Check if overdue
+          if (assignment.dueDate && status !== 'completed') {
+            const dueDate = new Date(assignment.dueDate * 1000);
+            if (dueDate < new Date()) {
+              status = 'overdue';
+            }
+          }
+          
+          const totalPoints = assignment.grade || 100;
+          
+          processedAssignments.push({
+            id: assignment.id.toString(),
+            name: assignment.name,
+            courseName: assignment.courseName,
+            courseId: assignment.courseId.toString(),
+            description: assignment.description || `Assignment for ${assignment.courseName}`,
+            dueDate: assignment.dueDate ? new Date(assignment.dueDate * 1000).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             status,
             grade,
-            submittedAt: isSubmitted ? new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
+            submittedAt,
             totalPoints,
             earnedPoints,
-            submissionType: ['file', 'text', 'online'][Math.floor(Math.random() * 3)] as 'file' | 'text' | 'online',
-            instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-            feedback: isCompleted ? 'Excellent work! You demonstrated a strong understanding of the concepts.' : undefined,
-            attachments: isCompleted ? ['assignment_submission.pdf', 'supporting_docs.zip'] : undefined
+            submissionType: 'file' as 'file' | 'text' | 'online',
+            instructor: 'Course Instructor', // This would need additional API call to get instructor
+            feedback,
+            attachments: status === 'completed' ? ['assignment_submission.pdf'] : undefined
           });
+        } catch (assignmentError) {
+          console.warn(`Failed to process assignment ${assignment.id}:`, assignmentError);
         }
-        
-        return courseAssignments;
-      });
+      }
 
       setAssignments(processedAssignments);
       console.log('✅ Assignments processed successfully:', processedAssignments.length);

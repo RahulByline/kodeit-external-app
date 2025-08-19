@@ -42,50 +42,47 @@ const Analytics: React.FC = () => {
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true);
-      const [allUsers, allCourses, allCompanies] = await Promise.all([
-        moodleService.getAllUsers(),
-        moodleService.getAllCourses(),
-        moodleService.getCompanies()
-      ]);
-
-      // Process user data
-      const processedUsers = allUsers.map(user => ({
-        ...user,
-        role: moodleService.detectUserRoleEnhanced(user.username, user, user.roles || [])
-      }));
-
-      const teachers = processedUsers.filter(u => u.role === 'teacher' || u.role === 'trainer');
-      const students = processedUsers.filter(u => u.role === 'student');
-      const activeUsers = processedUsers.filter(u => u.lastaccess && Date.now() / 1000 - u.lastaccess < 86400);
-
-      // Calculate user distribution
-      const userDistribution = [
-        { role: 'Students', count: students.length, percentage: Math.round((students.length / processedUsers.length) * 100) },
-        { role: 'Teachers', count: teachers.length, percentage: Math.round((teachers.length / processedUsers.length) * 100) },
-        { role: 'Others', count: processedUsers.length - students.length - teachers.length, percentage: Math.round(((processedUsers.length - students.length - teachers.length) / processedUsers.length) * 100) }
-      ];
-
-      // Generate performance data
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-      const performanceData = months.map(month => ({
-        month,
-        enrollments: Math.floor(Math.random() * 50) + 20,
-        completions: Math.floor(Math.random() * 30) + 15
-      }));
-
-      setAnalyticsData({
-        totalUsers: processedUsers.length,
-        totalCourses: allCourses.length,
-        totalCompanies: allCompanies.length,
-        completionRate: Math.floor(Math.random() * 30) + 70,
-        activeUsers: activeUsers.length,
-        enrollmentTrend: Math.floor(Math.random() * 20) + 5,
-        performanceData,
-        userDistribution
-      });
+      
+      console.log('🔍 Fetching real school analytics from Moodle API...');
+      
+      const realAnalyticsData = await moodleService.getRealSchoolAnalytics();
+      
+      if (realAnalyticsData) {
+        console.log('📊 Real school analytics fetched successfully:', {
+          totalUsers: realAnalyticsData.totalUsers,
+          completionRate: realAnalyticsData.completionRate,
+          activeUsers: realAnalyticsData.activeUsers
+        });
+        
+        setAnalyticsData(realAnalyticsData);
+      } else {
+        console.error('Failed to fetch real analytics data');
+        // Set fallback data
+        setAnalyticsData({
+          totalUsers: 0,
+          totalCourses: 0,
+          totalCompanies: 0,
+          completionRate: 0,
+          activeUsers: 0,
+          enrollmentTrend: 0,
+          performanceData: [],
+          userDistribution: []
+        });
+      }
 
     } catch (error) {
       console.error('Error fetching analytics data:', error);
+      // Set fallback data
+      setAnalyticsData({
+        totalUsers: 0,
+        totalCourses: 0,
+        totalCompanies: 0,
+        completionRate: 0,
+        activeUsers: 0,
+        enrollmentTrend: 0,
+        performanceData: [],
+        userDistribution: []
+      });
     } finally {
       setLoading(false);
     }
@@ -118,8 +115,8 @@ const Analytics: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
-            <p className="text-gray-600 mt-1">Comprehensive insights and performance metrics</p>
+            <h1 className="text-2xl font-bold text-gray-900">School Analytics Dashboard</h1>
+            <p className="text-gray-600 mt-1">School-specific insights and performance metrics</p>
           </div>
           <div className="flex items-center space-x-2">
             <select className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
