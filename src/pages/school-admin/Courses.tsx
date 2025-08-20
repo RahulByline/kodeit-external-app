@@ -25,7 +25,8 @@ import {
   Loader2,
   Download,
   Upload,
-  RefreshCw
+  RefreshCw,
+  Image as ImageIcon
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { moodleService } from '../../services/moodleApi';
@@ -66,6 +67,62 @@ interface CourseAssignment {
   assignedDate: string;
 }
 
+// Course image fallbacks based on category
+const getCourseImageFallback = (categoryName?: string, courseName?: string): string => {
+  const category = categoryName?.toLowerCase() || '';
+  const course = courseName?.toLowerCase() || '';
+  
+  // Programming/IT courses
+  if (category.includes('programming') || category.includes('coding') || category.includes('development') ||
+      course.includes('programming') || course.includes('coding') || course.includes('development')) {
+    return '/public/card1.jpg'; // Programming image
+  }
+  
+  // Business/Management courses
+  if (category.includes('business') || category.includes('management') || category.includes('leadership') ||
+      course.includes('business') || course.includes('management') || course.includes('leadership')) {
+    return '/public/card2.jpg'; // Business image
+  }
+  
+  // Education/Teaching courses
+  if (category.includes('education') || category.includes('teaching') || category.includes('pedagogy') ||
+      course.includes('education') || course.includes('teaching') || course.includes('pedagogy')) {
+    return '/public/card3.jpg'; // Education image
+  }
+  
+  // Technology/ICT courses
+  if (category.includes('technology') || category.includes('ict') || category.includes('digital') ||
+      course.includes('technology') || course.includes('ict') || course.includes('digital')) {
+    return '/public/Innovative-ICT-Curricula.jpeg';
+  }
+  
+  // Default fallback
+  return '/public/placeholder.svg';
+};
+
+// Validate and fix image URL
+const validateImageUrl = (url?: string): string => {
+  if (!url) return '/public/placeholder.svg';
+  
+  // If it's already a full URL, return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // If it's a relative path, make it absolute
+  if (url.startsWith('/')) {
+    return url;
+  }
+  
+  // If it's a Moodle file URL, ensure it has the token
+  if (url.includes('webservice/rest/server.php')) {
+    return url;
+  }
+  
+  // Default fallback
+  return '/public/placeholder.svg';
+};
+
 const SchoolCoursesManagement: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
@@ -88,6 +145,7 @@ const SchoolCoursesManagement: React.FC = () => {
     avgCompletion: 0
   });
   const [showCourseDetailModal, setShowCourseDetailModal] = useState(false);
+  const [imageLoadingStates, setImageLoadingStates] = useState<{[key: number]: boolean}>({});
 
   useEffect(() => {
     fetchCoursesData();
@@ -150,7 +208,7 @@ const SchoolCoursesManagement: React.FC = () => {
         courseAssignmentMap.get(courseId).push(assignment);
       });
 
-      // Process courses with comprehensive real data
+      // Process courses with comprehensive real data and improved image handling
       const processedCourses = allCourses.map(course => {
         const courseId = parseInt(course.id);
         const enrollmentStats = courseEnrollmentMap.get(courseId) || {
@@ -166,6 +224,15 @@ const SchoolCoursesManagement: React.FC = () => {
           ? Math.round((enrollmentStats.completed / enrollmentStats.total) * 100)
           : Math.floor(Math.random() * 40) + 60; // Fallback if no real data
 
+        // Improved image handling
+        let courseImage = course.courseimage || (course as any).overviewfiles?.[0]?.fileurl;
+        courseImage = validateImageUrl(courseImage);
+        
+        // If no valid image, use category-based fallback
+        if (courseImage === '/public/placeholder.svg') {
+          courseImage = getCourseImageFallback(course.categoryname, course.fullname);
+        }
+
         return {
           id: courseId,
           fullname: course.fullname,
@@ -175,7 +242,7 @@ const SchoolCoursesManagement: React.FC = () => {
           visible: course.visible,
           startdate: course.startdate,
           enddate: course.enddate,
-          courseimage: course.courseimage || '/placeholder.svg',
+          courseimage: courseImage,
           enrolledStudents: enrollmentStats.students || Math.floor(Math.random() * 20) + 5,
           enrolledTeachers: enrollmentStats.teachers || Math.floor(Math.random() * 3) + 1,
           completionRate: completionRate,
@@ -256,6 +323,28 @@ const SchoolCoursesManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle image loading states
+  const handleImageLoad = (courseId: number) => {
+    setImageLoadingStates(prev => ({
+      ...prev,
+      [courseId]: false
+    }));
+  };
+
+  const handleImageError = (courseId: number, course: Course) => {
+    setImageLoadingStates(prev => ({
+      ...prev,
+      [courseId]: false
+    }));
+    
+    // Update the course with a fallback image
+    setCourses(prev => prev.map(c => 
+      c.id === courseId 
+        ? { ...c, courseimage: getCourseImageFallback(c.categoryname, c.fullname) }
+        : c
+    ));
   };
 
   const filteredCourses = courses.filter(course => {
@@ -433,6 +522,22 @@ const SchoolCoursesManagement: React.FC = () => {
               <RefreshCw className="w-4 h-4" />
               <span>Refresh</span>
             </button>
+            <button 
+              onClick={() => {
+                console.log('🔍 Debugging course images...');
+                courses.forEach(course => {
+                  console.log(`Course: ${course.fullname}`);
+                  console.log(`  - Image URL: ${course.courseimage}`);
+                  console.log(`  - Category: ${course.categoryname}`);
+                  console.log(`  - Fallback: ${getCourseImageFallback(course.categoryname, course.fullname)}`);
+                });
+                alert(`Debugged ${courses.length} course images. Check console for details.`);
+              }}
+              className="flex items-center space-x-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>Debug Images</span>
+            </button>
           </div>
         </div>
 
@@ -544,13 +649,19 @@ const SchoolCoursesManagement: React.FC = () => {
             >
               {/* Course Header with Image */}
               <div className="relative h-32 bg-gradient-to-br from-blue-500 to-purple-600">
+                {imageLoadingStates[course.id] && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+                  </div>
+                )}
                 <img
                   src={course.courseimage}
                   alt={course.fullname}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = '/placeholder.svg';
-                  }}
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${
+                    imageLoadingStates[course.id] ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  onLoad={() => handleImageLoad(course.id)}
+                  onError={() => handleImageError(course.id, course)}
                 />
                 
                 {/* Status Badge */}
@@ -805,7 +916,18 @@ const SchoolCoursesManagement: React.FC = () => {
                   {/* Left Column - Course Information */}
                   <div className="lg:col-span-2 space-y-6">
                     {/* Course Image and Basic Info */}
-                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl p-6 text-white">
+                    <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl p-6 text-white overflow-hidden">
+                      {/* Course Image Background */}
+                      <div className="absolute inset-0 opacity-20">
+                        <img
+                          src={selectedCourse.courseimage}
+                          alt={selectedCourse.fullname}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-semibold">Course Overview</h3>
                         <div className="flex space-x-2">

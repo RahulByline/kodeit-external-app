@@ -568,7 +568,7 @@ export const moodleService = {
           shortname: course.shortname,
           summary: course.summary,
           categoryid: course.categoryid || course.category,
-          courseimage: course.courseimage || course.overviewfiles?.[0]?.fileurl,
+          courseimage: this.processCourseImage(course),
           progress: Math.floor(Math.random() * 100), // Mock progress
           categoryname: course.categoryname,
           format: course.format,
@@ -603,7 +603,7 @@ export const moodleService = {
           shortname: course.shortname,
           summary: course.summary || '',
           categoryid: course.categoryid || course.category,
-          courseimage: course.overviewfiles?.[0]?.fileurl || course.courseimage,
+          courseimage: this.processCourseImage(course),
           categoryname: course.categoryname || 'General',
           format: course.format || 'topics',
           startdate: course.startdate,
@@ -622,6 +622,61 @@ export const moodleService = {
       console.error('Error fetching all courses:', error);
       throw new Error('Failed to fetch courses');
     }
+  },
+
+  processCourseImage(course: MoodleCourse): string {
+    // Try to get course image from multiple sources
+    let imageUrl = course.courseimage;
+    
+    // If no courseimage, try overviewfiles
+    if (!imageUrl && course.overviewfiles && course.overviewfiles.length > 0) {
+      imageUrl = course.overviewfiles[0].fileurl;
+    }
+    
+    // If still no image, try to construct a default based on category
+    if (!imageUrl) {
+      const category = course.categoryname?.toLowerCase() || '';
+      const courseName = course.fullname?.toLowerCase() || '';
+      
+      // Programming/IT courses
+      if (category.includes('programming') || category.includes('coding') || category.includes('development') ||
+          courseName.includes('programming') || courseName.includes('coding') || courseName.includes('development')) {
+        return '/public/card1.jpg';
+      }
+      
+      // Business/Management courses
+      if (category.includes('business') || category.includes('management') || category.includes('leadership') ||
+          courseName.includes('business') || courseName.includes('management') || courseName.includes('leadership')) {
+        return '/public/card2.jpg';
+      }
+      
+      // Education/Teaching courses
+      if (category.includes('education') || category.includes('teaching') || category.includes('pedagogy') ||
+          courseName.includes('education') || courseName.includes('teaching') || courseName.includes('pedagogy')) {
+        return '/public/card3.jpg';
+      }
+      
+      // Technology/ICT courses
+      if (category.includes('technology') || category.includes('ict') || category.includes('digital') ||
+          courseName.includes('technology') || courseName.includes('ict') || courseName.includes('digital')) {
+        return '/public/Innovative-ICT-Curricula.jpeg';
+      }
+      
+      // Default fallback
+      return '/public/placeholder.svg';
+    }
+    
+    // If we have an image URL, ensure it's properly formatted
+    if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('/')) {
+      // If it's a relative path, make it absolute
+      if (imageUrl.startsWith('webservice/')) {
+        imageUrl = `https://kodeit.legatoserver.com/${imageUrl}`;
+      } else {
+        imageUrl = `/public/${imageUrl}`;
+      }
+    }
+    
+    return imageUrl;
   },
 
   calculateDuration(startdate?: number, enddate?: number): string {
