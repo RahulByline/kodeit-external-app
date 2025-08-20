@@ -14,12 +14,28 @@ const Emulators: React.FC = () => {
 
   const emulators = [
     {
-      id: 'scratch',
-      name: 'Scratch Emulator',
+      id: 'code-editor',
+      name: 'Code Editor',
+      description: 'Write and run code in multiple programming languages',
+      icon: Code,
+      status: 'active',
+      url: '/dashboard/student/code-editor'
+    },
+    {
+      id: 'compiler',
+      name: 'Compiler',
+      description: 'Advanced code compilation with Piston API',
+      icon: Settings,
+      status: 'active',
+      url: '/dashboard/student/compiler'
+    },
+    {
+      id: 'scratch-editor',
+      name: 'Scratch Code Editor',
       description: 'Learn programming with visual blocks',
       icon: Play,
       status: 'active',
-      url: '/editor'
+      url: '/dashboard/student/scratch-editor'
     }
   ];
 

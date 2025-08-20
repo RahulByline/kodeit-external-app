@@ -14,7 +14,8 @@ import {
   Clock,
   GraduationCap,
   Play,
-  Code
+  Code,
+  Settings
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { moodleService } from '../services/moodleApi';
@@ -51,6 +52,21 @@ const StudentDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showScratchEditor, setShowScratchEditor] = useState(false);
+  const [savedProjects, setSavedProjects] = useState<any[]>([]);
+
+  const handleProjectSave = (projectData: any) => {
+    const newProject = {
+      id: Date.now().toString(),
+      name: `Scratch Project ${savedProjects.length + 1}`,
+      data: projectData,
+      timestamp: new Date().toISOString()
+    };
+    setSavedProjects([...savedProjects, newProject]);
+    
+    // Save to localStorage
+    localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
+  };
+
   const [savedProjects, setSavedProjects] = useState<any[]>([]);
 
   const handleProjectSave = (projectData: any) => {
@@ -376,47 +392,18 @@ const StudentDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* Scratch Emulator Section */}
+        
+        {/* Programming Tools Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Programming Tools</h2>
               <p className="text-gray-600 mt-1">Access interactive programming environments</p>
             </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setShowScratchEditor(!showScratchEditor)}
-                className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
-                  showScratchEditor 
-                    ? 'bg-gray-600 text-white hover:bg-gray-700' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                {showScratchEditor ? 'Hide Scratch Editor' : 'Show Scratch Editor'}
-              </button>
-            </div>
           </div>
           
-          {!showScratchEditor && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div 
-                className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
-                onClick={() => setShowScratchEditor(true)}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Play className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-blue-900">Scratch Programming</h3>
-                    <p className="text-sm text-blue-700">Create interactive stories, games, and animations with visual blocks</p>
-                  </div>
-                </div>
-              </div>
-              
-                          <Link to="/student/emulators" className="block">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link to="/dashboard/student/code-editor" className="block">
               <div className="bg-green-50 rounded-lg p-4 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-green-100 rounded-lg">
@@ -429,16 +416,40 @@ const StudentDashboard: React.FC = () => {
                 </div>
               </div>
             </Link>
-            </div>
-          )}
-          
-          {showScratchEditor && (
-            <div className="mt-6">
-              <div className="h-[600px] rounded-lg overflow-hidden border border-gray-300">
-                <ScratchEditor onProjectSave={handleProjectSave} />
+            
+            <Link to="/dashboard/student/compiler" className="block">
+              <div className="bg-purple-50 rounded-lg p-4 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Settings className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-purple-900">Compiler</h3>
+                    <p className="text-sm text-purple-700">Advanced code compilation with Piston API</p>
+                className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                onClick={() => setShowScratchEditor(true)}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            </Link>
+           
+            <Link to="/dashboard/student/scratch-editor" className="block">
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Play className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-blue-900">Scratch Programming</h3>
+                    <p className="text-sm text-blue-700">Create interactive stories, games, and animations with visual blocks</p>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          </div>
         </div>
       </div>
     </DashboardLayout>

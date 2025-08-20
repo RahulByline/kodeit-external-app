@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import VM from 'scratch-vm';
 import ScratchBlocks from './ScratchBlocks';
 
+// Dynamic import for Scratch VM to avoid bundling issues
+let VM: any = null;
 interface ScratchEditorProps {
   projectId?: string;
   onProjectSave?: (projectData: any) => void;
@@ -12,7 +13,7 @@ const ScratchEditor: React.FC<ScratchEditorProps> = ({
   onProjectSave 
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const vmRef = useRef<VM | null>(null);
+  const vmRef = useRef<any | null>(null);
   const renderRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,11 @@ const ScratchEditor: React.FC<ScratchEditorProps> = ({
 
         const canvas = canvasRef.current;
         if (!canvas) return;
-
+        // Dynamically load Scratch VM
+        if (!VM) {
+          const scratchVM = await import('scratch-vm');
+          VM = scratchVM.default;
+        }
         // Initialize Scratch VM
         const vm = new VM();
         vmRef.current = vm;

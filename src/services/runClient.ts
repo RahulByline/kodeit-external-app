@@ -14,10 +14,10 @@ export type RunResponse = {
   error?: string;
 };
 
-const PROXY_URL = "https://kodeit-lms-backend.bylinelms.com";
+const PROXY_URL = import.meta.env.VITE_RUN_PROXY_URL || "http://localhost:8080";
 
 export async function runCode(req: RunRequest): Promise<RunResponse> {
-  const resp = await fetch(`${PROXY_URL}/api/run`, {
+  const resp = await fetch(`${PROXY_URL}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req)
