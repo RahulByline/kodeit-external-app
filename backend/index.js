@@ -216,8 +216,18 @@ For simple questions, provide direct answers. For complex topics, use the struct
  
 // Interactive Code Execution Function
 async function runCodeInteractive(language, code, executionId) {
-  const tempDir = path.join(os.tmpdir(), `code-${executionId}`);
-  await fs.mkdir(tempDir, { recursive: true });
+  // Use platform-specific temp directory
+  const tempDir = process.platform === 'win32' 
+    ? path.join(process.cwd(), `code-${executionId}`)
+    : path.join('/home/bylinelm/kodeit-lms-backend.bylinelms.com', `code-${executionId}`);
+  
+  try {
+    await fs.mkdir(tempDir, { recursive: true });
+    console.log(`📁 Created temp directory: ${tempDir}`);
+  } catch (error) {
+    console.error(`❌ Failed to create temp directory: ${error.message}`);
+    throw new Error(`Failed to create temporary directory: ${error.message}`);
+  }
  
   try {
     let fileName, command, args;
@@ -225,57 +235,105 @@ async function runCodeInteractive(language, code, executionId) {
     switch (language) {
       case 'python':
         fileName = 'main.py';
-        command = 'py';
+        // Use platform-specific Python command
+        if (process.platform === 'win32') {
+          command = 'py'; // Windows Python
+        } else {
+          command = '/usr/bin/python3'; // Linux Python
+        }
         args = ['main.py'];
+        break;
+      case 'javascript':
+        // JavaScript uses vm module, no file creation needed
+        fileName = 'main.js';
+        command = null; // Not used for JavaScript
+        args = null; // Not used for JavaScript
         break;
       default:
         throw new Error(`Interactive execution not supported for ${language}`);
     }
  
-    // Check if command is available
-    let commandPath = command;
-    try {
-      const { execSync } = await import('child_process');
-      execSync(`where ${command}`, { stdio: 'ignore' });
-      console.log(`✅ ${command} found in PATH`);
-    } catch (error) {
-      // For Python, try alternative commands
-      if (language === 'python') {
-        try {
-          execSync(`where py`, { stdio: 'ignore' });
-          console.log('✅ Python (py) found in PATH');
-          commandPath = 'py';
-        } catch (pyError) {
-          try {
-            execSync(`where python3`, { stdio: 'ignore' });
-            console.log('✅ Python (python3) found in PATH');
-            commandPath = 'python3';
-          } catch (python3Error) {
-            try {
-              execSync(`where python`, { stdio: 'ignore' });
-              console.log('✅ Python (python) found in PATH');
-              commandPath = 'python';
-            } catch (pythonError) {
-              throw new Error(`Python is not installed or not found in PATH. Please install Python to run Python code.`);
+    // Preprocess code to fix indentation issues
+    let processedCode = code;
+    if (language === 'python') {
+      processedCode = code.trim();
+      console.log('🔧 Python code preprocessed for interactive execution - removed extra whitespace');
+    }
+    
+    // Handle JavaScript execution differently (no file creation needed)
+    if (language === 'javascript') {
+      console.log('🔧 JavaScript execution - using vm module');
+      
+      try {
+        const vm = await import('vm');
+        let stdout = '';
+        let stderr = '';
+        
+        // Create a safe context with console.log captured
+        const context = {
+          console: {
+            log: (...args) => {
+              stdout += args.join(' ') + '\n';
+            },
+            error: (...args) => {
+              stderr += args.join(' ') + '\n';
+            },
+            warn: (...args) => {
+              stderr += args.join(' ') + '\n';
             }
+          },
+          setTimeout,
+          setInterval,
+          clearTimeout,
+          clearInterval,
+          Buffer,
+          process: {
+            env: process.env,
+            version: process.version,
+            platform: process.platform
           }
-        }
-      } else {
-        throw new Error(`${getLanguageLabel(language)} is not installed or not in PATH. Please install ${getLanguageLabel(language)} to run ${language} code.`);
+        };
+        
+        // Create sandboxed context
+        const sandbox = vm.createContext(context);
+        
+        // Execute the code with timeout
+        const script = new vm.Script(processedCode);
+        script.runInContext(sandbox, { timeout: 5000 });
+        
+        console.log(`JavaScript execution completed successfully`);
+        console.log(`JavaScript stdout:`, stdout);
+        console.log(`JavaScript stderr:`, stderr);
+        
+        return {
+          stdout: stdout,
+          stderr: stderr,
+          exitCode: 0,
+          diagnostics: []
+        };
+        
+      } catch (error) {
+        console.error(`JavaScript execution error:`, error);
+        return {
+          stdout: '',
+          stderr: `Execution error: ${error.message}`,
+          exitCode: -1,
+          diagnostics: []
+        };
       }
     }
- 
+    
     const filePath = path.join(tempDir, fileName);
-    await fs.writeFile(filePath, code, { encoding: 'utf8', flag: 'w' });
+    await fs.writeFile(filePath, processedCode, { encoding: 'utf8', flag: 'w' });
    
     console.log(`Created file: ${filePath}`);
     console.log(`Working directory: ${tempDir}`);
  
     return new Promise((resolve, reject) => {
-      const child = spawn(commandPath, args, {
+      const child = spawn(command, args, {
         cwd: tempDir,
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true
+        shell: false
       });
  
       let stdout = '';
@@ -298,6 +356,43 @@ async function runCodeInteractive(language, code, executionId) {
         // Check if the process is waiting for input
         if (output.includes('Enter') || output.includes('input') || output.includes(':')) {
           isWaitingForInput = true;
+          console.log('🔄 Detected input() call - waiting for user input');
+          
+          // Store execution for later input and return immediately
+          activeExecutions.set(executionId, {
+            child,
+            promise: new Promise((res, rej) => {
+              let finalStdout = stdout;
+              let finalStderr = stderr;
+              
+              child.stdout.on('data', (data) => {
+                finalStdout += data.toString();
+              });
+              
+              child.stderr.on('data', (data) => {
+                finalStderr += data.toString();
+              });
+              
+              child.on('close', (finalCode) => {
+                res({
+                  stdout: finalStdout,
+                  stderr: finalStderr,
+                  exitCode: finalCode,
+                  diagnostics: []
+                });
+              });
+              child.on('error', rej);
+            })
+          });
+          
+          // Clear timeout and resolve immediately
+          clearTimeout(timeoutId);
+          resolve({
+            waitingForInput: true,
+            executionId: executionId,
+            stdout: stdout,
+            stderr: stderr
+          });
         }
       });
  
@@ -316,30 +411,8 @@ async function runCodeInteractive(language, code, executionId) {
           console.warn('Failed to clean up temp directory:', err)
         );
  
-        if (isWaitingForInput) {
-          // Store execution for later input
-          activeExecutions.set(executionId, {
-            child,
-            promise: new Promise((res, rej) => {
-              child.on('close', (finalCode) => {
-                res({
-                  stdout: stdout,
-                  stderr: stderr,
-                  exitCode: finalCode,
-                  diagnostics: []
-                });
-              });
-              child.on('error', rej);
-            })
-          });
-         
-          resolve({
-            waitingForInput: true,
-            executionId: executionId,
-            stdout: stdout,
-            stderr: stderr
-          });
-        } else {
+        // Only resolve if we haven't already resolved due to input waiting
+        if (!isWaitingForInput) {
           resolve({
             stdout: stdout,
             stderr: stderr,
@@ -446,12 +519,19 @@ async function runCode(language, code, stdin = '') {
       }
     }
  
-         // Preprocess Python code to handle input() calls better
+         // Preprocess Python code to handle input() calls better and fix indentation
      let processedCode = code;
-     if (language === 'python' && code.includes('input(')) {
-       // Add a comment to explain the input handling
-       processedCode = `# Note: This code uses input() - default value "User" will be provided automatically\n${code}`;
-       console.log('🔧 Python code preprocessed for input() handling');
+     if (language === 'python') {
+       // Remove leading/trailing whitespace and normalize indentation
+       processedCode = code.trim();
+       
+       // If the code has input() calls, add a comment
+       if (code.includes('input(')) {
+         processedCode = `# Note: This code uses input() - interactive input will be handled\n${processedCode}`;
+         console.log('🔧 Python code preprocessed for input() handling');
+       }
+       
+       console.log('🔧 Python code preprocessed - removed extra whitespace');
      }
      
      // Skip file creation for Python and JavaScript since we're using inline execution
@@ -664,7 +744,10 @@ async function runCode(language, code, stdin = '') {
            // Simple Python execution without file creation (from test-simple.js)
            console.log(`Starting Python execution with inline method`);
            
-           const child = spawn('/usr/bin/python3', ['-c', processedCode], {
+           // Use platform-specific Python command
+           const pythonCommand = process.platform === 'win32' ? 'py' : '/usr/bin/python3';
+           
+           const child = spawn(pythonCommand, ['-c', processedCode], {
              stdio: ['pipe', 'pipe', 'pipe'],
              shell: false  // Don't use shell to avoid escaping issues
            });
@@ -938,6 +1021,32 @@ app.post('/api/run', async (req, res) => {
     });
   }
 });
+
+// Interactive code execution endpoint
+app.post('/api/run-interactive', async (req, res) => {
+  try {
+    const { language = 'python', source = '', stdin = '' } = req.body;
+ 
+    if (!source) {
+      return res.status(400).json({ error: 'Source code is required' });
+    }
+ 
+    console.log(`🚀 Running ${language} code interactively`);
+   
+    // Use interactive execution
+    const result = await runCodeInteractive(language, source, uuid());
+   
+    return res.json(result);
+  } catch (err) {
+    console.error('💥 Interactive code execution error:', err);
+    return res.status(500).json({
+      error: err.message,
+      stack: err.stack,
+      stdout: '',
+      stderr: err.message
+    });
+  }
+});
  
 // Interactive input endpoint
 app.post('/api/input', async (req, res) => {
@@ -955,11 +1064,17 @@ app.post('/api/input', async (req, res) => {
  
     console.log(`📝 Sending input to execution ${executionId}:`, input);
    
-    // Send input to the process
-    execution.child.stdin.write(input);
+    // Send input to the process with newline and end stdin
+    execution.child.stdin.write(input + '\n');
+    execution.child.stdin.end();
    
-    // Wait for response
-    const result = await execution.promise;
+    // Wait for response with timeout
+    const timeout = 10000; // 10 seconds timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Input response timed out')), timeout);
+    });
+    
+    const result = await Promise.race([execution.promise, timeoutPromise]);
     activeExecutions.delete(executionId);
    
     res.json(result);
