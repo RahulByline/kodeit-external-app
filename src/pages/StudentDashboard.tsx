@@ -67,21 +67,6 @@ const StudentDashboard: React.FC = () => {
     localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
   };
 
-  const [savedProjects, setSavedProjects] = useState<any[]>([]);
-
-  const handleProjectSave = (projectData: any) => {
-    const newProject = {
-      id: Date.now().toString(),
-      name: `Scratch Project ${savedProjects.length + 1}`,
-      data: projectData,
-      timestamp: new Date().toISOString()
-    };
-    setSavedProjects([...savedProjects, newProject]);
-    
-    // Save to localStorage
-    localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
-  };
-
   const courseProgress: CourseProgress[] = [
     { subject: 'Mathematics', progress: 85 },
     { subject: 'Physics', progress: 72 },
@@ -426,11 +411,6 @@ const StudentDashboard: React.FC = () => {
                   <div>
                     <h3 className="font-medium text-purple-900">Compiler</h3>
                     <p className="text-sm text-purple-700">Advanced code compilation with Piston API</p>
-                className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
-                onClick={() => setShowScratchEditor(true)}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="
                   </div>
                 </div>
               </div>

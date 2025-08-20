@@ -1625,6 +1625,12 @@ app.post('/api/run', async (req, res) => {
     console.error('💥 Code execution error:', err);
     return res.status(500).json({ 
       error: err.message, 
+      stack: err.stack,
+      stdout: '',
+      stderr: err.message
+    });
+  }
+});
 
 // Interactive code execution endpoint
 app.post('/api/run-interactive', async (req, res) => {
