@@ -51,6 +51,21 @@ const StudentDashboard: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showScratchEditor, setShowScratchEditor] = useState(false);
+  const [savedProjects, setSavedProjects] = useState<any[]>([]);
+
+  const handleProjectSave = (projectData: any) => {
+    const newProject = {
+      id: Date.now().toString(),
+      name: `Scratch Project ${savedProjects.length + 1}`,
+      data: projectData,
+      timestamp: new Date().toISOString()
+    };
+    setSavedProjects([...savedProjects, newProject]);
+    
+    // Save to localStorage
+    localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
+  };
 
   const [savedProjects, setSavedProjects] = useState<any[]>([]);
 
@@ -377,7 +392,7 @@ const StudentDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-
+        
         {/* Programming Tools Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-6">
@@ -411,11 +426,16 @@ const StudentDashboard: React.FC = () => {
                   <div>
                     <h3 className="font-medium text-purple-900">Compiler</h3>
                     <p className="text-sm text-purple-700">Advanced code compilation with Piston API</p>
+                className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                onClick={() => setShowScratchEditor(true)}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="
                   </div>
                 </div>
               </div>
             </Link>
-            
+           
             <Link to="/dashboard/student/scratch-editor" className="block">
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
                 <div className="flex items-center space-x-3">

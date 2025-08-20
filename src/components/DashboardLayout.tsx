@@ -205,8 +205,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           title: 'EMULATORS',
           items: [
             { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
-            { name: 'Compiler', icon: Settings, path: '/dashboard/student/compiler' },
-            { name: 'Scratch Code Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+            { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
           ]
         },
         {

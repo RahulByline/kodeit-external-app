@@ -199,7 +199,6 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/student/settings',
         '/dashboard/student/community',
         '/dashboard/student/enrollments',
-  
       ];
     default:
       return [];

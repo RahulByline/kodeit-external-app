@@ -3,7 +3,6 @@ import ScratchBlocks from './ScratchBlocks';
 
 // Dynamic import for Scratch VM to avoid bundling issues
 let VM: any = null;
-
 interface ScratchEditorProps {
   projectId?: string;
   onProjectSave?: (projectData: any) => void;
@@ -29,13 +28,11 @@ const ScratchEditor: React.FC<ScratchEditorProps> = ({
 
         const canvas = canvasRef.current;
         if (!canvas) return;
-
         // Dynamically load Scratch VM
         if (!VM) {
           const scratchVM = await import('scratch-vm');
           VM = scratchVM.default;
         }
-
         // Initialize Scratch VM
         const vm = new VM();
         vmRef.current = vm;

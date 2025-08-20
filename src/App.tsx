@@ -477,8 +477,6 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
-                
-
                 <Route path="/dashboard/student/community" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
