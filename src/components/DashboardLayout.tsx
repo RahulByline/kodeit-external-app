@@ -61,7 +61,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
 
     if (userRole === 'admin') {
       return [
-        ...baseItems,
+        {
+          title: 'DASHBOARD',
+          items: [
+            { name: 'Admin Dashboard', icon: LayoutDashboard, path: '/dashboard/admin' },
+            { name: 'Community', icon: Users, path: '/dashboard/admin/community' },
+            { name: 'Enrollments', icon: GraduationCap, path: '/dashboard/admin/enrollments' },
+          ]
+        },
         {
           title: 'TEACHERS',
           items: [

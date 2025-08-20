@@ -48,14 +48,11 @@ const Analytics: React.FC = () => {
         moodleService.getCompanies()
       ]);
 
-      // Process user data
-      const processedUsers = allUsers.map(user => ({
-        ...user,
-        role: moodleService.detectUserRoleEnhanced(user.username, user, user.roles || [])
-      }));
+      // Process user data - use the role that was already processed in getAllUsers
+      const processedUsers = allUsers;
 
-      const teachers = processedUsers.filter(u => u.role === 'teacher' || u.role === 'trainer');
-      const students = processedUsers.filter(u => u.role === 'student');
+      const teachers = processedUsers.filter(u => u.role === 'teacher' || u.role === 'trainer' || u.isTeacher);
+      const students = processedUsers.filter(u => u.role === 'student' || u.isStudent);
       const activeUsers = processedUsers.filter(u => u.lastaccess && Date.now() / 1000 - u.lastaccess < 86400);
 
       // Calculate user distribution

@@ -151,10 +151,17 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/admin/teachers',
         '/dashboard/admin/master-trainers',
         '/dashboard/admin/courses',
+        '/dashboard/admin/certifications',
+        '/dashboard/admin/assessments',
         '/dashboard/admin/schools',
         '/dashboard/admin/analytics',
+        '/dashboard/admin/predictive',
+        '/dashboard/admin/roi',
+        '/dashboard/admin/reports',
         '/dashboard/admin/users',
-        '/dashboard/admin/settings'
+        '/dashboard/admin/settings',
+        '/dashboard/admin/community',
+        '/dashboard/admin/enrollments'
       ];
     case 'school_admin':
       return [

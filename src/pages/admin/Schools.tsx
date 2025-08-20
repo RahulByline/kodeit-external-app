@@ -60,22 +60,22 @@ const Schools: React.FC = () => {
         const schoolTeachers = schoolUsers.filter(user => user.isTeacher);
         const schoolStudents = schoolUsers.filter(user => user.isStudent);
         
-        const isActive = company.lastaccess && company.lastaccess > (Date.now() / 1000) - (30 * 24 * 60 * 60);
+        const isActive = true; // Default to active since we don't have lastaccess
         
         return {
-          id: company.id,
+          id: parseInt(company.id),
           name: company.name,
           shortname: company.shortname,
           address: company.address,
           city: company.city,
           country: company.country,
-          postcode: company.postcode,
+          postcode: '',
           teachersCount: schoolTeachers.length,
           studentsCount: schoolStudents.length,
-          coursesCount: Math.floor(Math.random() * 20) + 5, // Mock course count
+          coursesCount: company.courseCount || 0, // Real course count from API
           status: isActive ? 'active' : 'inactive',
-          created: company.created || Date.now() / 1000,
-          lastAccess: company.lastaccess
+          created: Date.now() / 1000,
+          lastAccess: Date.now() / 1000
         };
       });
 
@@ -83,41 +83,9 @@ const Schools: React.FC = () => {
       setUsers(usersData);
       setCourses(coursesData);
     } catch (error) {
-      console.error('Error fetching schools:', error);
-      setError('Failed to load schools data');
-      // Fallback to mock data
-      setSchools([
-        {
-          id: 1,
-          name: 'Riyadh International School',
-          shortname: 'RIS',
-          address: 'King Fahd Road',
-          city: 'Riyadh',
-          country: 'Saudi Arabia',
-          postcode: '12345',
-          teachersCount: 45,
-          studentsCount: 850,
-          coursesCount: 12,
-          status: 'active',
-          created: Date.now() / 1000,
-          lastAccess: Date.now() / 1000
-        },
-        {
-          id: 2,
-          name: 'Jeddah Academy',
-          shortname: 'JA',
-          address: 'Corniche Road',
-          city: 'Jeddah',
-          country: 'Saudi Arabia',
-          postcode: '67890',
-          teachersCount: 32,
-          studentsCount: 620,
-          coursesCount: 8,
-          status: 'active',
-          created: (Date.now() / 1000) - (365 * 24 * 60 * 60),
-          lastAccess: (Date.now() / 1000) - (7 * 24 * 60 * 60)
-        }
-      ]);
+      console.error('Error fetching schools from IOMAD API:', error);
+      setError(`Failed to load schools data from IOMAD API: ${error.message || error}`);
+      setSchools([]);
     } finally {
       setLoading(false);
     }

@@ -12,6 +12,7 @@ import MyAIBuddy from "./components/MyAIBuddy";
 import TextSelectionPopupWrapper from "./components/TextSelectionPopupWrapper";
 
 import RouteGuard from "./components/RouteGuard";
+import ErrorBoundary from "./components/ErrorBoundary";
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 
@@ -19,6 +20,22 @@ import 'aos/dist/aos.css';
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+  </div>
+);
+
+// Error component for lazy loading failures
+const LazyErrorFallback = ({ error }: { error: Error }) => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="text-center">
+      <h2 className="text-2xl font-bold text-gray-900 mb-4">Failed to load component</h2>
+      <p className="text-gray-600 mb-4">There was an error loading this page.</p>
+      <button
+        onClick={() => window.location.reload()}
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+      >
+        Reload Page
+      </button>
+    </div>
   </div>
 );
 
@@ -42,10 +59,17 @@ const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 const AdminTeachers = lazy(() => import("./pages/admin/Teachers"));
 const MasterTrainers = lazy(() => import("./pages/admin/MasterTrainers"));
 const AdminCourses = lazy(() => import("./pages/admin/Courses"));
+const AdminCertifications = lazy(() => import("./pages/admin/Certifications"));
+const AdminAssessments = lazy(() => import("./pages/admin/Assessments"));
 const Schools = lazy(() => import("./pages/admin/Schools"));
 const AdminAnalytics = lazy(() => import("./pages/admin/Analytics"));
+const AdminPredictive = lazy(() => import("./pages/admin/Predictive"));
+const AdminROI = lazy(() => import("./pages/admin/ROI"));
+const AdminReports = lazy(() => import("./pages/admin/Reports"));
 const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
 const AdminSettings = lazy(() => import("./pages/admin/Settings"));
+const AdminCommunity = lazy(() => import("./pages/admin/Community"));
+const AdminEnrollments = lazy(() => import("./pages/admin/Enrollments"));
 
 // School Admin pages - lazy loaded
 const SchoolAdminTeachers = lazy(() => import("./pages/school-admin/Teachers"));
@@ -122,18 +146,19 @@ const App = () => {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AuthProvider>
-            <ThemeProvider>
-              <ChatProvider>
-                <BrowserRouter>
-                  <RouteGuard />
-                  <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-                    <MyAIBuddy />
-                    <TextSelectionPopupWrapper />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <AuthProvider>
+              <ThemeProvider>
+                <ChatProvider>
+                  <BrowserRouter>
+                    <RouteGuard />
+                    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+                      <MyAIBuddy />
+                      <TextSelectionPopupWrapper />
                   <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/debug/roles" element={
@@ -205,9 +230,11 @@ const App = () => {
                 {/* Protected Admin Dashboard Routes */}
                 <Route path="/dashboard/admin/teachers" element={
                   <ProtectedRoute requiredRole="admin">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <AdminTeachers />
-                    </Suspense>
+                    <ErrorBoundary fallback={<LazyErrorFallback error={new Error("Failed to load Teachers")} />}>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <AdminTeachers />
+                      </Suspense>
+                    </ErrorBoundary>
                   </ProtectedRoute>
                 } />
                 <Route path="/dashboard/admin/master-trainers" element={
@@ -221,6 +248,20 @@ const App = () => {
                   <ProtectedRoute requiredRole="admin">
                     <Suspense fallback={<LoadingSpinner />}>
                       <AdminCourses />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/certifications" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminCertifications />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/assessments" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminAssessments />
                     </Suspense>
                   </ProtectedRoute>
                 } />
@@ -238,6 +279,27 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+                <Route path="/dashboard/admin/predictive" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminPredictive />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/roi" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminROI />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/reports" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AdminReports />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
                 <Route path="/dashboard/admin/users" element={
                   <ProtectedRoute requiredRole="admin">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -250,6 +312,24 @@ const App = () => {
                     <Suspense fallback={<LoadingSpinner />}>
                       <AdminSettings />
                     </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/community" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ErrorBoundary fallback={<LazyErrorFallback error={new Error("Failed to load Community")} />}>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <AdminCommunity />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/enrollments" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ErrorBoundary fallback={<LazyErrorFallback error={new Error("Failed to load Enrollments")} />}>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <AdminEnrollments />
+                      </Suspense>
+                    </ErrorBoundary>
                   </ProtectedRoute>
                 } />
                 
@@ -507,15 +587,16 @@ const App = () => {
                     <NotFound />
                   </Suspense>
                 } />
-              </Routes>
-            </div>
-          </BrowserRouter>
-                </ChatProvider>
-          </ThemeProvider>
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
+                                </Routes>
+                </div>
+              </BrowserRouter>
+                    </ChatProvider>
+              </ThemeProvider>
+            </AuthProvider>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    );
 };
 
 export default App;

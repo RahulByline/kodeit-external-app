@@ -31,15 +31,15 @@ const Teachers: React.FC = () => {
       const allUsers = await moodleService.getAllUsers();
       
       const teacherUsers = allUsers
+        .filter(user => user.role === 'teacher' || user.role === 'trainer' || user.isTeacher)
         .map(user => ({
           id: user.id,
           username: user.username,
           fullname: user.fullname,
           email: user.email,
           lastaccess: user.lastaccess,
-          role: moodleService.detectUserRoleEnhanced(user.username, user, user.roles || [])
+          role: user.role || 'teacher'
         }))
-        .filter(user => user.role === 'teacher' || user.role === 'trainer')
         .map(teacher => ({
           ...teacher,
           courses: Math.floor(Math.random() * 5) + 1,

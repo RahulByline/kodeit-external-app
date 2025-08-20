@@ -52,7 +52,7 @@ const Users: React.FC = () => {
         firstname: user.firstname,
         lastname: user.lastname,
         email: user.email,
-        role: detectUserRole(user.username, user),
+        role: user.role || detectUserRole(user.username, user), // Use processed role first, fallback to local detection
         status: user.suspended === '1' ? 'suspended' : 'active',
         lastAccess: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : new Date().toISOString(),
         department: user.department || 'General',

@@ -123,15 +123,13 @@ const SchoolAdminSettings: React.FC = () => {
         console.log('No current user company found, using first company:', targetCompany);
       }
       
-      // Count users by role using enhanced detection
+      // Count users by role using the role that was already processed in getAllUsers
       const teachers = users.filter((user: any) => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher' || role === 'trainer';
+        return user.role === 'teacher' || user.role === 'trainer' || user.isTeacher;
       });
       
       const students = users.filter((user: any) => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'student';
+        return user.role === 'student' || user.isStudent;
       });
 
       // Find current user's profile in the users array
@@ -204,12 +202,8 @@ const SchoolAdminSettings: React.FC = () => {
         }
       };
 
-      // Process profile data with enhanced role detection for current user
-      const detectedRole = moodleService.detectUserRoleEnhanced(
-        currentUserProfile.username, 
-        currentUserProfile, 
-        currentUserProfile.roles || []
-      );
+      // Process profile data using the role that was already processed in getAllUsers
+      const detectedRole = currentUserProfile.role || 'school_admin';
       
       const processedProfileData: ProfileData = {
         id: parseInt(currentUserProfile.id) || 1,
