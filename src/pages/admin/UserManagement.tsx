@@ -619,6 +619,10 @@ const UserManagement: React.FC = () => {
         throw new Error('API returned null or undefined result');
       }
       
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to delete user');
+      }
+      
       console.log('✅ User deleted via IOMAD API successfully');
       
       // Add user to recently deleted set to prevent re-adding during auto-refresh
@@ -1338,9 +1342,9 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  // Add comprehensive test function
+  // Add comprehensive test function with enhanced IOMAD integration
   const runComprehensiveTest = async () => {
-    console.log('🧪 Starting comprehensive user management test...');
+    console.log('🧪 Starting comprehensive user management test with IOMAD integration...');
     
     try {
       // Test 1: API Connection
@@ -1348,8 +1352,8 @@ const UserManagement: React.FC = () => {
       const apiTest = await moodleService.testApiConnection();
       console.log('API Connection Test Result:', apiTest);
       
-      // Test 2: Fetch Users
-      console.log('👥 Test 2: Testing Fetch Users...');
+      // Test 2: Fetch Users with enhanced role detection
+      console.log('👥 Test 2: Testing Fetch Users with IOMAD roles...');
       const usersResult = await moodleService.getAllUsers();
       console.log('Fetch Users Test Result:', usersResult);
       
@@ -1358,18 +1362,34 @@ const UserManagement: React.FC = () => {
       const companiesResult = await moodleService.getCompanies();
       console.log('Get Companies Test Result:', companiesResult);
       
-      // Test 4: Get Roles
-      console.log('🎭 Test 4: Testing Get Roles...');
+      // Test 4: Get Available Roles
+      console.log('🎭 Test 4: Testing Get Available Roles...');
       const rolesResult = await moodleService.getAvailableRoles();
-      console.log('Get Roles Test Result:', rolesResult);
+      console.log('Get Available Roles Test Result:', rolesResult);
       
-      // Test 5: Get Courses
-      console.log('📚 Test 5: Testing Get Courses...');
+      // Test 5: Test IOMAD Role Fetching specifically
+      console.log('🔍 Test 5: Testing IOMAD Role Fetching...');
+      if (usersResult.length > 0) {
+        const testUser = usersResult[0];
+        const userRoles = await moodleService.getUserRoles(parseInt(testUser.id.toString()));
+        console.log(`IOMAD Role Fetching Test - User: ${testUser.username}, Roles:`, userRoles);
+      }
+      
+      // Test 6: Get Courses
+      console.log('📚 Test 6: Testing Get Courses...');
       const coursesResult = await moodleService.getAllCourses();
       console.log('Get Courses Test Result:', coursesResult);
       
-      // Test 6: Check Current State
-      console.log('📊 Test 6: Checking Current State...');
+      // Test 7: Test Role Assignment with IOMAD
+      console.log('🔧 Test 7: Testing IOMAD Role Assignment...');
+      if (usersResult.length > 0) {
+        const testUser = usersResult[0];
+        const roleResult = await moodleService.updateUserRole(parseInt(testUser.id.toString()), 'teacher');
+        console.log(`IOMAD Role Assignment Test for user ${testUser.username}:`, roleResult);
+      }
+      
+      // Test 8: Check Current State
+      console.log('📊 Test 8: Checking Current State...');
       console.log('Current users count:', users.length);
       console.log('Current loading state:', loading);
       console.log('Current error state:', error);
@@ -1378,8 +1398,8 @@ const UserManagement: React.FC = () => {
       console.log('Current filter role:', filterRole);
       console.log('Current filter status:', filterStatus);
       
-      // Test 7: Check Modal States
-      console.log('🔍 Test 7: Checking Modal States...');
+      // Test 9: Check Modal States
+      console.log('🔍 Test 9: Checking Modal States...');
       console.log('Add User Modal:', showAddUserModal);
       console.log('Edit User Modal:', showEditUserModal);
       console.log('Delete Confirm Modal:', showDeleteConfirmModal);
@@ -1388,7 +1408,7 @@ const UserManagement: React.FC = () => {
       console.log('Password Reset Modal:', showPasswordResetModal);
       console.log('Export Modal:', showExportModal);
       
-      alert('🧪 Comprehensive test completed! Check console for detailed results.');
+      alert('🧪 Comprehensive test with IOMAD integration completed! Check console for detailed results.');
       
     } catch (error) {
       console.error('❌ Comprehensive test failed:', error);
@@ -1419,7 +1439,7 @@ const UserManagement: React.FC = () => {
     try {
       // Test API Connection
       const apiTest = await moodleService.testApiConnection();
-      results.apiConnection = apiTest.success;
+      results.apiConnection = apiTest;
       
       // Test User Fetch
       const usersResult = await moodleService.getAllUsers();
@@ -1515,7 +1535,7 @@ const UserManagement: React.FC = () => {
           
           // Test Assign Courses
           try {
-            const assignResult = await moodleService.assignUserToCourses(userId, [1, 2]);
+            const assignResult = await moodleService.assignUserToCourses(userId.toString(), [1, 2].map(id => id.toString()));
             results.assignCourses = assignResult.success;
           } catch (e) {
             console.log('Assign courses test failed:', e);

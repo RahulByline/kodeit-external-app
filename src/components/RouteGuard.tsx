@@ -156,7 +156,7 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/admin/schools',
         '/dashboard/admin/analytics',
         '/dashboard/admin/predictive',
-        '/dashboard/admin/roi',
+      
         '/dashboard/admin/reports',
         '/dashboard/admin/users',
         '/dashboard/admin/settings',
@@ -175,6 +175,8 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/school-admin/reports',
         '/dashboard/school-admin/users',
         '/dashboard/school-admin/school-management',
+        '/dashboard/school-admin/community',
+        '/dashboard/school-admin/enrollments',
         '/dashboard/school-admin/settings'
       ];
     case 'teacher':
@@ -199,13 +201,14 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/student/courses',
         '/dashboard/student/grades',
         '/dashboard/student/messages',
-        '/dashboard/student/progress',
-        '/dashboard/student/emulators',
-        '/dashboard/student/code-editor',
-        '/dashboard/student/compiler',
-        '/dashboard/student/settings',
-        '/dashboard/student/community',
-        '/dashboard/student/enrollments',
+          '/dashboard/student/progress',
+          '/dashboard/admin/competencies',
+  '/dashboard/student/emulators',
+  '/dashboard/student/code-editor',
+  '/dashboard/student/compiler',
+  '/dashboard/student/settings',
+  '/dashboard/student/community',
+  '/dashboard/student/enrollments',
       ];
     default:
       return [];

@@ -24,7 +24,6 @@ interface Stats {
   totalActiveTeachers: number;
   courseCompletionRate: number;
   certifiedMasterTrainers: number;
-  trainingROI: number;
   totalSchools: number;
   totalCourses: number;
   totalStudents: number;
@@ -38,11 +37,7 @@ interface TeacherPerformance {
   activeTeachers: number;
 }
 
-interface ROIBreakdown {
-  category: string;
-  value: number;
-  percentage: number;
-}
+
 
 interface RecentActivity {
   type: 'course_completed' | 'teacher_certified' | 'school_added' | 'course_created';
@@ -94,12 +89,7 @@ interface UserActivityData {
   coursesAccessed: number;
 }
 
-interface ROIAnalysisData {
-  totalInvestment: number;
-  totalReturn: number;
-  roi: number;
-  breakdown: ROIBreakdown[];
-}
+
 
 const AdminDashboard: React.FC = () => {
   const { currentUser } = useAuth();
@@ -110,7 +100,6 @@ const AdminDashboard: React.FC = () => {
     totalActiveTeachers: 0,
     courseCompletionRate: 0,
     certifiedMasterTrainers: 0,
-    trainingROI: 0,
     totalSchools: 0,
     totalCourses: 0,
     totalStudents: 0,
@@ -125,12 +114,6 @@ const AdminDashboard: React.FC = () => {
   const [teacherPerformanceData, setTeacherPerformanceData] = useState<TeacherPerformanceData[]>([]);
   const [courseCompletionStats, setCourseCompletionStats] = useState<CourseCompletionStats[]>([]);
   const [userActivityData, setUserActivityData] = useState<UserActivityData[]>([]);
-  const [roiAnalysisData, setRoiAnalysisData] = useState<ROIAnalysisData>({
-    totalInvestment: 375000,
-    totalReturn: 1200000,
-    roi: 3.2,
-    breakdown: []
-  });
 
   const teacherPerformance: TeacherPerformance[] = [
     { subject: 'Mathematics', improvement: 24, totalTeachers: 45, activeTeachers: 38 },
@@ -139,12 +122,7 @@ const AdminDashboard: React.FC = () => {
     { subject: 'Humanities', improvement: 14, totalTeachers: 35, activeTeachers: 30 }
   ];
 
-  const roiBreakdown: ROIBreakdown[] = [
-    { category: 'Reduced Turnover', value: 420000, percentage: 35 },
-    { category: 'Student Performance', value: 380000, percentage: 32 },
-    { category: 'Operational Efficiency', value: 210000, percentage: 18 },
-    { category: 'Parent Satisfaction', value: 190000, percentage: 15 }
-  ];
+
 
   useEffect(() => {
     fetchAdminData();
@@ -232,12 +210,7 @@ const AdminDashboard: React.FC = () => {
       let courseCompletion: CourseCompletionStats[] = [];
       let userActivity: UserActivityData[] = [];
       let recentActivityData: RecentActivity[] = [];
-      let roiData: ROIAnalysisData = {
-        totalInvestment: 375000,
-        totalReturn: 1200000,
-        roi: 3.2,
-        breakdown: []
-      };
+
 
       try {
         teacherPerformance = await moodleService.getTeacherPerformanceData();
@@ -267,12 +240,7 @@ const AdminDashboard: React.FC = () => {
         console.warn('Failed to fetch recent activity data, using mock data:', error);
       }
 
-      try {
-        roiData = await moodleService.getROIAnalysisData();
-        console.log('ROI analysis data fetched:', roiData);
-      } catch (error) {
-        console.warn('Failed to fetch ROI analysis data, using mock data:', error);
-      }
+      
 
       // Calculate real statistics from API data
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
@@ -376,7 +344,7 @@ const AdminDashboard: React.FC = () => {
         totalActiveTeachers: activeTeachers.length,
         courseCompletionRate: Math.round((activeUsers.length / users.length) * 100),
         certifiedMasterTrainers: Math.floor(teachers.length * 0.3), // 30% of teachers are master trainers
-        trainingROI: roiData.roi,
+
         totalSchools: schools.length,
         totalCourses: courses.length,
         totalStudents: students.length,
@@ -390,7 +358,7 @@ const AdminDashboard: React.FC = () => {
       setTeacherPerformanceData(teacherPerformance);
       setCourseCompletionStats(courseCompletion);
       setUserActivityData(userActivity);
-      setRoiAnalysisData(roiData);
+
 
     } catch (error) {
       console.error('Error fetching admin data:', error);
@@ -401,7 +369,7 @@ const AdminDashboard: React.FC = () => {
         totalActiveTeachers: 12,
         courseCompletionRate: 78,
         certifiedMasterTrainers: 8,
-        trainingROI: 3.2,
+
         totalSchools: 3,
         totalCourses: 15,
         totalStudents: 45,
@@ -468,17 +436,7 @@ const AdminDashboard: React.FC = () => {
         { userId: '4', userName: 'Lisa Wilson', userRole: 'student', isActive: true, activityLevel: 1, loginCount: 8, coursesAccessed: 2 }
       ]);
 
-      setRoiAnalysisData({
-        totalInvestment: 375000,
-        totalReturn: 1200000,
-        roi: 3.2,
-        breakdown: [
-          { category: 'Reduced Turnover', value: 420000, percentage: 35 },
-          { category: 'Student Performance', value: 380000, percentage: 32 },
-          { category: 'Operational Efficiency', value: 210000, percentage: 18 },
-          { category: 'Parent Satisfaction', value: 190000, percentage: 15 }
-        ]
-      });
+
     } finally {
       setLoading(false);
     }
@@ -628,22 +586,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Training ROI</p>
-                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.trainingROI}x</h3>
-                    <div className="flex items-center mt-2">
-                      <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                      <span className="text-green-600 text-sm font-medium">+0.4x</span>
-                      <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
-                    </div>
-                  </div>
-                  <div className="p-3 bg-yellow-100 rounded-lg">
-                    <Target className="w-6 h-6 text-yellow-600" />
-                  </div>
-                </div>
-              </div>
+
             </div> */}
 
             {/* Additional KPI Cards */}
@@ -808,41 +751,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Training ROI Analysis */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Training ROI Analysis</h2>
-                </div>
 
-                <div className="space-y-4">
-                  {roiAnalysisData.breakdown.map((item, index) => (
-                    <div key={index}>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-700">{item.category}</span>
-                        <span className="text-sm font-semibold text-gray-900">${item.value.toLocaleString()}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full" 
-                          style={{ width: `${item.percentage}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Totals */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Total Investment</span>
-                    <span className="text-sm font-bold text-gray-900">${roiAnalysisData.totalInvestment.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">Total Return</span>
-                    <span className="text-sm font-bold text-green-600">${roiAnalysisData.totalReturn.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Course Statistics and Recent Activity */}
@@ -988,22 +897,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Training ROI</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.trainingROI}x</h3>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="text-green-600 text-sm font-medium">+0.4x</span>
-                  <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
-                </div>
-              </div>
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <Target className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
+
         </div> */}
 
         {/* Additional KPI Cards */}
@@ -1168,41 +1062,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Training ROI Analysis */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Training ROI Analysis</h2>
-            </div>
 
-            <div className="space-y-4">
-              {roiAnalysisData.breakdown.map((item, index) => (
-                <div key={index}>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">{item.category}</span>
-                    <span className="text-sm font-semibold text-gray-900">${item.value.toLocaleString()}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full" 
-                      style={{ width: `${item.percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Totals */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Total Investment</span>
-                <span className="text-sm font-bold text-gray-900">${roiAnalysisData.totalInvestment.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Total Return</span>
-                <span className="text-sm font-bold text-green-600">${roiAnalysisData.totalReturn.toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Course Statistics and Recent Activity */}

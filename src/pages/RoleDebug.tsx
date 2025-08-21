@@ -61,6 +61,32 @@ const RoleDebug = () => {
     }
   };
 
+  const handleDebugAllRoles = async () => {
+    setIsLoading(true);
+    try {
+      await moodleService.debugRoleDetection();
+      alert('✅ Role detection debug completed! Check console for detailed results.');
+    } catch (error) {
+      console.error('❌ Role detection debug failed:', error);
+      alert('Role detection debug failed. Check console for details.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDebugSpecificUser = async () => {
+    setIsLoading(true);
+    try {
+      await moodleService.debugRoleDetection(username);
+      alert(`✅ Role detection debug for ${username} completed! Check console for detailed results.`);
+    } catch (error) {
+      console.error('❌ Role detection debug failed:', error);
+      alert('Role detection debug failed. Check console for details.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
       <div className="max-w-4xl mx-auto">
@@ -98,6 +124,20 @@ const RoleDebug = () => {
                 variant="secondary"
               >
                 {isLoading ? 'Testing...' : 'Test User Search'}
+              </Button>
+              <Button 
+                onClick={handleDebugAllRoles}
+                disabled={isLoading}
+                variant="destructive"
+              >
+                {isLoading ? 'Debugging...' : 'Debug All Roles'}
+              </Button>
+              <Button 
+                onClick={handleDebugSpecificUser}
+                disabled={isLoading}
+                variant="outline"
+              >
+                {isLoading ? 'Debugging...' : 'Debug User'}
               </Button>
             </div>
 
@@ -151,6 +191,7 @@ const RoleDebug = () => {
             <div className="text-xs text-gray-500 mt-4">
               <p>💡 <strong>Tip:</strong> Check browser console for detailed API responses and role parsing.</p>
               <p>🔧 <strong>Test Users:</strong> Try "kodeit_admin", "alhuda_admin", or any other username from your IOMAD system.</p>
+              <p>🔍 <strong>Browser Console:</strong> You can also run <code>debugRoles()</code> or <code>debugRoles('username')</code> in the browser console.</p>
             </div>
           </CardContent>
         </Card>

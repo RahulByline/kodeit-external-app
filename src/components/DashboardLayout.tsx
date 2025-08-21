@@ -23,7 +23,8 @@ import {
   LogOut,
   Settings as SettingsIcon,
   Play,
-  Code
+  Code,
+  Map
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import LogoutDialog from './ui/logout-dialog';
@@ -90,8 +91,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           items: [
             { name: 'Analytics', icon: BarChart3, path: '/dashboard/admin/analytics' },
             { name: 'Predictive Models', icon: TrendingUp, path: '/dashboard/admin/predictive' },
-            { name: 'ROI Analysis', icon: Target, path: '/dashboard/admin/roi' },
             { name: 'Reports', icon: FileText, path: '/dashboard/admin/reports' },
+            { name: 'Competencies Map', icon: Map, path: '/dashboard/admin/competencies' },
           ]
         },
         {
