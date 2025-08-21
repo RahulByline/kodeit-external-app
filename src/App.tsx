@@ -64,12 +64,13 @@ const AdminAssessments = lazy(() => import("./pages/admin/Assessments"));
 const Schools = lazy(() => import("./pages/admin/Schools"));
 const AdminAnalytics = lazy(() => import("./pages/admin/Analytics"));
 const AdminPredictive = lazy(() => import("./pages/admin/Predictive"));
-const AdminROI = lazy(() => import("./pages/admin/ROI"));
+
 const AdminReports = lazy(() => import("./pages/admin/Reports"));
 const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
 const AdminSettings = lazy(() => import("./pages/admin/Settings"));
 const AdminCommunity = lazy(() => import("./pages/admin/Community"));
 const AdminEnrollments = lazy(() => import("./pages/admin/Enrollments"));
+const CompetenciesMap = lazy(() => import("./pages/admin/CompetenciesMap"));
 
 // School Admin pages - lazy loaded
 const SchoolAdminTeachers = lazy(() => import("./pages/school-admin/Teachers"));
@@ -81,6 +82,8 @@ const Assessments = lazy(() => import("./pages/school-admin/Assessments"));
 const Reports = lazy(() => import("./pages/school-admin/Reports"));
 const SchoolAdminUsers = lazy(() => import("./pages/school-admin/Users"));
 const SchoolManagement = lazy(() => import("./pages/school-admin/SchoolManagement"));
+const SchoolAdminCommunity = lazy(() => import("./pages/school-admin/Community"));
+const SchoolAdminEnrollments = lazy(() => import("./pages/school-admin/Enrollments"));
 
 // Teacher pages - lazy loaded
 const TeacherAnalytics = lazy(() => import("./pages/teacher/Analytics"));
@@ -286,13 +289,7 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
-                <Route path="/dashboard/admin/roi" element={
-                  <ProtectedRoute requiredRole="admin">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <AdminROI />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
+
                 <Route path="/dashboard/admin/reports" element={
                   <ProtectedRoute requiredRole="admin">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -395,6 +392,24 @@ const App = () => {
                     <Suspense fallback={<LoadingSpinner />}>
                       <SchoolManagement />
                     </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/community" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <ErrorBoundary fallback={<LazyErrorFallback error={new Error("Failed to load Community")} />}>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <SchoolAdminCommunity />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/school-admin/enrollments" element={
+                  <ProtectedRoute requiredRole="school_admin">
+                    <ErrorBoundary fallback={<LazyErrorFallback error={new Error("Failed to load Enrollments")} />}>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <SchoolAdminEnrollments />
+                      </Suspense>
+                    </ErrorBoundary>
                   </ProtectedRoute>
                 } />
                 
@@ -526,6 +541,13 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentProgress />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/competencies" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <CompetenciesMap />
                     </Suspense>
                   </ProtectedRoute>
                 } />
