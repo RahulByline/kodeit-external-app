@@ -46,108 +46,42 @@ const MasterTrainers: React.FC = () => {
       setLoading(true);
       setError('');
       
-      const users = await moodleService.getAllUsers();
+      console.log('🔍 Fetching real master trainers from Moodle API...');
       
-      // Filter users who are teachers and enhance with master trainer data
-      const teacherUsers = users.filter(user => user.isTeacher);
+      // Get real master trainers data
+      const realMasterTrainers = await moodleService.getRealMasterTrainers();
       
-      const specializations = [
-        'Programming & Development',
-        'Data Science & Analytics',
-        'Digital Marketing',
-        'Project Management',
-        'Leadership & Management',
-        'STEM Education',
-        'Language Teaching',
-        'Creative Arts'
-      ];
-
-      const achievements = [
-        'Certified Master Trainer',
-        'Excellence in Teaching Award',
-        'Student Success Champion',
-        'Innovation in Education',
-        'Mentorship Excellence',
-        'Curriculum Development Expert'
-      ];
-
-      const enhancedMasterTrainers: MasterTrainer[] = teacherUsers.slice(0, 10).map((teacher, index) => {
-        const isCertified = index < 5; // First 5 are certified
-        const isActive = teacher.lastaccess > (Date.now() / 1000) - (30 * 24 * 60 * 60);
-        
-        let status: 'active' | 'inactive' | 'certified' = 'inactive';
-        if (isCertified) status = 'certified';
-        else if (isActive) status = 'active';
-        
-        const specialization = specializations.slice(0, Math.floor(Math.random() * 3) + 1);
-        const trainerAchievements = achievements.slice(0, Math.floor(Math.random() * 3) + 1);
-        
-        return {
-          id: teacher.id,
-          username: teacher.username,
-          firstname: teacher.firstname,
-          lastname: teacher.lastname,
-          email: teacher.email,
-          city: teacher.city,
-          country: teacher.country,
-          specialization,
-          certificationDate: isCertified ? new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toLocaleDateString() : '',
-          experienceYears: Math.floor(Math.random() * 15) + 3,
-          coursesTaught: Math.floor(Math.random() * 20) + 5,
-          studentsTrained: Math.floor(Math.random() * 500) + 100,
-          successRate: Math.floor(Math.random() * 30) + 70,
-          rating: Math.floor(Math.random() * 20) + 80,
-          status,
-          achievements: trainerAchievements,
-          lastTraining: new Date(teacher.lastaccess * 1000).toLocaleDateString()
-        };
+      console.log('📊 Real master trainers data fetched:', {
+        trainers: realMasterTrainers.length
       });
 
-      setMasterTrainers(enhancedMasterTrainers);
+      // Transform to component interface
+      const processedTrainers: MasterTrainer[] = realMasterTrainers.map(trainer => ({
+        id: trainer.id,
+        username: trainer.username,
+        firstname: trainer.firstname,
+        lastname: trainer.lastname,
+        email: trainer.email,
+        city: trainer.city,
+        country: trainer.country,
+        specialization: trainer.specialization,
+        certificationDate: trainer.certificationDate,
+        experienceYears: trainer.experienceYears,
+        coursesTaught: trainer.coursesTaught,
+        studentsTrained: trainer.studentsTrained,
+        successRate: trainer.successRate,
+        rating: trainer.rating,
+        status: trainer.status as 'active' | 'inactive' | 'certified',
+        achievements: trainer.achievements,
+        lastTraining: trainer.lastTraining
+      }));
+
+      setMasterTrainers(processedTrainers);
+      console.log('✅ Master trainers processed successfully:', processedTrainers.length);
+      
     } catch (error) {
-      console.error('Error fetching master trainers:', error);
-      setError('Failed to load master trainers data');
-      // Fallback to mock data
-      setMasterTrainers([
-        {
-          id: 1,
-          username: 'master.trainer1',
-          firstname: 'Sarah',
-          lastname: 'Johnson',
-          email: 'sarah.johnson@school.com',
-          city: 'Riyadh',
-          country: 'Saudi Arabia',
-          specialization: ['Programming & Development', 'Data Science & Analytics'],
-          certificationDate: '2023-01-15',
-          experienceYears: 8,
-          coursesTaught: 15,
-          studentsTrained: 350,
-          successRate: 92,
-          rating: 95,
-          status: 'certified',
-          achievements: ['Certified Master Trainer', 'Excellence in Teaching Award', 'Student Success Champion'],
-          lastTraining: new Date().toLocaleDateString()
-        },
-        {
-          id: 2,
-          username: 'master.trainer2',
-          firstname: 'Ahmed',
-          lastname: 'Al-Rashid',
-          email: 'ahmed.alrashid@school.com',
-          city: 'Jeddah',
-          country: 'Saudi Arabia',
-          specialization: ['Digital Marketing', 'Project Management'],
-          certificationDate: '2023-03-20',
-          experienceYears: 12,
-          coursesTaught: 22,
-          studentsTrained: 480,
-          successRate: 88,
-          rating: 92,
-          status: 'certified',
-          achievements: ['Certified Master Trainer', 'Innovation in Education'],
-          lastTraining: new Date().toLocaleDateString()
-        }
-      ]);
+      console.error('❌ Error fetching master trainers:', error);
+      setError('Failed to load master trainers data. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -193,7 +127,7 @@ const MasterTrainers: React.FC = () => {
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading master trainers...</p>
+            <p className="mt-4 text-gray-600">Loading real master trainers from Moodle API...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -207,7 +141,7 @@ const MasterTrainers: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Master Trainers</h1>
-            <p className="text-gray-600 mt-1">Certified master trainers and educational experts</p>
+            <p className="text-gray-600 mt-1">Real master trainers data from Moodle API - {masterTrainers.length} trainers</p>
           </div>
           <Button className="bg-blue-600 hover:bg-blue-700">
             <Plus className="w-4 h-4 mr-2" />

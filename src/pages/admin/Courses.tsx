@@ -76,23 +76,19 @@ const Courses: React.FC = () => {
           lastname: teacher.lastname
         })) : [];
         
-        // Calculate completion rate based on course visibility and duration
-        const baseCompletionRate = course.visible ? 80 : 50;
-        const durationFactor = course.startdate && course.enddate ? 
-          Math.min((course.enddate - course.startdate) / (90 * 24 * 60 * 60), 1) : 0.5;
-        const completionRate = Math.floor(baseCompletionRate * durationFactor) + Math.floor(Math.random() * 20);
+        // Use actual enrollment count from course data, fallback to 0
+        const actualEnrollments = course.enrollmentCount || course.enrolledusercount || 0;
         
-        // Estimate enrolled users based on course visibility and category
-        const estimatedEnrollments = course.visible ? 
-          Math.floor(Math.random() * 50) + 20 : // 20-70 for visible courses
-          Math.floor(Math.random() * 15) + 5;   // 5-20 for hidden courses
+        // Use actual completion rate from course data, fallback to estimated based on visibility
+        const actualCompletionRate = course.completionrate || 
+          (course.visible ? 75 : 50); // Basic fallback for visible/hidden courses
         
         return {
           ...course,
           id: Number(course.id),
           categoryname: category?.name || 'Uncategorized',
-          enrolledusercount: estimatedEnrollments,
-          completionrate: Math.min(completionRate, 100),
+          enrolledusercount: actualEnrollments,
+          completionrate: actualCompletionRate,
           teachers: assignedTeachers,
           status,
           format: course.format || 'topics',
@@ -103,52 +99,10 @@ const Courses: React.FC = () => {
       setCourses(enhancedCourses);
       setCategories(categoriesData);
     } catch (error) {
-      console.error('Error fetching courses:', error);
-      setError('Failed to load courses data');
-      // Fallback to mock data
-      setCourses([
-        {
-          id: 1,
-          fullname: 'Introduction to Programming',
-          shortname: 'PROG101',
-          summary: 'Learn the fundamentals of programming with Python',
-          categoryid: 1,
-          categoryname: 'Computer Science',
-          startdate: Date.now() / 1000,
-          enddate: (Date.now() / 1000) + (90 * 24 * 60 * 60),
-          enrolledusercount: 45,
-          completionrate: 78,
-          teachers: [
-            { id: 1, firstname: 'Sarah', lastname: 'Johnson' }
-          ],
-          status: 'active',
-          format: 'topics',
-          visible: true
-        },
-        {
-          id: 2,
-          fullname: 'Advanced Mathematics',
-          shortname: 'MATH201',
-          summary: 'Advanced mathematical concepts and problem solving',
-          categoryid: 2,
-          categoryname: 'Mathematics',
-          startdate: (Date.now() / 1000) - (30 * 24 * 60 * 60),
-          enddate: (Date.now() / 1000) + (60 * 24 * 60 * 60),
-          enrolledusercount: 32,
-          completionrate: 85,
-          teachers: [
-            { id: 2, firstname: 'Ahmed', lastname: 'Al-Rashid' }
-          ],
-          status: 'active',
-          format: 'topics',
-          visible: true
-        }
-      ]);
-      setCategories([
-        { id: 1, name: 'Computer Science' },
-        { id: 2, name: 'Mathematics' },
-        { id: 3, name: 'Science' }
-      ]);
+      console.error('Error fetching courses from IOMAD API:', error);
+      setError(`Failed to load courses data from IOMAD API: ${error.message || error}`);
+      setCourses([]);
+      setCategories([]);
     } finally {
       setLoading(false);
     }

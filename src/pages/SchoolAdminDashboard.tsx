@@ -179,7 +179,7 @@ const SchoolAdminDashboard: React.FC = () => {
           fullname: user.fullname,
           email: user.email,
           lastaccess: user.lastaccess,
-          role: moodleService.detectUserRoleEnhanced(user.username, moodleUser, user.roles || []),
+          role: user.role || 'student', // Use the role that was already processed in getAllUsers
           profileImage: user.profileimageurl || '/placeholder.svg',
           firstname: user.firstname,
           lastname: user.lastname,

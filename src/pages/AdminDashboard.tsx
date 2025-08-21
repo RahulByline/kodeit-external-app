@@ -281,21 +281,18 @@ const AdminDashboard: React.FC = () => {
       );
 
       // Enhanced role detection using the moodleService method
+      // Use the role property that was already processed in getAllUsers
       const teachers = users.filter(user => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher' || role === 'trainer';
+        return user.role === 'teacher' || user.role === 'trainer' || user.isTeacher;
       });
       const students = users.filter(user => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'student';
+        return user.role === 'student' || user.isStudent;
       });
       const admins = users.filter(user => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'admin' || role === 'school_admin';
+        return user.role === 'admin' || user.role === 'school_admin' || user.isAdmin;
       });
       const activeTeachers = activeUsers.filter(user => {
-        const role = moodleService.detectUserRoleEnhanced(user.username, user, user.roles || []);
-        return role === 'teacher' || role === 'trainer';
+        return user.role === 'teacher' || user.role === 'trainer' || user.isTeacher;
       });
 
       console.log('User categorization:', {
@@ -579,7 +576,7 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex justify-between items-start">
                   <div>
@@ -647,7 +644,7 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Additional KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -939,7 +936,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex justify-between items-start">
               <div>
@@ -1007,7 +1004,7 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Additional KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
