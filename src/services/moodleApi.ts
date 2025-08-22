@@ -7480,6 +7480,201 @@ export const moodleService = {
       return [];
     }
   },
+
+  // Get real course content, modules, and activities
+  async getCourseContents(courseId: string) {
+    try {
+      console.log(`🔍 Fetching course contents for course ID: ${courseId}`);
+      
+      const response = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_course_get_contents',
+          courseid: courseId,
+        },
+      });
+
+      if (response.data && Array.isArray(response.data)) {
+        console.log(`✅ Found ${response.data.length} course sections`);
+        return response.data;
+      } else {
+        console.log('⚠️ No course contents found');
+        return [];
+      }
+    } catch (error: any) {
+      console.error('❌ Error fetching course contents:', error.response?.data || error.message);
+      return [];
+    }
+  },
+
+  // Get course completion status
+  async getCourseCompletion(courseId: string, userId?: string) {
+    try {
+      console.log(`🔍 Fetching course completion for course ID: ${courseId}`);
+      
+      const response = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_completion_get_course_completion_status',
+          courseid: courseId,
+          userid: userId || await this.getCurrentUserId(),
+        },
+      });
+
+      if (response.data) {
+        console.log('✅ Course completion data fetched');
+        return response.data;
+      } else {
+        console.log('⚠️ No completion data found');
+        return null;
+      }
+    } catch (error: any) {
+      console.error('❌ Error fetching course completion:', error.response?.data || error.message);
+      return null;
+    }
+  },
+
+  // Get course grades
+  async getCourseGrades(courseId: string, userId?: string) {
+    try {
+      console.log(`🔍 Fetching course grades for course ID: ${courseId}`);
+      
+      const response = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_grades_get_grades',
+          courseid: courseId,
+          userid: userId || await this.getCurrentUserId(),
+        },
+      });
+
+      if (response.data) {
+        console.log('✅ Course grades data fetched');
+        return response.data;
+      } else {
+        console.log('⚠️ No grades data found');
+        return null;
+      }
+    } catch (error: any) {
+      console.error('❌ Error fetching course grades:', error.response?.data || error.message);
+      return null;
+    }
+  },
+
+  // Get course activities with completion status
+  async getCourseActivities(courseId: string, userId?: string) {
+    try {
+      console.log(`🔍 Fetching course activities for course ID: ${courseId}`);
+      
+      // Get course contents first
+      const contents = await this.getCourseContents(courseId);
+      const activities = [];
+
+      // Extract activities from course sections
+      for (const section of contents) {
+        if (section.modules && Array.isArray(section.modules)) {
+          for (const module of section.modules) {
+            // Try to get completion status for this module
+            let completion = null;
+            try {
+              const completionResponse = await moodleApi.get('', {
+                params: {
+                  wsfunction: 'core_completion_get_activities_completion_status',
+                  courseid: courseId,
+                  userid: userId || await this.getCurrentUserId(),
+                },
+              });
+              
+              if (completionResponse.data && completionResponse.data.statuses) {
+                completion = completionResponse.data.statuses.find((status: any) => 
+                  status.cmid === module.id
+                );
+              }
+            } catch (completionError) {
+              console.warn('Could not fetch completion for module:', module.id);
+            }
+
+            activities.push({
+              id: module.id,
+              name: module.name,
+              type: module.modname,
+              description: module.description || '',
+              url: module.url,
+              visible: module.visible,
+              section: section.name,
+              sectionId: section.id,
+              completion: completion,
+              availabilityinfo: module.availabilityinfo,
+              contents: module.contents || [],
+              dates: module.dates || [],
+            });
+          }
+        }
+      }
+
+      console.log(`✅ Found ${activities.length} activities in course`);
+      return activities;
+    } catch (error: any) {
+      console.error('❌ Error fetching course activities:', error.response?.data || error.message);
+      return [];
+    }
+  },
+
+  // Get detailed course information
+  async getCourseDetails(courseId: string) {
+    try {
+      console.log(`🔍 Fetching detailed course information for course ID: ${courseId}`);
+      
+      // Get basic course info
+      const courseResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_course_get_courses_by_field',
+          field: 'id',
+          value: courseId,
+        },
+      });
+
+      let courseInfo = null;
+      if (courseResponse.data && courseResponse.data.courses && courseResponse.data.courses.length > 0) {
+        courseInfo = courseResponse.data.courses[0];
+      }
+
+      // Get course contents (modules and activities)
+      const contents = await this.getCourseContents(courseId);
+      
+      // Get course completion status
+      const completion = await this.getCourseCompletion(courseId);
+      
+      // Get course grades
+      const grades = await this.getCourseGrades(courseId);
+
+      // Get course activities with completion
+      const activities = await this.getCourseActivities(courseId);
+
+      return {
+        courseInfo,
+        contents,
+        completion,
+        grades,
+        activities,
+        totalModules: activities.length,
+        completedModules: activities.filter(activity => 
+          activity.completion && activity.completion.state === 1
+        ).length,
+      };
+    } catch (error: any) {
+      console.error('❌ Error fetching course details:', error.response?.data || error.message);
+      return null;
+    }
+  },
+
+  // Helper function to get current user ID
+  async getCurrentUserId() {
+    try {
+      const profile = await this.getProfile();
+      return profile?.id?.toString() || '1';
+    } catch (error) {
+      console.warn('Could not get current user ID, using fallback');
+      return '1';
+    }
+  },
 };
 
 // Test connection on startup (but don't block the app)
