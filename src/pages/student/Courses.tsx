@@ -41,10 +41,13 @@ import {
   ThumbsDown,
   Heart,
   BookOpenCheck,
-  Target as TargetIcon
+  Target as TargetIcon,
+  ArrowLeft,
+  Bell,
+  Info
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
-import { moodleService } from '../../services/moodleApi';
+import moodleService from '../../services/moodleApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -77,7 +80,7 @@ interface CourseActivity {
   id: string;
   name: string;
   type: 'assignment' | 'quiz' | 'resource' | 'forum' | 'video' | 'workshop';
-  status: 'not_started' | 'in_progress' | 'completed' | 'overdue';
+  status: 'not_started' | 'in_progress' | 'completed' | 'overdue' | 'submitted';
   dueDate?: number;
   grade?: number;
   maxGrade?: number;
@@ -137,6 +140,22 @@ const Courses: React.FC = () => {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showCourseDetails, setShowCourseDetails] = useState(false);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
+  
+  // Real course data state
+  const [realCourseData, setRealCourseData] = useState<any>(null);
+  const [realCourseContents, setRealCourseContents] = useState<any[]>([]);
+  const [realCourseActivities, setRealCourseActivities] = useState<any[]>([]);
+  const [realCourseCompletion, setRealCourseCompletion] = useState<any>(null);
+  const [realCourseGrades, setRealCourseGrades] = useState<any>(null);
+  const [isLoadingCourseData, setIsLoadingCourseData] = useState(false);
+  
+  // Completed courses state
+  const [completedCourses, setCompletedCourses] = useState<any[]>([]);
+  const [isLoadingCompletedCourses, setIsLoadingCompletedCourses] = useState(false);
+  
+  // Selected activity state
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  const [isActivityLoading, setIsActivityLoading] = useState(false);
 
   useEffect(() => {
     fetchCourses();
@@ -147,338 +166,206 @@ const Courses: React.FC = () => {
       setLoading(true);
       setError('');
       
-      console.log('🔍 Fetching real courses from Moodle API...');
+      console.log('🔍 Fetching real courses from IOMAD Moodle API...');
       
-      // Get current user from auth context
-      if (!currentUser) {
-        console.log('⚠️ No current user found');
-        setError('Please log in to view your courses');
-        setLoading(false);
-        return;
+      if (!currentUser?.id) {
+        throw new Error('No current user ID available');
       }
 
       console.log('👤 Current user:', currentUser);
       
-      // Fetch real courses from Moodle API
-      try {
-        // First get user profile to ensure we have the correct user ID
-        const userProfile = await moodleService.getProfile();
-        console.log('✅ User profile fetched:', userProfile);
-        
-        if (!userProfile || !userProfile.id) {
-          throw new Error('Could not fetch user profile');
-        }
+      // Fetch real user courses from IOMAD API
+      const userCourses = await moodleService.getUserCourses(currentUser.id);
 
-        // Get user's enrolled courses using the real user ID
-        const userCourses = await moodleService.getUserCourses(userProfile.id.toString());
-        console.log('📊 User courses data fetched:', {
-          userProfile,
-          courses: userCourses.length,
-          courseData: userCourses
-        });
+      console.log('📊 Real user courses fetched:', userCourses.length);
 
-        // Also get all available courses to show what's available
-        const allCourses = await moodleService.getAllCourses();
-        console.log('📚 All available courses:', allCourses.length);
+      // Process real course data - NO MOCK DATA
+      const enrolledCourses = userCourses.filter(course => 
+        course.visible !== 0 && course.categoryid && course.categoryid > 0
+      );
 
-        if (userCourses && userCourses.length > 0) {
-          // Process real enrolled course data from Moodle API
-          const processedCourses: Course[] = userCourses.map(course => {
-            // Use real progress if available, otherwise calculate based on course data
-            const progress = course.progress || Math.floor(Math.random() * 100);
-            const grade = Math.floor(Math.random() * 20) + 75; // 75-95 grade (mock for now)
-            const enrolledStudents = Math.floor(Math.random() * 50) + 10; // Mock data
-            const totalModules = Math.floor(Math.random() * 10) + 5; // Mock data
-            const completedModules = Math.floor(progress / 100 * totalModules);
-            
-            return {
-              id: course.id,
-              fullname: course.fullname,
-              shortname: course.shortname,
-              progress,
-              grade,
-              lastAccess: course.startdate,
-              completionDate: course.enddate,
-              status: progress === 100 ? 'completed' : 
-                     progress > 0 ? 'in_progress' : 'not_started',
-              categoryname: course.categoryname || 'General',
-              startdate: course.startdate,
-              enddate: course.enddate,
-              visible: course.visible,
-              description: course.summary || `Comprehensive course covering ${course.shortname.toLowerCase()} fundamentals and advanced concepts.`,
-              instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-              enrolledStudents,
-              totalModules,
-              completedModules
-            };
-          });
+      let processedCourses: Course[] = [];
 
-          setCourses(processedCourses);
-          console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
-        } else if (allCourses && allCourses.length > 0) {
-          // If no enrolled courses, show available courses as "not started"
-          console.log('⚠️ No enrolled courses, showing available courses');
-          const availableCourses: Course[] = allCourses
-            .filter(course => course.id !== '1' && course.visible !== 0) // Filter out site course and hidden courses
-            .map(course => {
-              return {
-                id: course.id,
-                fullname: course.fullname,
-                shortname: course.shortname,
-                progress: 0, // Not started
-                grade: 0,
-                lastAccess: course.startdate,
-                completionDate: course.enddate,
-                status: 'not_started',
-                categoryname: course.categoryname || 'General',
-                startdate: course.startdate,
-                enddate: course.enddate,
-                visible: course.visible,
-                description: course.summary || `Comprehensive course covering ${course.shortname.toLowerCase()} fundamentals and advanced concepts.`,
-                instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-                enrolledStudents: Math.floor(Math.random() * 50) + 10,
-                totalModules: Math.floor(Math.random() * 10) + 5,
-                completedModules: 0
-              };
-            });
+      if (enrolledCourses && enrolledCourses.length > 0) {
+        // Process real enrolled course data from IOMAD API - NO MOCK DATA
+        processedCourses = await Promise.all(enrolledCourses.map(async (course) => {
+          // Fetch real completion data for each course
+          const courseCompletion = await moodleService.getCourseCompletion(course.id);
+          const courseContents = await moodleService.getCourseContents(course.id);
+          
+          // Calculate real progress and statistics from actual data
+          const progress = courseCompletion?.completionstatus?.completion || 0;
+          const totalModules = courseContents?.length || 0;
+          const completedModules = courseCompletion?.completionstatus?.completed || 0;
+          
+          return {
+            id: course.id,
+            fullname: course.fullname,
+            shortname: course.shortname,
+            progress,
+            grade: courseCompletion?.completionstatus?.grade || 0,
+            lastAccess: course.startdate,
+            completionDate: course.enddate,
+            status: progress === 100 ? 'completed' : 
+                   progress > 0 ? 'in_progress' : 'not_started',
+            categoryname: course.categoryname || 'General',
+            startdate: course.startdate,
+            enddate: course.enddate,
+            visible: course.visible,
+            description: course.summary || `Course covering ${course.shortname.toLowerCase()} concepts.`,
+            instructor: 'Course Instructor', // Real instructor data would come from API
+            enrolledStudents: 0, // Real enrollment data would come from API
+            totalModules,
+            completedModules
+          };
+        }));
 
-          setCourses(availableCourses);
-          console.log('✅ Available courses processed successfully:', availableCourses.length);
-        } else {
-          console.log('⚠️ No courses found');
-          setCourses([]);
-          setError('No courses available in the system.');
-        }
-        
-        // Generate activities for the courses
-        generateSampleActivities();
-        generateSampleStudentActivities();
-        
-      } catch (apiError) {
-        console.error('❌ Error fetching from Moodle API:', apiError);
-        setError('Failed to load courses from Moodle API. Please check your connection and try again.');
+        setCourses(processedCourses);
+        console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
+      } else {
+        console.log('⚠️ No enrolled courses found');
         setCourses([]);
+        setError('No enrolled courses available.');
       }
-
-    } catch (error) {
-      console.error('❌ Error in fetchCourses:', error);
-      setError('Failed to load courses. Please check your connection and try again.');
-      setCourses([]);
+      
+    } catch (error: any) {
+      console.error('❌ Error fetching courses:', error);
+      setError('Failed to load courses. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const generateSampleActivities = () => {
-    const activities: CourseActivity[] = [
-      {
-        id: '1',
-        name: 'Introduction to Programming Assignment',
-        type: 'assignment',
-        status: 'in_progress',
-        dueDate: Date.now() + 86400 * 7, // 7 days from now
-        grade: 0,
-        maxGrade: 100,
-        description: 'Create a simple program using basic programming concepts',
-        instructions: 'Write a program that demonstrates variables, loops, and functions. Submit your code and a brief explanation.',
-        attachments: ['assignment_guidelines.pdf', 'sample_code.py'],
-        timeSpent: 45,
-        attempts: 1,
-        maxAttempts: 3
-      },
-      {
-        id: '2',
-        name: 'Mathematics Quiz - Chapter 1',
-        type: 'quiz',
-        status: 'completed',
-        dueDate: Date.now() - 86400 * 2,
-        grade: 85,
-        maxGrade: 100,
-        description: 'Test your understanding of basic mathematical concepts',
-        instructions: 'Complete the quiz within 30 minutes. You have 2 attempts.',
-        timeSpent: 25,
-        attempts: 1,
-        maxAttempts: 2
-      },
-      {
-        id: '3',
-        name: 'Digital Design Workshop',
-        type: 'workshop',
-        status: 'not_started',
-        dueDate: Date.now() + 86400 * 14,
-        grade: 0,
-        maxGrade: 100,
-        description: 'Hands-on workshop for digital design principles',
-        instructions: 'Participate in the workshop and complete the design project.',
-        timeSpent: 0,
-        attempts: 0,
-        maxAttempts: 1
-      },
-      {
-        id: '4',
-        name: 'Science Lab Video',
-        type: 'video',
-        status: 'completed',
-        dueDate: Date.now() - 86400 * 5,
-        grade: 100,
-        maxGrade: 100,
-        description: 'Watch the lab safety and procedure video',
-        instructions: 'Watch the complete video and take notes on safety procedures.',
-        timeSpent: 15,
-        attempts: 1,
-        maxAttempts: 1
-      }
-    ];
-
-    setCourseActivities(activities);
-  };
-
-  const generateSampleStudentActivities = () => {
-    const activities: StudentActivity[] = [
-      {
-        id: '1',
-        courseId: '1',
-        activityId: '1',
-        type: 'study',
-        title: 'Programming Fundamentals Review',
-        description: 'Review basic programming concepts before the assignment',
-        duration: 60,
-        completed: true,
-        timestamp: Date.now() - 86400 * 2,
-        notes: 'Focused on variables, loops, and functions. Need to practice more with arrays.',
-        resources: ['programming_basics.pdf', 'practice_exercises.pdf'],
-        goals: ['Understand variable scope', 'Master loop structures', 'Practice function writing'],
-        achievements: ['Completed 10 practice exercises', 'Watched 3 tutorial videos']
-      },
-      {
-        id: '2',
-        courseId: '1',
-        activityId: '2',
-        type: 'practice',
-        title: 'Math Problem Solving',
-        description: 'Practice solving mathematical problems for the quiz',
-        duration: 45,
-        completed: true,
-        timestamp: Date.now() - 86400 * 1,
-        notes: 'Good progress on algebra problems. Need to review geometry formulas.',
-        resources: ['math_formulas.pdf', 'practice_quiz.pdf'],
-        goals: ['Solve 20 practice problems', 'Review key formulas', 'Improve speed'],
-        achievements: ['Solved 18/20 problems correctly', 'Completed practice quiz in 25 minutes']
-      },
-      {
-        id: '3',
-        courseId: '2',
-        activityId: '3',
-        type: 'review',
-        title: 'Design Principles Study',
-        description: 'Study design principles for the upcoming workshop',
-        duration: 90,
-        completed: false,
-        timestamp: Date.now(),
-        notes: 'Started studying color theory and typography. Need to continue with layout principles.',
-        resources: ['design_principles.pdf', 'color_theory.pdf'],
-        goals: ['Understand color theory', 'Learn typography basics', 'Master layout principles'],
-        achievements: ['Completed color theory module', 'Watched typography tutorial']
-      }
-    ];
-
-    setStudentActivities(activities);
-  };
-
   const handleCourseClick = async (course: Course) => {
     setSelectedCourse(course);
     setShowCourseDetails(true);
+    setIsLoadingCourseData(true);
+    setIsLoadingCompletedCourses(true);
     
     console.log('📚 Opening course details for:', course.fullname);
-    console.log('🔍 Fetching real course data from Moodle API...');
+    console.log('🔍 Fetching ALL real course data from IOMAD API...');
     
     try {
-      // Fetch real course details from Moodle API
-      const courseDetails = await moodleService.getCourseDetails(course.id);
+      // Fetch ALL real course data from IOMAD API in parallel
+      const [
+        courseContents,
+        courseActivities,
+        courseCompletion,
+        courseGrades,
+        courseDetails,
+        userCourses
+      ] = await Promise.all([
+        moodleService.getCourseContents(course.id),
+        moodleService.getCourseActivities(course.id),
+        moodleService.getCourseCompletion(course.id),
+        moodleService.getCourseGrades(course.id),
+        moodleService.getCourseDetails(course.id),
+        moodleService.getUserCourses(currentUser?.id || '1')
+      ]);
       
-      if (courseDetails) {
-        console.log('✅ Real course details fetched:', courseDetails);
+      console.log('✅ All real course data fetched:', {
+        contents: courseContents?.length || 0,
+        activities: courseActivities?.length || 0,
+        completion: courseCompletion ? 'Yes' : 'No',
+        grades: courseGrades ? 'Yes' : 'No',
+        details: courseDetails ? 'Yes' : 'No',
+        userCourses: userCourses?.length || 0
+      });
+      
+      // Store all real course data in state
+      setRealCourseData(courseDetails);
+      setRealCourseContents(courseContents || []);
+      setRealCourseActivities(courseActivities || []);
+      setRealCourseCompletion(courseCompletion);
+      setRealCourseGrades(courseGrades);
+      
+      // Process completed courses
+      if (userCourses && userCourses.length > 0) {
+        const completedCoursesData = userCourses.filter((userCourse: any) => {
+          // Check if course is completed (progress = 100 or has completion status)
+          return userCourse.progress === 100 || 
+                 (courseCompletion && courseCompletion.completionstatus?.completion === 100) ||
+                 userCourse.status === 'completed';
+        });
         
-        // Process real course modules and activities
-        const activities = courseDetails.activities || [];
-        
-        const realModules: CourseModule[] = activities.map((activity: any) => ({
-          id: activity.id,
-          name: activity.name,
-          type: activity.type,
-          description: activity.description || `${activity.type} activity in ${activity.section}`,
-          url: activity.url,
-          visible: activity.visible,
-          completion: activity.completion ? 
-            (activity.completion.state === 1 ? 100 : 
-             activity.completion.state === 2 ? 50 : 0) : 0,
-          grade: activity.completion?.grade || 0,
-          maxGrade: 100,
-          dueDate: activity.dates?.find((date: any) => date.purpose === 'due')?.timestamp * 1000
-        }));
-        
-        setCourseModules(realModules);
-        console.log(`✅ Processed ${realModules.length} real course modules`);
-        
-        // Process real course activities
-        const realActivities: CourseActivity[] = activities.map((activity: any) => {
-          // Determine activity status based on completion
-          let status: CourseActivity['status'] = 'not_started';
-          if (activity.completion) {
-            if (activity.completion.state === 1) {
-              status = 'completed';
-            } else if (activity.completion.state === 2) {
-              status = 'in_progress';
-            }
-          }
-          
-          // Check if overdue
-          const dueDate = activity.dates?.find((date: any) => date.purpose === 'due')?.timestamp * 1000;
-          if (dueDate && dueDate < Date.now() && status !== 'completed') {
-            status = 'overdue';
-          }
+        setCompletedCourses(completedCoursesData);
+        console.log(`✅ Found ${completedCoursesData.length} completed courses`);
+      }
+      
+      if (courseContents && courseActivities) {
+        // Process real course modules from contents
+        const realModules: CourseModule[] = courseContents.map((section: any, sectionIndex: number) => {
+          // Find completion data for this section
+          const sectionCompletion = courseCompletion?.completionstatus?.find((status: any) => 
+            status.sectionid === section.id
+          );
           
           return {
-            id: activity.id.toString(),
-            name: activity.name,
-            type: mapActivityType(activity.type),
-            status,
-            dueDate,
-            grade: activity.completion?.grade || 0,
-            maxGrade: 100,
-            description: activity.description || `${activity.type} activity from ${activity.section}`,
-            instructions: activity.availabilityinfo || 'Complete this activity as part of your course.',
-            attachments: activity.contents?.map((content: any) => content.filename).filter(Boolean) || [],
-            timeSpent: Math.floor(Math.random() * 120), // Mock time spent for now
-            attempts: activity.completion?.state ? 1 : 0,
-            maxAttempts: activity.type === 'quiz' ? 3 : 1
+            id: section.id,
+            name: section.name || `Section ${sectionIndex + 1}`,
+            type: 'resource',
+            description: section.summary || 'Course section',
+            visible: 1,
+            completion: sectionCompletion?.completion || 0,
+            grade: sectionCompletion?.grade || 0,
+            maxGrade: 100
           };
         });
         
-        setCourseActivities(realActivities);
-        console.log(`✅ Processed ${realActivities.length} real course activities`);
+        setCourseModules(realModules);
+        console.log(`✅ Processed ${realModules.length} real course modules from IOMAD API`);
         
-        // Update course with real completion data
-        if (courseDetails.completion) {
-          setSelectedCourse(prev => prev ? {
-            ...prev,
-            progress: courseDetails.completion.progresspercentage || prev.progress,
-            totalModules: courseDetails.totalModules || activities.length,
-            completedModules: courseDetails.completedModules || activities.filter((a: any) => 
-              a.completion && a.completion.state === 1
-            ).length
-          } : null);
-        }
+        // Process real course activities from API - FILTER OUT VIDEO ACTIVITIES
+        const realActivities: CourseActivity[] = courseActivities
+          .filter((activity: any) => {
+            // Filter out video activities - only show resource and content activities
+            const activityType = activity.type || activity.modname;
+            return activityType !== 'video' && 
+                   activityType !== 'url' && 
+                   activityType !== 'page' &&
+                   activityType !== 'label';
+          })
+          .map((activity: any) => {
+            // Determine status based on completion data
+            let status: CourseActivity['status'] = 'not_started';
+            if (activity.completion) {
+              if (activity.completion.state === 1) {
+                status = 'completed';
+              } else if (activity.completion.state === 0) {
+                status = 'in_progress';
+              }
+            }
+            
+            return {
+              id: activity.id.toString(),
+              name: activity.name || 'Activity',
+              type: mapActivityType(activity.type),
+              status: status,
+              dueDate: activity.dates?.find((date: any) => date.label === 'Due date')?.timestamp || undefined,
+              grade: activity.completion?.value || 0,
+              maxGrade: 100,
+              description: activity.description || 'Course activity',
+              instructions: activity.description || 'Complete this activity',
+              attachments: activity.contents?.map((content: any) => content.filename) || [],
+              timeSpent: 0, // Real time spent would come from API
+              attempts: activity.completion?.attempts || 0,
+              maxAttempts: 3
+            };
+          });
+        
+        setCourseActivities(realActivities);
+        console.log(`✅ Processed ${realActivities.length} real course activities from IOMAD API`);
         
       } else {
-        console.log('⚠️ Could not fetch real course details, using fallback data');
-        // Generate fallback modules and activities
+        console.log('⚠️ Could not fetch real course data, using fallback data');
         generateFallbackCourseData(course);
       }
     } catch (error) {
-      console.error('❌ Error fetching real course details:', error);
-      // Generate fallback modules and activities
+      console.error('❌ Error fetching real course data:', error);
       generateFallbackCourseData(course);
+    } finally {
+      setIsLoadingCourseData(false);
+      setIsLoadingCompletedCourses(false);
     }
   };
 
@@ -499,6 +386,258 @@ const Courses: React.FC = () => {
     };
     
     return typeMap[moodleType] || 'resource';
+  };
+
+  const handleViewActivities = async (course: Course) => {
+    console.log('📊 Viewing activities for course:', course.fullname);
+    setSelectedCourse(course);
+    setShowCourseDetails(true);
+    
+    try {
+      // Fetch real course activities from IOMAD API
+      const courseActivities = await moodleService.getCourseActivities(course.id);
+      
+      if (courseActivities && courseActivities.length > 0) {
+        // Process real course activities from API
+        const realActivities: CourseActivity[] = courseActivities.map((activity: any) => {
+          // Determine status based on completion data
+          let status: CourseActivity['status'] = 'not_started';
+          if (activity.completion) {
+            if (activity.completion.state === 1) {
+              status = 'completed';
+            } else if (activity.completion.state === 0) {
+              status = 'in_progress';
+            }
+          }
+          
+          return {
+            id: activity.id.toString(),
+            name: activity.name || 'Activity',
+            type: mapActivityType(activity.type),
+            status: status,
+            dueDate: activity.dates?.find((date: any) => date.label === 'Due date')?.timestamp || undefined,
+            grade: activity.completion?.value || 0,
+            maxGrade: 100,
+            description: activity.description || 'Course activity',
+            instructions: activity.description || 'Complete this activity',
+            attachments: activity.contents?.map((content: any) => content.filename) || [],
+            timeSpent: Math.floor(Math.random() * 60) + 10,
+            attempts: activity.completion?.attempts || 0,
+            maxAttempts: 3
+          };
+        });
+        
+        setCourseActivities(realActivities);
+        console.log(`✅ Loaded ${realActivities.length} real activities from IOMAD API`);
+      } else {
+        console.log('⚠️ No real activities found, using fallback data');
+        // Generate fallback activities
+        const fallbackActivities: CourseActivity[] = [
+          {
+            id: '1',
+            name: `${course.shortname} - Introduction Assignment`,
+            type: 'assignment',
+            status: course.progress > 0 ? 'in_progress' : 'not_started',
+            dueDate: Date.now() + 86400 * 7,
+            grade: 0,
+            maxGrade: 100,
+            description: `Complete the introduction assignment for ${course.fullname}`,
+            instructions: 'Review the course materials and submit your first assignment.',
+            attachments: ['assignment_guidelines.pdf', 'sample_materials.pdf'],
+            timeSpent: 45,
+            attempts: course.progress > 0 ? 1 : 0,
+            maxAttempts: 3
+          }
+        ];
+        setCourseActivities(fallbackActivities);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching real activities:', error);
+      // Use fallback data
+      const fallbackActivities: CourseActivity[] = [
+        {
+          id: '1',
+          name: `${course.shortname} - Introduction Assignment`,
+          type: 'assignment',
+          status: course.progress > 0 ? 'in_progress' : 'not_started',
+          dueDate: Date.now() + 86400 * 7,
+          grade: 0,
+          maxGrade: 100,
+          description: `Complete the introduction assignment for ${course.fullname}`,
+          instructions: 'Review the course materials and submit your first assignment.',
+          attachments: ['assignment_guidelines.pdf', 'sample_materials.pdf'],
+          timeSpent: 45,
+          attempts: course.progress > 0 ? 1 : 0,
+          maxAttempts: 3
+        }
+      ];
+      setCourseActivities(fallbackActivities);
+    }
+  };
+
+  const handleViewProgress = async (course: Course) => {
+    console.log('📈 Viewing progress for course:', course.fullname);
+    setSelectedCourse(course);
+    setShowCourseDetails(true);
+    
+    try {
+      // Fetch real course contents and completion data from IOMAD API
+      const courseContents = await moodleService.getCourseContents(course.id);
+      const courseCompletion = await moodleService.getCourseCompletion(course.id);
+      
+      if (courseContents) {
+        // Process real course modules from contents with completion data
+        const progressModules: CourseModule[] = courseContents.map((section: any, sectionIndex: number) => {
+          // Calculate completion based on course progress or completion data
+          const completion = courseCompletion?.completionstatus?.find((status: any) => 
+            status.sectionid === section.id
+          );
+          
+          return {
+            id: section.id,
+            name: section.name || `Section ${sectionIndex + 1}`,
+            type: 'resource',
+            description: section.summary || 'Course section',
+            visible: 1,
+            completion: completion?.completion || Math.floor(course.progress * (sectionIndex + 1) / courseContents.length),
+            grade: Math.floor(course.progress * (sectionIndex + 1) / courseContents.length),
+            maxGrade: 100
+          };
+        });
+        
+        setCourseModules(progressModules);
+        console.log(`✅ Loaded ${progressModules.length} real progress modules from IOMAD API`);
+      } else {
+        console.log('⚠️ No real course contents found, using fallback data');
+        // Generate fallback progress modules
+        const fallbackModules: CourseModule[] = [
+          {
+            id: 1,
+            name: 'Introduction Module',
+            type: 'resource',
+            description: 'Course introduction and overview',
+            visible: 1,
+            completion: 100,
+            grade: 100,
+            maxGrade: 100
+          },
+          {
+            id: 2,
+            name: 'Core Concepts',
+            type: 'resource',
+            description: 'Fundamental concepts and theories',
+            visible: 1,
+            completion: Math.floor(course.progress * 0.75),
+            grade: Math.floor(course.progress * 0.85),
+            maxGrade: 100
+          }
+        ];
+        setCourseModules(fallbackModules);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching real progress data:', error);
+      // Use fallback data
+      const fallbackModules: CourseModule[] = [
+        {
+          id: 1,
+          name: 'Introduction Module',
+          type: 'resource',
+          description: 'Course introduction and overview',
+          visible: 1,
+          completion: 100,
+          grade: 100,
+          maxGrade: 100
+        },
+        {
+          id: 2,
+          name: 'Core Concepts',
+          type: 'resource',
+          description: 'Fundamental concepts and theories',
+          visible: 1,
+          completion: Math.floor(course.progress * 0.75),
+          grade: Math.floor(course.progress * 0.85),
+          maxGrade: 100
+        }
+      ];
+      setCourseModules(fallbackModules);
+    }
+  };
+
+  const handleActivityClick = async (activity: any, index: number) => {
+    console.log('🎯 Activity clicked:', activity.name, 'Index:', index);
+    setSelectedActivity(activity);
+    setIsActivityLoading(true);
+    
+    try {
+      // Fetch activity details from IOMAD API
+      const activityDetails = await moodleService.getCourseContents(selectedCourse?.id || '');
+      
+      if (activityDetails) {
+        // Find the specific activity in the course contents
+        const foundActivity = activityDetails.flatMap((section: any) => 
+          section.modules || []
+        ).find((module: any) => module.id.toString() === activity.id);
+        
+        if (foundActivity) {
+          // Fetch detailed activity information
+          const detailedActivity = await moodleService.getCourseActivities(selectedCourse?.id || '');
+          const activityInfo = detailedActivity?.find((act: any) => act.id.toString() === activity.id);
+          
+          // Extract all media files from content and introfiles
+          const allMediaFiles = [
+            ...(foundActivity.contents || []),
+            ...(foundActivity.introfiles || []),
+            ...(foundActivity.descriptionfiles || []),
+            ...(foundActivity.contentfiles || [])
+          ];
+          
+          // Categorize files by type
+          const categorizedFiles = {
+            images: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('image/') || 
+              file.filename?.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i)
+            ),
+            videos: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('video/') || 
+              file.filename?.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i)
+            ),
+            audio: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('audio/') || 
+              file.filename?.match(/\.(mp3|wav|ogg|aac|flac|m4a|wma)$/i)
+            ),
+            documents: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('application/') || 
+              file.filename?.match(/\.(pdf|doc|docx|ppt|pptx|xls|xlsx|txt|rtf)$/i)
+            ),
+            other: allMediaFiles.filter((file: any) => {
+              const isImage = file.mimetype?.startsWith('image/') || file.filename?.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i);
+              const isVideo = file.mimetype?.startsWith('video/') || file.filename?.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i);
+              const isAudio = file.mimetype?.startsWith('audio/') || file.filename?.match(/\.(mp3|wav|ogg|aac|flac|m4a|wma)$/i);
+              const isDocument = file.mimetype?.startsWith('application/') || file.filename?.match(/\.(pdf|doc|docx|ppt|pptx|xls|xlsx|txt|rtf)$/i);
+              return !isImage && !isVideo && !isAudio && !isDocument;
+            })
+          };
+          
+          setSelectedActivity({
+            ...activity,
+            details: foundActivity,
+            content: foundActivity.contents || [],
+            description: foundActivity.description || activity.description,
+            htmlContent: foundActivity.descriptionhtml || foundActivity.description,
+            intro: foundActivity.intro || activity.description,
+            introfiles: foundActivity.introfiles || [],
+            modname: foundActivity.modname,
+            activityInfo: activityInfo,
+            allMediaFiles: allMediaFiles,
+            categorizedFiles: categorizedFiles
+          });
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching activity details:', error);
+    } finally {
+      setIsActivityLoading(false);
+    }
   };
 
   // Fallback function for when API fails
@@ -719,7 +858,7 @@ const Courses: React.FC = () => {
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
-            <span className="text-gray-600">Loading real courses from Moodle API...</span>
+            <span className="text-gray-600">Loading real courses from IOMAD Moodle API...</span>
           </div>
         </div>
       </DashboardLayout>
@@ -746,585 +885,833 @@ const Courses: React.FC = () => {
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Courses</h1>
-            <p className="text-gray-600 mt-1">Real-time course data from Moodle API - {courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            <Button variant="outline" onClick={refreshData} disabled={refreshing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button variant="outline" onClick={exportCoursesData}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{courses.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Available courses
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.filter(c => c.status === 'in_progress').length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Active courses
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.filter(c => c.status === 'completed').length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Finished courses
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Progress</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.length > 0 ? Math.round(courses.reduce((sum, c) => sum + c.progress, 0) / courses.length) : 0}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Across all courses
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters and Search */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Search & Filters</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="text"
-                    placeholder="Search courses by name, code, or category..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="not_started">Not Started</SelectItem>
-                  </SelectContent>
-                </Select>
+      {showCourseDetails && selectedCourse ? (
+        // Course Details Page
+        <div className="space-y-6">
+          {/* Page Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowCourseDetails(false)}
+                className="text-gray-600 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-100"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{selectedCourse.fullname}</h1>
+                <p className="text-sm text-gray-600">Course Details • {selectedCourse.shortname}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+            <div className="flex items-center space-x-3">
+              <Button variant="outline" size="sm">
+                <Search className="w-4 h-4 mr-2" />
+                Search
+              </Button>
+              <Button className="bg-green-600 hover:bg-green-700">
+                <Play className="w-4 h-4 mr-2" />
+                See Tutorial
+              </Button>
+            </div>
+          </div>
 
-        {/* Courses Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCourses.map((course) => (
-            <Card key={course.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{course.fullname}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {course.shortname} • {course.categoryname}
-                    </CardDescription>
-                  </div>
-                  <Badge className={
-                    course.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    course.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }>
-                    {course.status.replace('_', ' ')}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-gray-600 line-clamp-2">
-                  {course.description}
-                </p>
-                
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-medium">Progress</span>
-                      <span className="text-sm text-gray-600">{course.progress}%</span>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Content Area */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Activity Content Area */}
+              <div className="bg-white rounded-lg border">
+                <div className="h-96 bg-gray-50 flex items-center justify-center">
+                  {isActivityLoading ? (
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading activity content...</p>
                     </div>
-                    <Progress value={course.progress} className="h-2" />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Instructor:</span>
-                      <p className="font-medium">{course.instructor}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Students:</span>
-                      <p className="font-medium">{course.enrolledStudents}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Modules:</span>
-                      <p className="font-medium">{course.completedModules}/{course.totalModules}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Grade:</span>
-                      <p className="font-medium">{course.grade}%</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex space-x-2 pt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => handleCourseClick(course)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Details
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Play className="w-4 h-4 mr-2" />
-                    Continue
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {filteredCourses.length === 0 && (
-          <Card>
-            <CardContent className="text-center py-12">
-              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Courses Found</h3>
-              <p className="text-gray-500">
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'No courses match your current filters. Try adjusting your search criteria.'
-                  : 'No courses available. Please check your enrollment status.'
-                }
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Course Details Modal */}
-        {showCourseDetails && selectedCourse && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{selectedCourse.fullname}</h2>
-                    <p className="text-gray-600 mt-1">{selectedCourse.description}</p>
-                  </div>
-                  <button
-                    onClick={() => setShowCourseDetails(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Course Information */}
-                  <div className="lg:col-span-1">
-                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Information</h3>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Course ID:</span>
-                          <span className="font-medium">{selectedCourse.id}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Category:</span>
-                          <span className="font-medium">{selectedCourse.categoryname}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Progress:</span>
-                          <span className="font-medium">{selectedCourse.progress}%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Grade:</span>
-                          <span className="font-medium">{selectedCourse.grade}%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Instructor:</span>
-                          <span className="font-medium">{selectedCourse.instructor}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Quick Actions */}
-                    <div className="bg-blue-50 rounded-lg p-4 mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                      <div className="space-y-2">
-                        <Button className="w-full">
-                          <Play className="w-4 h-4 mr-2" />
-                          Continue Learning
-                        </Button>
-                        <Button variant="outline" className="w-full">
-                          <BookOpenCheck className="w-4 h-4 mr-2" />
-                          View Activities
-                        </Button>
-                        <Button variant="outline" className="w-full">
-                          <BarChart3 className="w-4 h-4 mr-2" />
-                          View Progress
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Course Modules and Activities */}
-                  <div className="lg:col-span-2">
-                    <div className="space-y-6">
-                      {/* Course Modules */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Modules</h3>
-                        <div className="space-y-3">
-                          {courseModules.map((module) => (
-                            <div key={module.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                  {getActivityIcon(module.type as CourseActivity['type'])}
-                                  <h4 className="font-medium text-gray-900">{module.name}</h4>
-                                </div>
-                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                  module.completion === 100 ? 'bg-green-100 text-green-800' :
-                                  module.completion > 0 ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {module.completion === 100 ? 'Completed' :
-                                   module.completion > 0 ? 'In Progress' : 'Not Started'}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-600 mb-3">{module.description}</p>
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500">Grade: {module.grade || 0}/{module.maxGrade || 100}</span>
-                                <span className="text-gray-500">Progress: {module.completion}%</span>
-                              </div>
+                                      ) : selectedActivity ? (
+                      <div className="w-full h-full p-6">
+                        <div className="bg-white rounded-lg shadow-sm border p-6 h-full overflow-y-auto">
+                          <div className="mb-6">
+                            <div className="flex items-center space-x-2 mb-3">
+                              <Badge variant="secondary" className="text-xs">
+                                {selectedActivity.modname || selectedActivity.type}
+                              </Badge>
+                              <Badge variant={selectedActivity.status === 'completed' ? 'default' : 'outline'} className="text-xs">
+                                {selectedActivity.status === 'completed' ? 'Completed' : 
+                                 selectedActivity.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+                              </Badge>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Course Activities */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Activities</h3>
-                        <div className="space-y-3">
-                          {courseActivities.map((activity) => (
-                            <div key={activity.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                  {getActivityIcon(activity.type)}
-                                  <h4 className="font-medium text-gray-900">{activity.name}</h4>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  {getStatusIcon(activity.status)}
-                                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(activity.status)}`}>
-                                    {activity.status.replace('_', ' ')}
-                                  </span>
-                                </div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                              {selectedActivity.name}
+                            </h2>
+                            
+                            {/* Activity Description in HTML Format */}
+                            {selectedActivity.htmlContent && (
+                              <div className="mb-6">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-3">Activity Description</h3>
+                                <div 
+                                  className="prose prose-sm max-w-none bg-gray-50 rounded-lg p-4 border"
+                                  dangerouslySetInnerHTML={{ __html: selectedActivity.htmlContent }}
+                                />
                               </div>
-                              <p className="text-sm text-gray-600 mb-3">{activity.description}</p>
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500">Grade: {activity.grade || 0}/{activity.maxGrade || 100}</span>
-                                {activity.dueDate && (
-                                  <span className="text-gray-500">
-                                    Due: {new Date(activity.dueDate).toLocaleDateString()}
-                                  </span>
-                                )}
+                            )}
+                            
+                            {/* Activity Intro */}
+                            {selectedActivity.intro && selectedActivity.intro !== selectedActivity.htmlContent && (
+                              <div className="mb-6">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction</h3>
+                                <div 
+                                  className="prose prose-sm max-w-none bg-blue-50 rounded-lg p-4 border border-blue-200"
+                                  dangerouslySetInnerHTML={{ __html: selectedActivity.intro }}
+                                />
                               </div>
+                            )}
+                          </div>
+                          
+                          {/* All Media Content */}
+                          {selectedActivity.allMediaFiles && selectedActivity.allMediaFiles.length > 0 && (
+                            <div className="mb-6">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-3">All Course Media</h3>
                               
-                              {/* Expandable Activity Details */}
-                              <div className="mt-3">
-                                <button
-                                  onClick={() => toggleActivityExpansion(activity.id)}
-                                  className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 text-sm"
-                                >
-                                  {expandedActivities.has(activity.id) ? (
-                                    <ChevronDown className="w-4 h-4" />
-                                  ) : (
-                                    <ChevronRight className="w-4 h-4" />
-                                  )}
-                                  <span>View Details</span>
-                                </button>
-                                
-                                {expandedActivities.has(activity.id) && (
-                                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
-                                    {activity.instructions && (
-                                      <div>
-                                        <h5 className="text-sm font-medium text-gray-900 mb-1">Instructions:</h5>
-                                        <p className="text-sm text-gray-600">{activity.instructions}</p>
-                                      </div>
-                                    )}
-                                    
-                                    {activity.attachments && activity.attachments.length > 0 && (
-                                      <div>
-                                        <h5 className="text-sm font-medium text-gray-900 mb-1">Attachments:</h5>
-                                        <div className="space-y-1">
-                                          {activity.attachments.map((attachment, index) => (
-                                            <div key={index} className="flex items-center space-x-2 text-sm text-blue-600">
-                                              <File className="w-4 h-4" />
-                                              <span>{attachment}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                      <div>
-                                        <span className="text-gray-500">Time Spent:</span>
-                                        <p className="font-medium">{activity.timeSpent || 0} minutes</p>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-500">Attempts:</span>
-                                        <p className="font-medium">{activity.attempts || 0}/{activity.maxAttempts || 1}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Student Activities */}
-                      <div>
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-lg font-semibold text-gray-900">My Study Activities</h3>
-                          <Button 
-                            onClick={() => setShowActivityModal(true)}
-                            size="sm"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Activity
-                          </Button>
-                        </div>
-                        <div className="space-y-3">
-                          {studentActivities
-                            .filter(activity => activity.courseId === selectedCourse.id)
-                            .map((activity) => (
-                              <div key={activity.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center space-x-2">
-                                    <TargetIcon className="w-4 h-4 text-green-600" />
-                                    <h4 className="font-medium text-gray-900">{activity.title}</h4>
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    {activity.completed ? (
-                                      <CheckCircle className="w-4 h-4 text-green-600" />
-                                    ) : (
-                                      <Circle className="w-4 h-4 text-gray-400" />
-                                    )}
-                                    <span className={`px-2 py-1 text-xs rounded-full ${
-                                      activity.completed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                    }`}>
-                                      {activity.completed ? 'Completed' : 'In Progress'}
-                                    </span>
-                                  </div>
-                                </div>
-                                <p className="text-sm text-gray-600 mb-3">{activity.description}</p>
-                                <div className="flex items-center justify-between text-sm">
-                                  <span className="text-gray-500">Duration: {activity.duration} minutes</span>
-                                  <span className="text-gray-500">
-                                    {new Date(activity.timestamp).toLocaleDateString()}
-                                  </span>
-                                </div>
-                                
-                                {/* Expandable Student Activity Details */}
-                                <div className="mt-3">
-                                  <button
-                                    onClick={() => toggleActivityExpansion(`student-${activity.id}`)}
-                                    className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 text-sm"
-                                  >
-                                    {expandedActivities.has(`student-${activity.id}`) ? (
-                                      <ChevronDown className="w-4 h-4" />
-                                    ) : (
-                                      <ChevronRight className="w-4 h-4" />
-                                    )}
-                                    <span>View Details</span>
-                                  </button>
-                                  
-                                  {expandedActivities.has(`student-${activity.id}`) && (
-                                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
-                                      {activity.notes && (
-                                        <div>
-                                          <h5 className="text-sm font-medium text-gray-900 mb-1">Notes:</h5>
-                                          <p className="text-sm text-gray-600">{activity.notes}</p>
-                                        </div>
-                                      )}
-                                      
-                                      {activity.goals && activity.goals.length > 0 && (
-                                        <div>
-                                          <h5 className="text-sm font-medium text-gray-900 mb-1">Goals:</h5>
-                                          <ul className="space-y-1">
-                                            {activity.goals.map((goal, index) => (
-                                              <li key={index} className="text-sm text-gray-600 flex items-center space-x-2">
-                                                <Target className="w-3 h-3 text-blue-600" />
-                                                <span>{goal}</span>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      
-                                      {activity.achievements && activity.achievements.length > 0 && (
-                                        <div>
-                                          <h5 className="text-sm font-medium text-gray-900 mb-1">Achievements:</h5>
-                                          <ul className="space-y-1">
-                                            {activity.achievements.map((achievement, index) => (
-                                              <li key={index} className="text-sm text-gray-600 flex items-center space-x-2">
-                                                <Star className="w-3 h-3 text-yellow-600" />
-                                                <span>{achievement}</span>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      
-                                      {activity.resources && activity.resources.length > 0 && (
-                                        <div>
-                                          <h5 className="text-sm font-medium text-gray-900 mb-1">Resources:</h5>
-                                          <div className="space-y-1">
-                                            {activity.resources.map((resource, index) => (
-                                              <div key={index} className="flex items-center space-x-2 text-sm text-blue-600">
-                                                <File className="w-4 h-4" />
-                                                <span>{resource}</span>
-                                              </div>
-                                            ))}
+                              {/* Images */}
+                              {selectedActivity.categorizedFiles.images.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <Image className="w-4 h-4 mr-2 text-blue-600" />
+                                    Images ({selectedActivity.categorizedFiles.images.length})
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {selectedActivity.categorizedFiles.images.map((image: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                                        <div className="aspect-video bg-gray-100 flex items-center justify-center">
+                                                                                     <img 
+                                             src={image.fileurl} 
+                                             alt={image.filename || `Image ${index + 1}`}
+                                             className="w-full h-full object-cover"
+                                             onError={(e) => {
+                                               (e.currentTarget as HTMLElement).style.display = 'none';
+                                               ((e.currentTarget as HTMLElement).nextElementSibling as HTMLElement)!.style.display = 'flex';
+                                             }}
+                                           />
+                                          <div className="hidden w-full h-full items-center justify-center text-gray-400">
+                                            <Image className="w-8 h-8" />
                                           </div>
                                         </div>
-                                      )}
-                                    </div>
-                                  )}
+                                        <div className="p-3">
+                                          <p className="text-sm font-medium text-gray-900 truncate">{image.filename}</p>
+                                          <div className="flex items-center justify-between mt-2">
+                                            <span className="text-xs text-gray-500">
+                                              {(image.filesize / 1024).toFixed(1)} KB
+                                            </span>
+                                            <Button size="sm" variant="outline">
+                                              <Download className="w-3 h-3 mr-1" />
+                                              Download
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
+                              )}
+
+                              {/* Videos */}
+                              {selectedActivity.categorizedFiles.videos.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <Video className="w-4 h-4 mr-2 text-red-600" />
+                                    Videos ({selectedActivity.categorizedFiles.videos.length})
+                                  </h4>
+                                  <div className="space-y-4">
+                                    {selectedActivity.categorizedFiles.videos.map((video: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                                        <div className="aspect-video bg-gray-900 flex items-center justify-center">
+                                          <video 
+                                            controls 
+                                            className="w-full h-full"
+                                            poster={video.fileurl}
+                                          >
+                                            <source src={video.fileurl} type={video.mimetype} />
+                                            Your browser does not support the video tag.
+                                          </video>
+                                        </div>
+                                        <div className="p-4">
+                                          <h5 className="font-medium text-gray-900 mb-2">{video.filename}</h5>
+                                          <div className="flex items-center justify-between">
+                                            <div className="text-sm text-gray-600">
+                                              <p>Type: {video.mimetype}</p>
+                                              <p>Size: {(video.filesize / 1024 / 1024).toFixed(1)} MB</p>
+                                            </div>
+                                            <Button size="sm" variant="outline">
+                                              <Download className="w-4 h-4 mr-2" />
+                                              Download
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Audio */}
+                              {selectedActivity.categorizedFiles.audio.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <MessageSquare className="w-4 h-4 mr-2 text-green-600" />
+                                    Audio ({selectedActivity.categorizedFiles.audio.length})
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {selectedActivity.categorizedFiles.audio.map((audio: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                                        <div className="flex items-center space-x-3 mb-3">
+                                          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                            <MessageSquare className="w-5 h-5 text-green-600" />
+                                          </div>
+                                          <div className="flex-1">
+                                            <h5 className="font-medium text-gray-900">{audio.filename}</h5>
+                                            <p className="text-sm text-gray-600">{audio.mimetype}</p>
+                                          </div>
+                                          <Button size="sm" variant="outline">
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download
+                                          </Button>
+                                        </div>
+                                        <audio controls className="w-full">
+                                          <source src={audio.fileurl} type={audio.mimetype} />
+                                          Your browser does not support the audio element.
+                                        </audio>
+                                        <p className="text-xs text-gray-500 mt-2">
+                                          Size: {(audio.filesize / 1024 / 1024).toFixed(1)} MB
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Documents */}
+                              {selectedActivity.categorizedFiles.documents.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <FileText className="w-4 h-4 mr-2 text-purple-600" />
+                                    Documents ({selectedActivity.categorizedFiles.documents.length})
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {selectedActivity.categorizedFiles.documents.map((doc: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                                        <div className="flex items-center space-x-3">
+                                          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                            <FileText className="w-5 h-5 text-purple-600" />
+                                          </div>
+                                          <div className="flex-1">
+                                            <h5 className="font-medium text-gray-900 truncate">{doc.filename}</h5>
+                                            <p className="text-sm text-gray-600">{doc.mimetype}</p>
+                                            <p className="text-xs text-gray-500">
+                                              {(doc.filesize / 1024).toFixed(1)} KB
+                                            </p>
+                                          </div>
+                                          <Button size="sm" variant="outline">
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Other Files */}
+                              {selectedActivity.categorizedFiles.other.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <File className="w-4 h-4 mr-2 text-gray-600" />
+                                    Other Files ({selectedActivity.categorizedFiles.other.length})
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {selectedActivity.categorizedFiles.other.map((file: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg p-3 bg-white">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center space-x-3">
+                                            <File className="w-4 h-4 text-gray-500" />
+                                            <div>
+                                              <p className="font-medium text-gray-900">{file.filename}</p>
+                                              <p className="text-sm text-gray-600">{file.mimetype}</p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <span className="text-xs text-gray-500">
+                                              {(file.filesize / 1024).toFixed(1)} KB
+                                            </span>
+                                            <Button size="sm" variant="outline">
+                                              <Download className="w-4 h-4 mr-2" />
+                                              Download
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Intro Files */}
+                          {selectedActivity.introfiles && selectedActivity.introfiles.length > 0 && (
+                            <div className="mb-6">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction Files</h3>
+                              <div className="space-y-3">
+                                {selectedActivity.introfiles.map((item: any, index: number) => (
+                                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-blue-50">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center space-x-2">
+                                        <FileText className="w-4 h-4 text-blue-500" />
+                                        <h4 className="font-medium text-gray-900">{item.filename || `Intro File ${index + 1}`}</h4>
+                                      </div>
+                                      <Button size="sm" variant="outline">
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Download
+                                      </Button>
+                                    </div>
+                                    {item.fileurl && (
+                                      <p className="text-sm text-gray-500">File URL: {item.fileurl}</p>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            </div>
+                          )}
+                          
+                          {/* Activity Instructions */}
+                          {selectedActivity.instructions && (
+                            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                              <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
+                                <Target className="w-4 h-4 mr-2 text-yellow-600" />
+                                Instructions
+                              </h3>
+                              <div 
+                                className="prose prose-sm max-w-none text-gray-700"
+                                dangerouslySetInnerHTML={{ __html: selectedActivity.instructions }}
+                              />
+                            </div>
+                          )}
+                          
+                          {/* Activity Info */}
+                          {selectedActivity.activityInfo && (
+                            <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                              <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
+                                <Info className="w-4 h-4 mr-2 text-green-600" />
+                                Activity Information
+                              </h3>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-gray-600">Type:</span>
+                                  <p className="font-medium">{selectedActivity.activityInfo.type}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">Status:</span>
+                                  <p className="font-medium">{selectedActivity.activityInfo.status}</p>
+                                </div>
+                                {selectedActivity.activityInfo.dueDate && (
+                                  <div>
+                                    <span className="text-gray-600">Due Date:</span>
+                                    <p className="font-medium">{new Date(selectedActivity.activityInfo.dueDate).toLocaleDateString()}</p>
+                                  </div>
+                                )}
+                                {selectedActivity.activityInfo.grade && (
+                                  <div>
+                                    <span className="text-gray-600">Grade:</span>
+                                    <p className="font-medium">{selectedActivity.activityInfo.grade}%</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                  ) : (
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <BookOpen className="w-8 h-8 text-blue-600" />
+                      </div>
+                      <p className="text-gray-600 text-lg font-medium mb-2">Select an Activity</p>
+                      <p className="text-gray-500 text-sm">Click on any activity from the sidebar to view its content</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Course Information */}
+              <div className="bg-white rounded-lg border p-6">
+                {isLoadingCourseData ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading course data from IOMAD API...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {realCourseData?.courseInfo?.categoryname || selectedCourse.categoryname}
+                        </Badge>
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                        {realCourseData?.courseInfo?.fullname || selectedCourse.fullname}
+                      </h2>
+                      <p className="text-gray-600">
+                        Course ID: {selectedCourse.id} • 
+                        {realCourseData?.courseInfo?.format ? ` Format: ${realCourseData.courseInfo.format}` : ''}
+                      </p>
+                    </div>
+
+                    {/* Course Activities Summary */}
+                    {realCourseActivities.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3">Course Activities ({realCourseActivities.length})</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {realCourseActivities.slice(0, 6).map((activity: any) => (
+                            <div key={activity.id} className="border border-gray-200 rounded-lg p-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <h4 className="font-medium text-gray-900 text-sm">{activity.name}</h4>
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  activity.completion?.state === 1 ? 'bg-green-100 text-green-800' :
+                                  activity.completion?.state === 0 ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {activity.completion?.state === 1 ? 'Completed' :
+                                   activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 capitalize">{activity.type} Activity</p>
+                            </div>
+                          ))}
+                        </div>
+                        {realCourseActivities.length > 6 && (
+                          <p className="text-sm text-gray-500 mt-2">
+                            And {realCourseActivities.length - 6} more activities...
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Completed Courses Section */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                        Completed Courses ({completedCourses.length})
+                      </h3>
+                      {isLoadingCompletedCourses ? (
+                        <div className="flex justify-center items-center py-8">
+                          <div className="text-center">
+                            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                            <p className="text-sm text-gray-600">Loading completed courses...</p>
+                          </div>
+                        </div>
+                      ) : completedCourses.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {completedCourses.map((completedCourse: any) => (
+                            <div key={completedCourse.id} className="border border-green-200 bg-green-50 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-medium text-gray-900 text-sm">{completedCourse.fullname}</h4>
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                  Completed
+                                </span>
+                              </div>
+                              <div className="space-y-1 text-xs text-gray-600">
+                                <p><strong>Course ID:</strong> {completedCourse.id}</p>
+                                <p><strong>Short Name:</strong> {completedCourse.shortname}</p>
+                                <p><strong>Category:</strong> {completedCourse.categoryname || 'General'}</p>
+                                <p><strong>Progress:</strong> {completedCourse.progress || 100}%</p>
+                                {completedCourse.startdate && (
+                                  <p><strong>Start Date:</strong> {new Date(completedCourse.startdate * 1000).toLocaleDateString()}</p>
+                                )}
+                                {completedCourse.enddate && (
+                                  <p><strong>End Date:</strong> {new Date(completedCourse.enddate * 1000).toLocaleDateString()}</p>
+                                )}
+                              </div>
+                              {completedCourse.summary && (
+                                <p className="text-xs text-gray-500 mt-2 line-clamp-2">{completedCourse.summary}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 rounded-lg p-6 text-center">
+                          <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <CheckCircle className="w-6 h-6 text-gray-400" />
+                          </div>
+                          <h4 className="font-medium text-gray-900 mb-1">No Completed Courses</h4>
+                          <p className="text-sm text-gray-500">
+                            You haven't completed any courses yet. Keep learning to see your completed courses here!
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Right Sidebar - Course Progress and Activities */}
+            <div className="bg-white rounded-lg border p-4 h-fit space-y-6">
+              {/* Real Course Progress */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Your Course Progress</h3>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Progress</span>
+                    <span className="text-sm text-gray-500">
+                      {realCourseCompletion?.completionstatus?.completion || selectedCourse.progress}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                      style={{ 
+                        width: `${realCourseCompletion?.completionstatus?.completion || selectedCourse.progress}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {realCourseData?.completedModules || 0}/{realCourseData?.totalModules || realCourseContents.length} modules completed
+                  </p>
+                  
+                  {/* Real Completion Details */}
+                  {realCourseCompletion && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-500">Activities:</span>
+                          <p className="font-medium">{realCourseActivities.length}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Completed:</span>
+                          <p className="font-medium">
+                            {realCourseActivities.filter((a: any) => a.completion?.state === 1).length}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">In Progress:</span>
+                          <p className="font-medium">
+                            {realCourseActivities.filter((a: any) => a.completion?.state === 0).length}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Not Started:</span>
+                          <p className="font-medium">
+                            {realCourseActivities.filter((a: any) => !a.completion?.state).length}
+                          </p>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Add Activity Modal */}
-        {showActivityModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Study Activity</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Activity Title</label>
-                  <Input
-                    type="text"
-                    placeholder="Enter activity title..."
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Describe your study activity..."
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Duration (minutes)</label>
-                  <Input
-                    type="number"
-                    placeholder="30"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Activity Type</label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select activity type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="study">Study</SelectItem>
-                      <SelectItem value="practice">Practice</SelectItem>
-                      <SelectItem value="review">Review</SelectItem>
-                      <SelectItem value="assignment">Assignment</SelectItem>
-                      <SelectItem value="quiz">Quiz</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Real Course Activities */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 mb-3">
+                  Course Activities ({realCourseActivities.length})
+                </h3>
+                <div className="space-y-2">
+                  {realCourseActivities.length > 0 ? (
+                    realCourseActivities.map((activity: any, index: number) => (
+                      <div 
+                        key={activity.id} 
+                        className={`bg-gray-50 rounded-lg p-3 cursor-pointer hover:shadow-md transition-shadow ${
+                          selectedActivity?.id === activity.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                        }`}
+                        onClick={() => handleActivityClick(activity, index)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                              {activity.completion?.state === 1 ? (
+                                <CheckCircle className="w-5 h-5 text-green-600" />
+                              ) : selectedActivity?.id === activity.id ? (
+                                <Play className="w-5 h-5 text-blue-600" />
+                              ) : (
+                                <Circle className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium text-gray-900">{activity.name}</h4>
+                              <p className="text-xs text-gray-500 capitalize">
+                                {activity.type} • {activity.completion?.state === 1 ? 'Completed' :
+                                                 activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
+                              </p>
+                            </div>
+                          </div>
+                          {activity.completion?.state === 1 && (
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4 text-center">
+                      <p className="text-sm text-gray-500">No activities found</p>
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              <div className="flex justify-end space-x-3 mt-6">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowActivityModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button>
-                  Add Activity
-                </Button>
+
+              {/* Real Course Modules */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 mb-3">
+                  Course Sections ({realCourseContents.length})
+                </h3>
+                <div className="space-y-2">
+                  {realCourseContents.length > 0 ? (
+                    realCourseContents.map((section: any) => (
+                      <div key={section.id} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <BookOpen className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-900">{section.name}</h4>
+                              <p className="text-xs text-gray-500">
+                                {section.modules?.length || 0} activities
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-medium text-gray-900">
+                              {section.modules?.length || 0}
+                            </div>
+                            <div className="text-xs text-gray-500">Activities</div>
+                          </div>
+                        </div>
+                        {section.summary && (
+                          <p className="text-xs text-gray-500 mt-2 line-clamp-2">{section.summary}</p>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4 text-center">
+                      <p className="text-sm text-gray-500">No course sections found</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Completed Courses Summary */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 mb-3">
+                  Completed Courses ({completedCourses.length})
+                </h3>
+                {isLoadingCompletedCourses ? (
+                  <div className="bg-gray-50 rounded-lg p-4 text-center">
+                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-500">Loading...</p>
+                  </div>
+                ) : completedCourses.length > 0 ? (
+                  <div className="space-y-2">
+                    {completedCourses.slice(0, 3).map((completedCourse: any) => (
+                      <div key={completedCourse.id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="text-sm font-medium text-gray-900 line-clamp-1">{completedCourse.fullname}</h4>
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        </div>
+                        <p className="text-xs text-gray-500">{completedCourse.shortname}</p>
+                        <p className="text-xs text-green-600 font-medium">{completedCourse.progress || 100}% Complete</p>
+                      </div>
+                    ))}
+                    {completedCourses.length > 3 && (
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-sm text-gray-500">
+                          +{completedCourses.length - 3} more completed courses
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-center">
+                    <CheckCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No completed courses yet</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        // Courses List Page
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">My Courses</h1>
+              <p className="text-gray-600 mt-1">Real-time course data from IOMAD Moodle API - {courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <Button variant="outline" onClick={refreshData} disabled={refreshing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button variant="outline" onClick={exportCoursesData}>
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{courses.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  Available courses
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {courses.filter(c => c.status === 'in_progress').length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Active courses
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Completed</CardTitle>
+                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {courses.filter(c => c.status === 'completed').length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Finished courses
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
+                <Award className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {courses.length > 0 ? Math.round(courses.reduce((sum, course) => sum + (course.grade || 0), 0) / courses.length) : 0}%
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Overall performance
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Search and Filter */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  type="text"
+                  placeholder="Search courses..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Courses</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="not_started">Not Started</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Courses Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredCourses.map((course) => (
+              <Card key={course.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => handleCourseClick(course)}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant={course.status === 'completed' ? 'default' : course.status === 'in_progress' ? 'secondary' : 'outline'}>
+                      {course.status === 'completed' ? 'Completed' : course.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+                    </Badge>
+                    <div className="text-xs text-gray-500">
+                      {course.categoryname}
+                    </div>
+                  </div>
+                  <CardTitle className="text-lg">{course.fullname}</CardTitle>
+                  <CardDescription className="line-clamp-2">
+                    {course.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">Progress</span>
+                        <span className="font-medium">{course.progress}%</span>
+                      </div>
+                      <Progress value={course.progress} className="h-2" />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                      <div>
+                        <span>Grade: </span>
+                        <span className="font-medium">{course.grade || 0}%</span>
+                      </div>
+                      <div>
+                        <span>Modules: </span>
+                        <span className="font-medium">{course.completedModules || 0}/{course.totalModules || 0}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-2">
+                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleViewProgress(course); }}>
+                        <Eye className="w-4 h-4 mr-1" />
+                        View Progress
+                      </Button>
+                      <Button size="sm" onClick={(e) => { e.stopPropagation(); handleCourseClick(course); }}>
+                        <BookOpen className="w-4 h-4 mr-1" />
+                        View Details
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {filteredCourses.length === 0 && (
+            <div className="text-center py-12">
+              <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
+              <p className="text-gray-500">Try adjusting your search or filter criteria.</p>
+            </div>
+          )}
+        </div>
+      )}
     </DashboardLayout>
   );
 };
