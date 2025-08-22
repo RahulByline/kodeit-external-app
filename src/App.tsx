@@ -71,6 +71,7 @@ const AdminSettings = lazy(() => import("./pages/admin/Settings"));
 const AdminCommunity = lazy(() => import("./pages/admin/Community"));
 const AdminEnrollments = lazy(() => import("./pages/admin/Enrollments"));
 const CompetenciesMap = lazy(() => import("./pages/admin/CompetenciesMap"));
+const CohortNavigationSettings = lazy(() => import("./pages/admin/CohortNavigationSettings"));
 
 // School Admin pages - lazy loaded
 const SchoolAdminTeachers = lazy(() => import("./pages/school-admin/Teachers"));
@@ -548,6 +549,13 @@ const App = () => {
                   <ProtectedRoute requiredRole="admin">
                     <Suspense fallback={<LoadingSpinner />}>
                       <CompetenciesMap />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/cohort-navigation" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <CohortNavigationSettings />
                     </Suspense>
                   </ProtectedRoute>
                 } />
