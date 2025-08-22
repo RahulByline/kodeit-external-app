@@ -426,12 +426,11 @@ const TeacherCourses: React.FC = () => {
                     <div className="flex items-center space-x-2 text-xs text-gray-500">
                       <Calendar className="w-3 h-3" />
                       <span>
-                        {new Date(parseInt(course.startdate) * 1000).toLocaleDateString()} - 
-                        {new Date(parseInt(course.enddate) * 1000).toLocaleDateString()}
+                        {new Date(Number(course.startdate) * 1000).toLocaleDateString()} - 
+                        {new Date(Number(course.enddate) * 1000).toLocaleDateString()}
                       </span>
                     </div>
                   )}
-                  
                   <div className="flex space-x-2 pt-2">
                     <Button variant="outline" size="sm" className="flex-1">
                       <Eye className="w-4 h-4 mr-1" />

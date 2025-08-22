@@ -192,23 +192,25 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/teacher/groups',
         '/dashboard/teacher/settings'
       ];
-    case 'student':
+        case 'student':
       return [
         ...baseRoutes,
+        '/dashboard/student/dashboard1',
+        '/dashboard/student/dashboard2',
         '/dashboard/student/assessments',
         '/dashboard/student/assignments',
         '/dashboard/student/calendar',
         '/dashboard/student/courses',
         '/dashboard/student/grades',
         '/dashboard/student/messages',
-          '/dashboard/student/progress',
-          '/dashboard/admin/competencies',
-  '/dashboard/student/emulators',
-  '/dashboard/student/code-editor',
-  '/dashboard/student/compiler',
-  '/dashboard/student/settings',
-  '/dashboard/student/community',
-  '/dashboard/student/enrollments',
+        '/dashboard/student/progress',
+        '/dashboard/admin/competencies',
+        '/dashboard/student/emulators',
+        '/dashboard/student/code-editor',
+        '/dashboard/student/compiler',
+        '/dashboard/student/settings',
+        '/dashboard/student/community',
+        '/dashboard/student/enrollments',
       ];
     default:
       return [];

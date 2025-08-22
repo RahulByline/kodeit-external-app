@@ -204,235 +204,252 @@ const StudentDashboard: React.FC = () => {
   console.log('StudentDashboard - userRole being passed:', 'student');
   
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Student Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome back, {currentUser?.firstname || "Student"}! Here's your academic overview</p>
-          </div>
-          
-          {/* Dashboard Controls */}
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 bg-white border border-gray-300 rounded-lg px-3 py-2">
-              <span className="text-sm font-medium text-gray-700">Q2 2025 (Apr-Jun)</span>
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            </div>
-            <button className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-              <Download className="w-4 h-4 text-gray-600" />
-            </button>
-            <button className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-              <Share2 className="w-4 h-4 text-gray-600" />
-            </button>
-          </div>
-        </div>
-
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Enrolled Courses</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.enrolledCourses}</h3>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="text-green-600 text-sm font-medium">+1.0%</span>
-                  <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+    <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+        <div className="min-h-screen py-4">
+          <div className=" mx-auto space-y-6">
+            {/* Enhanced Header */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                      <GraduationCap className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-blue-600 bg-clip-text text-transparent">
+                        Student Dashboard
+                      </h1>
+                      <p className="text-gray-600 mt-1">
+                        Welcome back, {currentUser?.firstname || "Student"}! Here's your academic overview
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Enhanced Dashboard Controls */}
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+                    <span className="text-sm font-medium text-gray-700">Q2 2025 (Apr-Jun)</span>
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  </div>
+                  <button className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md">
+                    <Download className="w-4 h-4 text-gray-600" />
+                  </button>
+                  <button className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md">
+                    <Share2 className="w-4 h-4 text-gray-600" />
+                  </button>
                 </div>
               </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <BookOpen className="w-6 h-6 text-blue-600" />
-              </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Completed Assignments</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.completedAssignments}</h3>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="text-green-600 text-sm font-medium">+12.4%</span>
-                  <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+            {/* Enhanced KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Enrolled Courses</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.enrolledCourses}</h3>
+                    <div className="flex items-center mt-2">
+                      <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                      <span className="text-green-600 text-sm font-medium">+1.0%</span>
+                      <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                    <BookOpen className="w-6 h-6 text-white" />
+                  </div>
                 </div>
               </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <FileText className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Pending Assignments</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.pendingAssignments}</h3>
-                <div className="flex items-center mt-2">
-                  <span className="text-red-600 text-sm font-medium">Due soon</span>
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Completed Assignments</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.completedAssignments}</h3>
+                    <div className="flex items-center mt-2">
+                      <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                      <span className="text-green-600 text-sm font-medium">+12.4%</span>
+                      <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                    <FileText className="w-6 h-6 text-white" />
+                  </div>
                 </div>
               </div>
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <Clock className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Average Grade</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.averageGrade}%</h3>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                  <span className="text-green-600 text-sm font-medium">+2.3%</span>
-                  <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Pending Assignments</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.pendingAssignments}</h3>
+                    <div className="flex items-center mt-2">
+                      <span className="text-red-600 text-sm font-medium">Due soon</span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                    <Clock className="w-6 h-6 text-white" />
+                  </div>
                 </div>
               </div>
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <BarChart3 className="w-6 h-6 text-purple-600" />
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-gray-500 text-sm font-medium">Average Grade</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.averageGrade}%</h3>
+                    <div className="flex items-center mt-2">
+                      <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                      <span className="text-green-600 text-sm font-medium">+2.3%</span>
+                      <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                    <BarChart3 className="w-6 h-6 text-white" />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Course Progress Analysis */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Course Progress Analysis</h2>
-            </div>
-            
-            {/* Filter Buttons */}
-            <div className="flex space-x-2 mb-6">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
-                By Subject
-              </button>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-                By Semester
-              </button>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-                By Assignment
-              </button>
-            </div>
-
-            {/* Chart Placeholder */}
-            <div className="bg-blue-50 rounded-lg p-8 text-center mb-6">
-              <BarChart3 className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-              <p className="text-blue-700 text-sm">
-                Progress analysis chart showing 81% average completion rate across all enrolled courses
-              </p>
-            </div>
-
-            {/* Subject Breakdown */}
-            <div className="space-y-3">
-              {courseProgress.map((item, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700">{item.subject}</span>
-                  <span className="text-sm font-semibold text-green-600">{item.progress}%</span>
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Course Progress Analysis */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-lg font-semibold text-gray-900">Course Progress Analysis</h2>
                 </div>
-              ))}
-            </div>
-          </div>
+                
+                {/* Filter Buttons */}
+                <div className="flex space-x-2 mb-6">
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+                    By Subject
+                  </button>
+                  <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
+                    By Semester
+                  </button>
+                  <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
+                    By Assignment
+                  </button>
+                </div>
 
-          {/* Grade Distribution Analysis */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Grade Distribution Analysis</h2>
-            </div>
+                {/* Chart Placeholder */}
+                <div className="bg-blue-50 rounded-lg p-8 text-center mb-6">
+                  <BarChart3 className="w-12 h-12 text-blue-400 mx-auto mb-4" />
+                  <p className="text-blue-700 text-sm">
+                    Progress analysis chart showing 81% average completion rate across all enrolled courses
+                  </p>
+                </div>
 
-            <div className="space-y-4">
-              {gradeBreakdown.map((item, index) => (
-                <div key={index}>
+                {/* Subject Breakdown */}
+                <div className="space-y-3">
+                  {courseProgress.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">{item.subject}</span>
+                      <span className="text-sm font-semibold text-green-600">{item.progress}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grade Distribution Analysis */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-lg font-semibold text-gray-900">Grade Distribution Analysis</h2>
+                </div>
+
+                <div className="space-y-4">
+                  {gradeBreakdown.map((item, index) => (
+                    <div key={index}>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-700">{item.grade}</span>
+                        <span className="text-sm font-semibold text-gray-900">{item.count} assignments</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            item.grade.includes('A') ? 'bg-green-600' :
+                            item.grade.includes('B') ? 'bg-blue-600' :
+                            item.grade.includes('C') ? 'bg-yellow-600' : 'bg-red-600'
+                          }`}
+                          style={{ width: `${item.percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totals */}
+                <div className="mt-6 pt-6 border-t border-gray-200">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">{item.grade}</span>
-                    <span className="text-sm font-semibold text-gray-900">{item.count} assignments</span>
+                    <span className="text-sm font-medium text-gray-700">Total Assignments</span>
+                    <span className="text-sm font-bold text-gray-900">20</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className={`h-2 rounded-full ${
-                        item.grade.includes('A') ? 'bg-green-600' :
-                        item.grade.includes('B') ? 'bg-blue-600' :
-                        item.grade.includes('C') ? 'bg-yellow-600' : 'bg-red-600'
-                      }`}
-                      style={{ width: `${item.percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Totals */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium text-gray-700">Total Assignments</span>
-                <span className="text-sm font-bold text-gray-900">20</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">GPA</span>
-                <span className="text-sm font-bold text-green-600">3.4</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Programming Tools Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Programming Tools</h2>
-              <p className="text-gray-600 mt-1">Access interactive programming environments</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link to="/dashboard/student/code-editor" className="block">
-              <div className="bg-green-50 rounded-lg p-4 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Code className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-green-900">Code Editor</h3>
-                    <p className="text-sm text-green-700">Write and run code in multiple programming languages</p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700">GPA</span>
+                    <span className="text-sm font-bold text-green-600">3.4</span>
                   </div>
                 </div>
               </div>
-            </Link>
+            </div>
             
-            <Link to="/dashboard/student/compiler" className="block">
-              <div className="bg-purple-50 rounded-lg p-4 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <Settings className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-purple-900">Compiler</h3>
-                    <p className="text-sm text-purple-700">Advanced code compilation with Piston API</p>
-                  </div>
+            {/* Programming Tools Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Programming Tools</h2>
+                  <p className="text-gray-600 mt-1">Access interactive programming environments</p>
                 </div>
               </div>
-            </Link>
-           
-            <Link to="/dashboard/student/scratch-editor" className="block">
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Play className="w-5 h-5 text-blue-600" />
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Link to="/dashboard/student/code-editor" className="block">
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <Code className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-green-900">Code Editor</h3>
+                        <p className="text-sm text-green-700">Write and run code in multiple programming languages</p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-medium text-blue-900">Scratch Programming</h3>
-                    <p className="text-sm text-blue-700">Create interactive stories, games, and animations with visual blocks</p>
+                </Link>
+                
+                <Link to="/dashboard/student/compiler" className="block">
+                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-purple-100 rounded-lg">
+                        <Settings className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-purple-900">Compiler</h3>
+                        <p className="text-sm text-purple-700">Advanced code compilation with Piston API</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </Link>
+               
+                <Link to="/dashboard/student/scratch-editor" className="block">
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <Play className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-blue-900">Scratch Programming</h3>
+                        <p className="text-sm text-blue-700">Create interactive stories, games, and animations with visual blocks</p>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               </div>
-            </Link>
+            </div>
           </div>
         </div>
-      </div>
-    </DashboardLayout>
+      </DashboardLayout>
+    </div>
   );
 };
 

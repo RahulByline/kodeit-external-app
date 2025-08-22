@@ -310,287 +310,317 @@ const Community: React.FC = () => {
   }
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Community</h1>
-            <p className="text-gray-600 mt-1">Connect with fellow students, join study groups, and share knowledge</p>
-          </div>
-          
-          <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            <Plus className="w-4 h-4 mr-2" />
-            New Post
-          </button>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Users className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Total Members</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.totalMembers}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-green-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Active Today</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.activeToday}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <MessageSquare className="w-5 h-5 text-purple-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Total Posts</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.totalPosts}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Users2 className="w-5 h-5 text-orange-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Study Groups</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.totalGroups}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Award className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Top Contributors</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.topContributors}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content - Posts */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Search and Filters */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Search posts, topics, or tags..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+    <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+        <div className="min-h-screen py-4">
+          <div className=" mx-auto space-y-6">
+            {/* Enhanced Header */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                      <Users className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-blue-600 bg-clip-text text-transparent">
+                        Community
+                      </h1>
+                      <p className="text-gray-600 mt-1">
+                        Connect with fellow students, join study groups, and share knowledge • {stats.totalMembers} members
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Filter className="w-4 h-4 text-gray-400" />
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {categories.map(category => (
-                      <option key={category} value={category}>
-                        {category === 'all' ? 'All Categories' : category}
-                      </option>
-                    ))}
-                  </select>
+                
+                <div className="flex items-center space-x-3">
+                  <button className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl">
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Post
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Posts */}
-            <div className="space-y-4">
-              {filteredPosts.map(post => (
-                <div key={post.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-start space-x-4">
-                    <img
-                      src={post.author.avatar}
-                      alt={post.author.name}
-                      className="w-10 h-10 rounded-full"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <span className="font-medium text-gray-900">{post.author.name}</span>
-                        <span className="text-sm text-gray-500">•</span>
-                        <span className="text-sm text-gray-500">{post.author.role}</span>
-                        <span className="text-sm text-gray-500">•</span>
-                        <span className="text-sm text-gray-500">{post.timestamp}</span>
-                        <span className="text-sm text-gray-500">•</span>
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {post.category}
-                        </span>
+            {/* Enhanced Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Users className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalMembers}</div>
+                    <p className="text-sm text-gray-500">Members</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Total Members</h3>
+                <p className="text-sm text-gray-600">Active community members</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.activeToday}</div>
+                    <p className="text-sm text-gray-500">Active</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Active Today</h3>
+                <p className="text-sm text-gray-600">Currently online members</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <MessageSquare className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalPosts}</div>
+                    <p className="text-sm text-gray-500">Posts</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Total Posts</h3>
+                <p className="text-sm text-gray-600">Community discussions</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Users2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalGroups}</div>
+                    <p className="text-sm text-gray-500">Groups</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Study Groups</h3>
+                <p className="text-sm text-gray-600">Active study groups</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Award className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.topContributors}</div>
+                    <p className="text-sm text-gray-500">Top</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Top Contributors</h3>
+                <p className="text-sm text-gray-600">Leading community members</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Main Content - Posts */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Enhanced Search and Filters */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        type="text"
+                        placeholder="Search posts, topics, or users..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      {categories.map((category) => (
+                        <button
+                          key={category}
+                          onClick={() => setSelectedCategory(category)}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                            selectedCategory === category
+                              ? 'bg-blue-600 text-white shadow-md'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Posts */}
+                <div className="space-y-4">
+                  {filteredPosts.map(post => (
+                    <div key={post.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-500 hover:scale-[1.01]">
+                      <div className="flex items-start space-x-4">
+                        <img
+                          src={post.author.avatar}
+                          alt={post.author.name}
+                          className="w-10 h-10 rounded-full"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <span className="font-medium text-gray-900">{post.author.name}</span>
+                            <span className="text-sm text-gray-500">•</span>
+                            <span className="text-sm text-gray-500">{post.author.role}</span>
+                            <span className="text-sm text-gray-500">•</span>
+                            <span className="text-sm text-gray-500">{post.timestamp}</span>
+                            <span className="text-sm text-gray-500">•</span>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {post.category}
+                            </span>
+                          </div>
+                          
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
+                          <p className="text-gray-600 mb-4 line-clamp-3">{post.content}</p>
+                          
+                          <div className="flex items-center space-x-4 mb-4">
+                            {post.tags.map(tag => (
+                              <span key={tag} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                <Hash className="w-3 h-3 mr-1" />
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <button
+                                onClick={() => handleLike(post.id)}
+                                className={`flex items-center space-x-1 text-sm transition-colors duration-300 ${
+                                  post.isLiked ? 'text-red-600' : 'text-gray-500 hover:text-red-600'
+                                }`}
+                              >
+                                <Heart className={`w-4 h-4 ${post.isLiked ? 'fill-current' : ''}`} />
+                                <span>{post.likes}</span>
+                              </button>
+                              <button className="flex items-center space-x-1 text-sm text-gray-500 hover:text-blue-600 transition-colors duration-300">
+                                <MessageCircle className="w-4 h-4" />
+                                <span>{post.comments}</span>
+                              </button>
+                              <button className="flex items-center space-x-1 text-sm text-gray-500 hover:text-gray-700 transition-colors duration-300">
+                                <Eye className="w-4 h-4" />
+                                <span>{post.views}</span>
+                              </button>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleBookmark(post.id)}
+                                className={`p-2 rounded-lg transition-colors duration-300 ${
+                                  post.isBookmarked 
+                                    ? 'bg-yellow-100 text-yellow-600' 
+                                    : 'text-gray-500 hover:bg-gray-100'
+                                }`}
+                              >
+                                <Bookmark className={`w-4 h-4 ${post.isBookmarked ? 'fill-current' : ''}`} />
+                              </button>
+                              <button className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors duration-300">
+                                <Share2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{post.title}</h3>
-                      <p className="text-gray-600 mb-4 line-clamp-3">{post.content}</p>
-                      
-                      <div className="flex items-center space-x-4 mb-4">
-                        {post.tags.map(tag => (
-                          <span key={tag} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            <Hash className="w-3 h-3 mr-1" />
-                            {tag}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sidebar - Study Groups */}
+              <div className="space-y-6">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900">Study Groups</h2>
+                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                      View All
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {studyGroups.map(group => (
+                      <div key={group.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start space-x-3 mb-3">
+                          <img
+                            src={group.leader.avatar}
+                            alt={group.leader.name}
+                            className="w-8 h-8 rounded-full"
+                          />
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900">{group.name}</h3>
+                            <p className="text-sm text-gray-500">{group.leader.name}</p>
+                          </div>
+                        </div>
+                        
+                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{group.description}</p>
+                        
+                        <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {group.subject}
                           </span>
-                        ))}
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <button
-                            onClick={() => handleLike(post.id)}
-                            className={`flex items-center space-x-1 text-sm ${
-                              post.isLiked ? 'text-red-600' : 'text-gray-500 hover:text-red-600'
-                            }`}
-                          >
-                            <Heart className={`w-4 h-4 ${post.isLiked ? 'fill-current' : ''}`} />
-                            <span>{post.likes}</span>
-                          </button>
-                          <button className="flex items-center space-x-1 text-sm text-gray-500 hover:text-blue-600">
-                            <MessageCircle className="w-4 h-4" />
-                            <span>{post.comments}</span>
-                          </button>
-                          <button className="flex items-center space-x-1 text-sm text-gray-500 hover:text-gray-700">
-                            <Eye className="w-4 h-4" />
-                            <span>{post.views}</span>
-                          </button>
+                          <span>{group.members}/{group.maxMembers} members</span>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        
+                        <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                          <span className="flex items-center">
+                            <Calendar className="w-3 h-3 mr-1" />
+                            {group.meetingTime}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">Next: {group.nextMeeting}</span>
                           <button
-                            onClick={() => handleBookmark(post.id)}
-                            className={`p-2 rounded-lg ${
-                              post.isBookmarked 
-                                ? 'bg-yellow-100 text-yellow-600' 
-                                : 'text-gray-400 hover:text-yellow-600 hover:bg-yellow-50'
+                            onClick={() => handleJoinGroup(group.id)}
+                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-300 ${
+                              group.isJoined
+                                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700'
                             }`}
                           >
-                            <Bookmark className={`w-4 h-4 ${post.isBookmarked ? 'fill-current' : ''}`} />
-                          </button>
-                          <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
-                            <Share2 className="w-4 h-4" />
+                            {group.isJoined ? 'Joined' : 'Join'}
                           </button>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Sidebar - Study Groups */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Study Groups</h2>
-                <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                  View All
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                {studyGroups.map(group => (
-                  <div key={group.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start space-x-3 mb-3">
-                      <img
-                        src={group.leader.avatar}
-                        alt={group.leader.name}
-                        className="w-8 h-8 rounded-full"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900">{group.name}</h3>
-                        <p className="text-sm text-gray-500">{group.leader.name}</p>
+                {/* Top Contributors */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Contributors</h2>
+                  <div className="space-y-3">
+                    {[
+                      { name: 'Sarah Johnson', points: 1250, avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=32&h=32&fit=crop&crop=face' },
+                      { name: 'Emma Davis', points: 2100, avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=32&h=32&fit=crop&crop=face' },
+                      { name: 'Mike Chen', points: 890, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face' },
+                      { name: 'Lisa Wang', points: 1650, avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=32&h=32&fit=crop&crop=face' },
+                      { name: 'Alex Thompson', points: 750, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face' }
+                    ].map((contributor, index) => (
+                      <div key={index} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
+                          <img
+                            src={contributor.avatar}
+                            alt={contributor.name}
+                            className="w-8 h-8 rounded-full"
+                          />
+                          <span className="text-sm font-medium text-gray-900">{contributor.name}</span>
+                        </div>
+                        <div className="ml-auto flex items-center space-x-1">
+                          <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                          <span className="text-sm text-gray-500">{contributor.points}</span>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{group.description}</p>
-                    
-                    <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {group.subject}
-                      </span>
-                      <span>{group.members}/{group.maxMembers} members</span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-                      <span className="flex items-center">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {group.meetingTime}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">Next: {group.nextMeeting}</span>
-                      <button
-                        onClick={() => handleJoinGroup(group.id)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                          group.isJoined
-                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                      >
-                        {group.isJoined ? 'Joined' : 'Join'}
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Top Contributors */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Contributors</h2>
-              <div className="space-y-3">
-                {[
-                  { name: 'Sarah Johnson', points: 1250, avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=32&h=32&fit=crop&crop=face' },
-                  { name: 'Emma Davis', points: 2100, avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=32&h=32&fit=crop&crop=face' },
-                  { name: 'Mike Chen', points: 890, avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=32&h=32&fit=crop&crop=face' },
-                  { name: 'Lisa Wang', points: 1650, avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=32&h=32&fit=crop&crop=face' },
-                  { name: 'Alex Thompson', points: 750, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=32&h=32&fit=crop&crop=face' }
-                ].map((contributor, index) => (
-                  <div key={index} className="flex items-center space-x-3">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-gray-500">#{index + 1}</span>
-                      <img
-                        src={contributor.avatar}
-                        alt={contributor.name}
-                        className="w-8 h-8 rounded-full"
-                      />
-                      <span className="text-sm font-medium text-gray-900">{contributor.name}</span>
-                    </div>
-                    <div className="ml-auto flex items-center space-x-1">
-                      <Star className="w-3 h-3 text-yellow-500 fill-current" />
-                      <span className="text-sm text-gray-500">{contributor.points}</span>
-                    </div>
-                  </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </DashboardLayout>
+      </DashboardLayout>
+    </div>
   );
 };
 

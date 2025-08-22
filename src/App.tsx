@@ -98,6 +98,8 @@ const TeacherGroups = lazy(() => import("./pages/teacher/Groups"));
 // Student pages - lazy loaded
 const StudentAssessments = lazy(() => import("./pages/student/Assessments"));
 const StudentAssignments = lazy(() => import("./pages/student/Assignments"));
+const Dashboard1 = lazy(() => import("./pages/student/Dashboard1"));
+const Dashboard2 = lazy(() => import("./pages/student/Dashboard2"));
 const StudentCalendar = lazy(() => import("./pages/student/Calendar"));
 const StudentCourses = lazy(() => import("./pages/student/Courses"));
 const StudentGrades = lazy(() => import("./pages/student/Grades"));
@@ -226,6 +228,20 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentDashboard />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/dashboard1" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Dashboard1 />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/dashboard2" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Dashboard2 />
                     </Suspense>
                   </ProtectedRoute>
                 } />

@@ -188,6 +188,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
       return [
         ...baseItems,
         {
+          title: 'DASHBOARDS',
+          items: [
+            { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
+            { name: 'Dashboard1 (1st-3rd)', icon: LayoutDashboard, path: '/dashboard/student/dashboard1' },
+            { name: 'Dashboard2 (4th-7th)', icon: LayoutDashboard, path: '/dashboard/student/dashboard2' },
+          ]
+        },
+        {
           title: 'COURSES',
           items: [
             { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
