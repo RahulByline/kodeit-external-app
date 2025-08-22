@@ -1,0 +1,83 @@
+{
+  "2": {
+    "dashboard": {
+      "Dashboard": false,
+      "Community": true,
+      "Enrollments": true
+    },
+    "courses": {
+      "My Courses": true,
+      "Assignments": true,
+      "Assessments": true
+    },
+    "progress": {
+      "My Grades": true,
+      "Progress Tracking": true
+    },
+    "resources": {
+      "Calendar": true,
+      "Messages": false
+    },
+    "emulators": {
+      "Code Editor": false,
+      "Scratch Editor": false
+    },
+    "settings": {
+      "Profile Settings": true
+    }
+  },
+  "cohort_1": {
+    "dashboard": {
+      "Dashboard": true,
+      "Community": false,
+      "Enrollments": false
+    },
+    "courses": {
+      "My Courses": true,
+      "Assignments": false,
+      "Assessments": false
+    },
+    "progress": {
+      "My Grades": false,
+      "Progress Tracking": false
+    },
+    "resources": {
+      "Calendar": false,
+      "Messages": false
+    },
+    "emulators": {
+      "Code Editor": false,
+      "Scratch Editor": false
+    },
+    "settings": {
+      "Profile Settings": false
+    }
+  },
+  "cohort_2": {
+    "dashboard": {
+      "Dashboard": true,
+      "Community": true,
+      "Enrollments": true
+    },
+    "courses": {
+      "My Courses": true,
+      "Assignments": true,
+      "Assessments": true
+    },
+    "progress": {
+      "My Grades": true,
+      "Progress Tracking": true
+    },
+    "resources": {
+      "Calendar": true,
+      "Messages": true
+    },
+    "emulators": {
+      "Code Editor": true,
+      "Scratch Editor": true
+    },
+    "settings": {
+      "Profile Settings": true
+    }
+  }
+}
