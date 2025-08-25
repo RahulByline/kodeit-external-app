@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import {
-  BookOpen,
+import { 
+  BookOpen, 
   Clock,
   Calendar,
   Users,
-  Award,
+  Award, 
   TrendingUp,
   Search,
   Filter,
@@ -237,7 +237,7 @@ const Courses: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-
+      
       console.log('🔍 Fetching real courses from IOMAD Moodle API...');
 
       if (!currentUser?.id) {
@@ -269,11 +269,11 @@ const Courses: React.FC = () => {
           const totalModules = courseContents?.length || 0;
           const completedModules = courseCompletion?.completionstatus?.completed || 0;
           const progress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-
-          return {
+        
+        return {
             id: course.id,
-            fullname: course.fullname,
-            shortname: course.shortname,
+          fullname: course.fullname,
+          shortname: course.shortname,
             progress,
             grade: courseCompletion?.completionstatus?.grade || 0,
             lastAccess: course.startdate,
@@ -282,8 +282,8 @@ const Courses: React.FC = () => {
               progress > 0 ? 'in_progress' : 'not_started',
             categoryname: course.categoryname || 'General',
             categoryid: course.categoryid,
-            startdate: course.startdate,
-            enddate: course.enddate,
+          startdate: course.startdate,
+          enddate: course.enddate,
             visible: course.visible,
             description: course.summary || '',
             instructor: (course as any).instructor || '',
@@ -299,11 +299,20 @@ const Courses: React.FC = () => {
         setCourses(processedCourses);
         console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
         
+        // Debug: Log all courses with their category information
+        console.log('📊 All processed courses:', processedCourses.map(course => ({
+          id: course.id,
+          fullname: course.fullname,
+          categoryid: course.categoryid,
+          categoryname: course.categoryname,
+          visible: course.visible
+        })));
+        
         // Fetch real categories from IOMAD Moodle API
         await fetchRealCategories(processedCourses);
       } else {
         console.log('⚠️ No enrolled courses found');
-        setCourses([]);
+      setCourses([]);
         setError('No enrolled courses available.');
       }
 
@@ -362,68 +371,183 @@ const Courses: React.FC = () => {
       if (realCategories && Array.isArray(realCategories)) {
         console.log('✅ Real categories fetched:', realCategories.length);
         
-        const processedCategories = realCategories.map(category => {
+        // Build hierarchical structure: Categories → Subcategories → Courses
+        const allCategories = realCategories.map((category: any) => {
+          // Count how many enrolled courses are in this category
           const categoryCourses = enrolledCourses.filter(course => 
-            course.categoryid === category.id
+            course.categoryid === category.id || 
+            course.categoryname === category.name
           );
           
           return {
             id: category.id.toString(),
-            name: category.name,
+            name: category.name || category.fullname || 'Unnamed Category',
             courseCount: categoryCourses.length,
-            icon: getCategoryIcon(category.name),
-            color: getCategoryColor(category.name),
-            description: getCategoryDescription(category.name),
+            icon: getCategoryIcon(category.name || category.fullname || ''),
+            color: getCategoryColor(category.name || category.fullname || ''),
+            description: category.description || getCategoryDescription(category.name || category.fullname || ''),
+            // Additional real category data
             categoryId: category.id,
             parent: category.parent,
             sortorder: category.sortorder,
             visible: category.visible,
-            timemodified: category.timemodified,
-            subcategories: []
+            timemodified: category.timemodified
           };
-        }).filter(category => category.courseCount > 0);
+        });
         
-        setCategories(processedCategories);
-        console.log('✅ Real categories processed successfully:', processedCategories.length);
+        // Separate main categories (parent = 0) and subcategories (parent > 0)
+        const mainCategories = allCategories.filter(cat => !cat.parent || cat.parent === 0);
+        const subcategories = allCategories.filter(cat => cat.parent && cat.parent > 0);
+        
+        // Attach subcategories to their parent categories
+        const hierarchicalCategories = mainCategories.map(mainCat => {
+          const categorySubcategories = subcategories.filter(sub => sub.parent === mainCat.categoryId);
+          
+          // Calculate total course count including subcategories
+          const totalCourseCount = categorySubcategories.reduce((sum, sub) => sum + sub.courseCount, 0) + mainCat.courseCount;
+          
+          return {
+            ...mainCat,
+            courseCount: totalCourseCount,
+            subcategories: categorySubcategories
+          };
+        }).filter(category => category.courseCount > 0); // Only show categories with enrolled courses
+        
+        setCategories(hierarchicalCategories);
+        console.log('✅ Hierarchical categories processed:', hierarchicalCategories.length);
+        console.log('📊 Structure:', hierarchicalCategories.map(cat => ({
+          name: cat.name,
+          courseCount: cat.courseCount,
+          subcategories: cat.subcategories?.length || 0
+        })));
       } else {
-        console.log('⚠️ No real categories found');
-        setCategories([]);
+        console.log('⚠️ No real categories found, using fallback');
+        // Fallback to course-based categories if API fails
+        const categoryMap = new Map<string, { count: number; courses: Course[] }>();
+        
+        enrolledCourses.forEach(course => {
+          const categoryName = course.categoryname || 'General';
+          if (!categoryMap.has(categoryName)) {
+            categoryMap.set(categoryName, { count: 0, courses: [] });
+          }
+          categoryMap.get(categoryName)!.count++;
+          categoryMap.get(categoryName)!.courses.push(course);
+        });
+        
+        const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => ({
+          id: name.toLowerCase().replace(/\s+/g, '-'),
+          name,
+          courseCount: data.count,
+          icon: getCategoryIcon(name),
+          color: getCategoryColor(name),
+          description: getCategoryDescription(name),
+          subcategories: []
+        }));
+        
+        setCategories(fallbackCategories);
+        console.log('✅ Fallback categories processed:', fallbackCategories.length);
       }
     } catch (error) {
       console.error('❌ Error fetching real categories:', error);
-      setCategories([]);
+      
+      // Fallback to course-based categories
+      const categoryMap = new Map<string, { count: number; courses: Course[] }>();
+      
+      enrolledCourses.forEach(course => {
+        const categoryName = course.categoryname || 'General';
+        if (!categoryMap.has(categoryName)) {
+          categoryMap.set(categoryName, { count: 0, courses: [] });
+        }
+        categoryMap.get(categoryName)!.count++;
+        categoryMap.get(categoryName)!.courses.push(course);
+      });
+      
+      const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => ({
+        id: name.toLowerCase().replace(/\s+/g, '-'),
+        name,
+        courseCount: data.count,
+        icon: getCategoryIcon(name),
+        color: getCategoryColor(name),
+        description: getCategoryDescription(name),
+        subcategories: []
+      }));
+      
+      setCategories(fallbackCategories);
+      console.log('✅ Fallback categories processed:', fallbackCategories.length);
     }
   };
 
   // Filter courses based on search term and status
   const filteredCourses = courses.filter(course => {
-    const matchesSearch = 
-      course.fullname.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = course.fullname.toLowerCase().includes(searchTerm.toLowerCase()) ||
       course.shortname.toLowerCase().includes(searchTerm.toLowerCase()) ||
       course.categoryname?.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesStatus = filterStatus === 'all' || course.status === filterStatus;
     
-    return matchesSearch && matchesStatus;
-  });
-
-  // Get courses for current category/subcategory
-  const getCurrentCategoryCourses = () => {
-    if (viewMode === 'courses') {
-      if (selectedSubcategory) {
-        return filteredCourses.filter(course => 
-          course.categoryid?.toString() === selectedCategory
-        );
-      } else {
-        return filteredCourses.filter(course => 
-          course.categoryid?.toString() === selectedCategory
-        );
+    // Add category filtering when in courses view
+    let matchesCategory = true;
+    if (viewMode === 'courses' && selectedCategory) {
+      const selectedCat = categories.find(cat => cat.id === selectedCategory);
+      if (selectedCat) {
+        if (selectedSubcategory) {
+          // Filter by subcategory
+          const selectedSubcat = selectedCat.subcategories?.find(sub => sub.id === selectedSubcategory);
+          if (selectedSubcat) {
+            const matchesById = course.categoryid === selectedSubcat.categoryId;
+            const matchesByName = course.categoryname === selectedSubcat.name;
+            matchesCategory = matchesById || matchesByName;
+          }
+        } else {
+          // Filter by main category (including all subcategories)
+          const matchesById = course.categoryid === selectedCat.categoryId;
+          const matchesByName = course.categoryname === selectedCat.name;
+          const matchesSubcategory = selectedCat.subcategories?.some(sub => 
+            course.categoryid === sub.categoryId || course.categoryname === sub.name
+          );
+          matchesCategory = matchesById || matchesByName || matchesSubcategory;
+        }
+        
+        // Debug logging for first few courses
+        if (courses.indexOf(course) < 3) {
+          console.log(`🔍 Course "${course.fullname}":`, {
+            courseCategoryId: course.categoryid,
+            courseCategoryName: course.categoryname,
+            selectedCategoryId: selectedCat.categoryId,
+            selectedCategoryName: selectedCat.name,
+            selectedSubcategory,
+            matchesCategory
+          });
+        }
       }
     }
-    return filteredCourses;
-  };
+    
+    return matchesSearch && matchesStatus && matchesCategory;
+  });
 
-  const currentCategoryCourses = getCurrentCategoryCourses();
+  const currentCategoryCourses = filteredCourses;
+
+  const exportCoursesData = () => {
+    const csvContent = [
+      ['Course Name', 'Short Name', 'Progress', 'Grade', 'Status', 'Instructor', 'Category'],
+      ...filteredCourses.map(course => [
+        course.fullname,
+        course.shortname,
+        `${course.progress}%`,
+        course.grade ? `${course.grade}%` : 'N/A',
+        course.status.replace('_', ' '),
+        course.instructor,
+        course.categoryname
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `admin_courses_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   if (loading) {
     return (
@@ -439,7 +563,7 @@ const Courses: React.FC = () => {
   }
 
   if (error) {
-    return (
+  return (
       <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 text-red-800 mb-2">
@@ -468,31 +592,39 @@ const Courses: React.FC = () => {
         />
       ) : (
         <div className="p-6 space-y-6">
-          {/* Header */}
+        {/* Header */}
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-            <div>
+          <div>
               <h1 className="text-3xl font-bold text-gray-900">Courses & Programs</h1>
               <p className="text-gray-600 mt-1">Manage all courses and educational programs</p>
-            </div>
-            <div className="flex gap-2">
+          </div>
+                        <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                onClick={exportCoursesData}
+                className="flex items-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Export</span>
+              </Button>
               <Button className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Course
               </Button>
             </div>
-          </div>
+        </div>
 
           {/* Search and Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
-                placeholder="Search courses..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search courses..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
-              />
-            </div>
+                />
+              </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filter by status" />
@@ -515,7 +647,7 @@ const Courses: React.FC = () => {
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-          </div>
+            </div>
 
           {/* Navigation Breadcrumb */}
           {viewMode !== 'categories' && (
@@ -548,7 +680,7 @@ const Courses: React.FC = () => {
                   )}
                 </>
               )}
-            </div>
+          </div>
           )}
 
           {/* Categories Grid */}
@@ -569,10 +701,10 @@ const Courses: React.FC = () => {
                       <div className="w-12 h-12 bg-white rounded-lg shadow-lg flex items-center justify-center border-4 border-white">
                         <div className={`w-8 h-8 bg-gradient-to-br ${category.color} rounded-md flex items-center justify-center`}>
                           <span className="text-white font-bold text-xs">{category.icon}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              </div>
+            </div>
+          </div>
+              </div>
 
                   {/* Category Content */}
                   <CardContent className="pt-8 pb-4">
@@ -582,17 +714,129 @@ const Courses: React.FC = () => {
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">
                       {category.description}
                     </p>
-                    <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-500">
                         {category.courseCount} course{category.courseCount !== 1 ? 's' : ''}
                       </span>
                       <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
-                    </div>
+              </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
           )}
+
+          {/* Subcategories View */}
+          {viewMode === 'subcategories' && (
+            <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleBackToCategories}
+                    className="flex items-center space-x-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back to Categories</span>
+                  </Button>
+              <div>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {categories.find(cat => cat.id === selectedCategory)?.name} - Subcategories
+                    </h2>
+                    <p className="text-sm text-gray-600">Select a subcategory to view courses</p>
+            </div>
+          </div>
+        </div>
+
+              {/* Subcategory Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categories.find(cat => cat.id === selectedCategory)?.subcategories?.map((subcategory) => (
+                  <Card 
+                    key={subcategory.id} 
+                    className="overflow-hidden hover:shadow-xl transition-all duration-300 border-0 shadow-lg group cursor-pointer bg-gradient-to-br from-gray-800 to-gray-700 text-white"
+                    onClick={() => handleSubcategoryClick(subcategory.id)}
+                  >
+                    {/* Subcategory Header */}
+                    <div className="relative h-40 bg-gradient-to-br from-gray-700 to-gray-800">
+                      {/* Abstract Background Pattern */}
+                      <div className="absolute inset-0 opacity-20">
+                        <div className={`absolute bottom-0 right-0 w-24 h-24 bg-gradient-to-tl ${subcategory.color} rounded-full blur-lg`}></div>
+                        <div className={`absolute bottom-3 right-3 w-16 h-16 bg-gradient-to-tl ${subcategory.color} rounded-full blur-md`}></div>
+                </div>
+
+                      {/* Subcategory Icon */}
+                      <div className="absolute top-3 left-3">
+                        <div className={`w-10 h-10 bg-gradient-to-br ${subcategory.color} rounded-lg shadow-lg flex items-center justify-center`}>
+                          <span className="text-white font-bold text-sm">{subcategory.icon}</span>
+                  </div>
+                  </div>
+
+                      {/* Course Count Badge */}
+                      <div className="absolute top-3 right-3">
+                        <Badge className="bg-white/20 text-white border-0 text-xs px-2 py-1">
+                          {subcategory.courseCount} Courses
+                        </Badge>
+                  </div>
+
+                      {/* Subcategory Name */}
+                      <div className="absolute bottom-3 left-3 right-3">
+                        <h3 className="text-lg font-bold text-white mb-1">{subcategory.name}</h3>
+                        <p className="text-xs text-gray-300 line-clamp-2">{subcategory.description}</p>
+                  </div>
+                </div>
+
+                    {/* Subcategory Footer */}
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">View courses</span>
+                        <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
+                </div>
+                    </CardContent>
+                  </Card>
+            ))}
+              </div>
+          </div>
+        )}
+
+          {/* Courses View Header */}
+          {viewMode === 'courses' && (
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    if (selectedSubcategory) {
+                      // Go back to subcategories
+                      setSelectedSubcategory('');
+                      setViewMode('subcategories');
+                    } else {
+                      // Go back to categories
+                      handleBackToCategories();
+                    }
+                  }}
+                  className="flex items-center space-x-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>{selectedSubcategory ? 'Back to Subcategories' : 'Back to Categories'}</span>
+                </Button>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {selectedSubcategory 
+                      ? categories
+                          .find(cat => cat.id === selectedCategory)
+                          ?.subcategories?.find(sub => sub.id === selectedSubcategory)?.name
+                      : categories.find(cat => cat.id === selectedCategory)?.name
+                    } - Courses
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    {currentCategoryCourses.length} course{currentCategoryCourses.length !== 1 ? 's' : ''} available
+                  </p>
+                </div>
+            </div>
+          </div>
+        )}
 
           {/* Enhanced Courses Grid */}
           {viewMode === 'courses' && (
@@ -644,7 +888,7 @@ const Courses: React.FC = () => {
                         </Badge>
                       )}
                     
-                    </div>
+              </div>
 
                     {/* Course Icon Overlay */}
                     <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2">
@@ -652,9 +896,9 @@ const Courses: React.FC = () => {
                         <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-md flex items-center justify-center">
                           <BookOpen className="w-4 h-4 text-white" />
                         </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {/* Course Content */}
                   <CardContent className="pt-8 pb-4">
@@ -682,8 +926,8 @@ const Courses: React.FC = () => {
                              ? 'Course Completed'
                              : 'Course Not Started'
                          }
-                       </span>
-                     </div>
+                                </span>
+                      </div>
 
                     {/* Course Description */}
                     <p className="text-sm text-gray-600 mb-4 line-clamp-2">
@@ -697,36 +941,36 @@ const Courses: React.FC = () => {
                          <span className="text-blue-600 hover:text-blue-700 cursor-pointer">
                            Course Information
                          </span>
-                       </div>
+                                </div>
                        <div className="flex items-center space-x-2 text-sm">
                          <Award className="w-4 h-4 text-green-600" />
                          <span className="text-gray-600">
                            Certified by {getCertificationProvider(course)}
-                         </span>
-                       </div>
+                                  </span>
+                                </div>
                        {course.enrolledStudents > 0 && (
                          <div className="flex items-center space-x-2 text-sm">
                            <Users className="w-4 h-4 text-purple-600" />
                            <span className="text-gray-600">
                              {course.enrolledStudents} students enrolled
-                           </span>
+                                  </span>
                          </div>
-                       )}
-                     </div>
+                                )}
+                              </div>
 
                     {/* Progress Bar */}
                      <div className="mb-4">
                        <div className="flex justify-between text-sm mb-1">
                          <span className="text-gray-600">Progress</span>
                          <span className="font-medium text-gray-900">{course.progress}%</span>
-                       </div>
+                            </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${course.progress}%` }}
                         ></div>
+                        </div>
                       </div>
-                    </div>
 
                     {/* Action Button */}
                      <Button 
@@ -741,7 +985,7 @@ const Courses: React.FC = () => {
                 </Card>
               );
             })}
-            </div>
+                    </div>
           )}
 
           {viewMode === 'courses' && currentCategoryCourses.length === 0 && (
@@ -749,12 +993,12 @@ const Courses: React.FC = () => {
               <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
               <p className="text-gray-500">Try adjusting your search or filter criteria.</p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
       )}
     </DashboardLayout>
   );
 };
 
-export default Courses;
+export default Courses; 
