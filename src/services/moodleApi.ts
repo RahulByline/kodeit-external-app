@@ -1821,7 +1821,7 @@ export const moodleService = {
     return 'Submitted';
   },
 
-  // New method to get course details with real enrollment data
+  // Enhanced method to get course details with real enrollment data and activities
   async getCourseDetails(courseId: string) {
     try {
       console.log('🔍 Fetching course details from IOMAD API...');
@@ -1858,20 +1858,34 @@ export const moodleService = {
           completionRate = Math.floor(Math.random() * 30) + 70; // Mock completion rate
         }
 
+        // Get course activities and contents for real data
+        const courseContents = await this.getCourseContents(courseId);
+        const courseActivities = await this.getCourseActivities(courseId);
+        const courseCompletion = await this.getCourseCompletion(courseId);
+
         return {
-          id: course.id,
-          fullname: course.fullname,
-          shortname: course.shortname,
-          summary: course.summary || '',
-          categoryid: course.categoryid,
-          categoryname: course.categoryname || 'General',
-          startdate: course.startdate,
-          enddate: course.enddate,
-          visible: course.visible,
-          enrolledStudents,
-          completionRate,
-          averageGrade: Math.floor(Math.random() * 20) + 75,
-          totalAssignments: Math.floor(Math.random() * 10) + 3
+          courseInfo: {
+            id: course.id,
+            fullname: course.fullname,
+            shortname: course.shortname,
+            summary: course.summary || '',
+            categoryid: course.categoryid,
+            categoryname: course.categoryname || 'General',
+            startdate: course.startdate,
+            enddate: course.enddate,
+            visible: course.visible,
+            enrolledStudents,
+            completionRate,
+            averageGrade: Math.floor(Math.random() * 20) + 75,
+            totalAssignments: Math.floor(Math.random() * 10) + 3
+          },
+          contents: courseContents,
+          activities: courseActivities,
+          completion: courseCompletion,
+          totalModules: courseActivities?.length || 0,
+          completedModules: courseActivities?.filter((activity: any) => 
+            activity.completion && activity.completion.state === 1
+          )?.length || 0
         };
       }
 
@@ -7570,53 +7584,7 @@ export const moodleService = {
     }
   },
 
-  // Get detailed course information
-  async getCourseDetails(courseId: string) {
-    try {
-      console.log(`🔍 Fetching detailed course information for course ID: ${courseId}`);
-      
-      // Get basic course info
-      const courseResponse = await moodleApi.get('', {
-        params: {
-          wsfunction: 'core_course_get_courses_by_field',
-          field: 'id',
-          value: courseId,
-        },
-      });
 
-      let courseInfo = null;
-      if (courseResponse.data && courseResponse.data.courses && courseResponse.data.courses.length > 0) {
-        courseInfo = courseResponse.data.courses[0];
-      }
-
-      // Get course contents (modules and activities)
-      const contents = await this.getCourseContents(courseId);
-      
-      // Get course completion status
-      const completion = await this.getCourseCompletion(courseId);
-      
-      // Get course grades
-      const grades = await this.getCourseGrades(courseId);
-
-      // Get course activities with completion
-      const activities = await this.getCourseActivities(courseId);
-
-      return {
-        courseInfo,
-        contents,
-        completion,
-        grades,
-        activities,
-        totalModules: activities.length,
-        completedModules: activities.filter(activity => 
-          activity.completion && activity.completion.state === 1
-        ).length,
-      };
-    } catch (error: any) {
-      console.error('❌ Error fetching course details:', error.response?.data || error.message);
-      return null;
-    }
-  },
 
   // Helper function to get current user ID
   async getCurrentUserId() {

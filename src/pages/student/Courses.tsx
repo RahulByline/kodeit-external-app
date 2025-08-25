@@ -150,6 +150,22 @@ interface Course {
   courseimage?: string;
   overviewfiles?: Array<{ fileurl: string; filename?: string }>;
   summaryfiles?: Array<{ fileurl: string; filename?: string }>;
+  // Additional properties used in the component
+  categorizedItems?: {
+    assignments: any[];
+    quizzes: any[];
+    resources: any[];
+    forums: any[];
+    lessons: any[];
+    workshops: any[];
+    videos: any[];
+    other: any[];
+  };
+  allItems?: any[];
+  totalActivities?: number;
+  totalResources?: number;
+  totalAssignments?: number;
+  totalQuizzes?: number;
 }
 
 // Course image fallbacks based on category and course name (same as admin)
@@ -481,7 +497,22 @@ const Courses: React.FC = () => {
             courseimage: courseImage,
             // Ensure image fields are included
             overviewfiles: (course as any).overviewfiles || [],
-            summaryfiles: (course as any).summaryfiles || []
+            summaryfiles: (course as any).summaryfiles || [],
+            categorizedItems: {
+              assignments: [],
+              quizzes: [],
+              resources: [],
+              forums: [],
+              lessons: [],
+              workshops: [],
+              videos: [],
+              other: []
+            },
+            allItems: [],
+            totalActivities: 0,
+            totalResources: 0,
+            totalAssignments: 0,
+            totalQuizzes: 0
           };
         }));
 
@@ -519,6 +550,8 @@ const Courses: React.FC = () => {
     
     try {
       // Fetch ALL real course data from IOMAD API in parallel
+      console.log(`🔍 Starting to fetch real course data for course ID: ${course.id}`);
+      
       const [
         courseContents,
         courseActivities,
@@ -528,7 +561,7 @@ const Courses: React.FC = () => {
         userCourses
       ] = await Promise.all([
         moodleService.getCourseContents(course.id),
-        moodleService.getCourseActivities(course.id),
+        moodleService.getCourseActivities(course.id, currentUser?.id),
         moodleService.getCourseCompletion(course.id),
         moodleService.getCourseGrades(course.id),
         moodleService.getCourseDetails(course.id),
@@ -543,6 +576,29 @@ const Courses: React.FC = () => {
         details: courseDetails ? 'Yes' : 'No',
         userCourses: userCourses?.length || 0
       });
+      
+      // Debug: Log detailed activity information
+      if (courseActivities && courseActivities.length > 0) {
+        console.log('📋 Real activities found:', courseActivities.map((activity: any) => ({
+          id: activity.id,
+          name: activity.name,
+          type: activity.type,
+          section: activity.section,
+          completion: activity.completion
+        })));
+      } else {
+        console.log('⚠️ No real activities found in courseActivities');
+      }
+      
+      if (courseContents && courseContents.length > 0) {
+        console.log('📚 Course contents sections:', courseContents.map((section: any) => ({
+          id: section.id,
+          name: section.name,
+          modulesCount: section.modules?.length || 0
+        })));
+      } else {
+        console.log('⚠️ No course contents found');
+      }
       
       // Store all real course data in state
       setRealCourseData(courseDetails);
@@ -590,8 +646,11 @@ const Courses: React.FC = () => {
         // Process ALL course items (activities and resources) from BOTH API endpoints
         const allCourseItems: any[] = [];
         
+        console.log('🔄 Processing course items from both API sources...');
+        
         // Add activities from getCourseActivities
         if (courseActivities && Array.isArray(courseActivities)) {
+          console.log(`📋 Adding ${courseActivities.length} activities from getCourseActivities`);
           courseActivities.forEach((activity: any) => {
             allCourseItems.push({
               ...activity,
@@ -599,12 +658,16 @@ const Courses: React.FC = () => {
               itemType: 'activity'
             });
           });
+        } else {
+          console.log('⚠️ No courseActivities array found or empty');
         }
         
         // Add resources and activities from course contents
         if (courseContents && Array.isArray(courseContents)) {
+          let totalModules = 0;
           courseContents.forEach((section: any) => {
             if (section.modules && Array.isArray(section.modules)) {
+              totalModules += section.modules.length;
               section.modules.forEach((module: any) => {
                 allCourseItems.push({
                   ...module,
@@ -615,7 +678,12 @@ const Courses: React.FC = () => {
               });
             }
           });
+          console.log(`📚 Added ${totalModules} modules from course contents`);
+        } else {
+          console.log('⚠️ No courseContents array found or empty');
         }
+        
+        console.log(`📊 Total items collected: ${allCourseItems.length}`);
         
         // Categorize all items by type for course overview
         const categorizedItems = {
@@ -670,43 +738,56 @@ const Courses: React.FC = () => {
         console.log(`❓ Quizzes: ${categorizedItems.quizzes.length}`);
         
         // Process activities for sidebar (excluding videos as requested)
-        const realActivities: CourseActivity[] = allCourseItems
-          .filter((item: any) => {
-            const itemType = item.modname || item.type;
-            return itemType !== 'url' && 
-                   itemType !== 'label' &&
-                   itemType !== 'video';
-          })
-          .map((item: any) => {
-            // Determine status based on completion data
-            let status: CourseActivity['status'] = 'not_started';
-            if (item.completion) {
-              if (item.completion.state === 1) {
-                status = 'completed';
-              } else if (item.completion.state === 0) {
-                status = 'in_progress';
-              }
+        console.log('🔄 Processing activities for sidebar display...');
+        
+        const filteredItems = allCourseItems.filter((item: any) => {
+          const itemType = item.modname || item.type;
+          const shouldInclude = itemType !== 'url' && 
+                               itemType !== 'label' &&
+                               itemType !== 'video';
+          
+          if (!shouldInclude) {
+            console.log(`🚫 Filtered out item: ${item.name} (type: ${itemType})`);
+          }
+          
+          return shouldInclude;
+        });
+        
+        console.log(`📋 Filtered items for sidebar: ${filteredItems.length} out of ${allCourseItems.length}`);
+        
+        const realActivities: CourseActivity[] = filteredItems.map((item: any) => {
+          // Determine status based on completion data
+          let status: CourseActivity['status'] = 'not_started';
+          if (item.completion) {
+            if (item.completion.state === 1) {
+              status = 'completed';
+            } else if (item.completion.state === 0) {
+              status = 'in_progress';
             }
-            
-            return {
-              id: item.id.toString(),
-              name: item.name || item.title || 'Unnamed Item',
-              type: mapActivityType(item.modname || item.type),
-              status: status,
-              dueDate: item.dates?.find((date: any) => date.label === 'Due date')?.timestamp || undefined,
-              grade: item.completion?.value || 0,
-              maxGrade: 100,
-              description: item.description || item.intro || 'Course item',
-              instructions: item.description || item.intro || 'Complete this activity',
-              attachments: item.contents?.map((content: any) => content.filename) || [],
-              timeSpent: 0,
-              attempts: item.completion?.attempts || 0,
-              maxAttempts: 3,
-              sectionName: item.sectionName || 'General',
-              source: item.source,
-              itemType: item.itemType
-            };
-          });
+          }
+          
+          const activity = {
+            id: item.id.toString(),
+            name: item.name || item.title || 'Unnamed Item',
+            type: mapActivityType(item.modname || item.type),
+            status: status,
+            dueDate: item.dates?.find((date: any) => date.label === 'Due date')?.timestamp || undefined,
+            grade: item.completion?.value || 0,
+            maxGrade: 100,
+            description: item.description || item.intro || 'Course item',
+            instructions: item.description || item.intro || 'Complete this activity',
+            attachments: item.contents?.map((content: any) => content.filename) || [],
+            timeSpent: 0,
+            attempts: item.completion?.attempts || 0,
+            maxAttempts: 3,
+            sectionName: item.sectionName || 'General',
+            source: item.source,
+            itemType: item.itemType
+          };
+          
+          console.log(`✅ Processed activity: ${activity.name} (${activity.type}) - Status: ${activity.status}`);
+          return activity;
+        });
         
         setCourseActivities(realActivities);
         console.log(`✅ Processed ${realActivities.length} real course activities from IOMAD API`);
@@ -1238,7 +1319,7 @@ const Courses: React.FC = () => {
     );
   }
 
-  return (
+    return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       {showCourseDetails && selectedCourse ? (
         // Course Details Page - Design from Second Image
@@ -1313,7 +1394,7 @@ const Courses: React.FC = () => {
                       <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                       <p className="text-gray-600">Loading activity content...</p>
                     </div>
-                                    ) : (
+                  ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       {/* Video Player Placeholder - Design from Second Image */}
                       <div className="text-center">
@@ -1391,799 +1472,32 @@ const Courses: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-                             {/* Course Activities Section */}
-               {selectedActivity && (
-                 <div className="bg-white rounded-lg border">
-                   <div className="p-6">
-                     <div className="mb-6">
-                       <div className="flex items-center space-x-2 mb-3">
-                              <Badge variant="secondary" className="text-xs">
-                                {selectedActivity.modname || selectedActivity.type}
-                              </Badge>
-                              <Badge variant={selectedActivity.status === 'completed' ? 'default' : 'outline'} className="text-xs">
-                                {selectedActivity.status === 'completed' ? 'Completed' : 
-                                 selectedActivity.status === 'in_progress' ? 'In Progress' : 'Not Started'}
-                              </Badge>
-                            </div>
-                            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                              {selectedActivity.name}
-                            </h2>
-                            
-                            {/* Activity Description in HTML Format */}
-                            {selectedActivity.htmlContent && (
-                              <div className="mb-6">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3">Activity Description</h3>
-                                <div 
-                                  className="prose prose-sm max-w-none bg-gray-50 rounded-lg p-4 border"
-                                  dangerouslySetInnerHTML={{ __html: selectedActivity.htmlContent }}
-                                />
-              </div>
-                            )}
-                            
-                            {/* Activity Intro */}
-                            {selectedActivity.intro && selectedActivity.intro !== selectedActivity.htmlContent && (
-                              <div className="mb-6">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction</h3>
-                                <div 
-                                  className="prose prose-sm max-w-none bg-blue-50 rounded-lg p-4 border border-blue-200"
-                                  dangerouslySetInnerHTML={{ __html: selectedActivity.intro }}
-                                />
-              </div>
-                            )}
-        </div>
-
-                          {/* All Media Content */}
-                          {selectedActivity.allMediaFiles && selectedActivity.allMediaFiles.length > 0 && (
-                            <div className="mb-6">
-                              <h3 className="text-lg font-semibold text-gray-900 mb-3">All Course Media</h3>
-                              
-                              {/* Images */}
-                              {selectedActivity.categorizedFiles.images.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                    <Image className="w-4 h-4 mr-2 text-blue-600" />
-                                    Images ({selectedActivity.categorizedFiles.images.length})
-                                  </h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {selectedActivity.categorizedFiles.images.map((image: any, index: number) => (
-                                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                                        <div className="aspect-video bg-gray-100 flex items-center justify-center">
-                                                                                     <img 
-                                             src={image.fileurl} 
-                                             alt={image.filename || `Image ${index + 1}`}
-                                             className="w-full h-full object-cover"
-                                             onError={(e) => {
-                                               (e.currentTarget as HTMLElement).style.display = 'none';
-                                               ((e.currentTarget as HTMLElement).nextElementSibling as HTMLElement)!.style.display = 'flex';
-                                             }}
-                                           />
-                                          <div className="hidden w-full h-full items-center justify-center text-gray-400">
-                                            <Image className="w-8 h-8" />
-                </div>
-              </div>
-                                        <div className="p-3">
-                                          <p className="text-sm font-medium text-gray-900 truncate">{image.filename}</p>
-                                          <div className="flex items-center justify-between mt-2">
-                                            <span className="text-xs text-gray-500">
-                                              {(image.filesize / 1024).toFixed(1)} KB
-                                            </span>
-                                            <Button size="sm" variant="outline">
-                                              <Download className="w-3 h-3 mr-1" />
-                                              Download
-                                            </Button>
-              </div>
             </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
 
-                              {/* Videos */}
-                              {selectedActivity.categorizedFiles.videos.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                    <Video className="w-4 h-4 mr-2 text-red-600" />
-                                    Videos ({selectedActivity.categorizedFiles.videos.length})
-                                  </h4>
-                                  <div className="space-y-4">
-                                    {selectedActivity.categorizedFiles.videos.map((video: any, index: number) => (
-                                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                                        <div className="aspect-video bg-gray-900 flex items-center justify-center">
-                                          <video 
-                                            controls 
-                                            className="w-full h-full"
-                                            poster={video.fileurl}
-                                          >
-                                            <source src={video.fileurl} type={video.mimetype} />
-                                            Your browser does not support the video tag.
-                                          </video>
-                                        </div>
-                                        <div className="p-4">
-                                          <h5 className="font-medium text-gray-900 mb-2">{video.filename}</h5>
-                                          <div className="flex items-center justify-between">
-                                            <div className="text-sm text-gray-600">
-                                              <p>Type: {video.mimetype}</p>
-                                              <p>Size: {(video.filesize / 1024 / 1024).toFixed(1)} MB</p>
-                                            </div>
-                                            <Button size="sm" variant="outline">
-                                              <Download className="w-4 h-4 mr-2" />
-                                              Download
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Audio */}
-                              {selectedActivity.categorizedFiles.audio.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                    <MessageSquare className="w-4 h-4 mr-2 text-green-600" />
-                                    Audio ({selectedActivity.categorizedFiles.audio.length})
-                                  </h4>
-                                  <div className="space-y-3">
-                                    {selectedActivity.categorizedFiles.audio.map((audio: any, index: number) => (
-                                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
-                                        <div className="flex items-center space-x-3 mb-3">
-                                          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                            <MessageSquare className="w-5 h-5 text-green-600" />
-                                          </div>
-                  <div className="flex-1">
-                                            <h5 className="font-medium text-gray-900">{audio.filename}</h5>
-                                            <p className="text-sm text-gray-600">{audio.mimetype}</p>
-                  </div>
-                                          <Button size="sm" variant="outline">
-                                            <Download className="w-4 h-4 mr-2" />
-                                            Download
-                                          </Button>
-                </div>
-                                        <audio controls className="w-full">
-                                          <source src={audio.fileurl} type={audio.mimetype} />
-                                          Your browser does not support the audio element.
-                                        </audio>
-                                        <p className="text-xs text-gray-500 mt-2">
-                                          Size: {(audio.filesize / 1024 / 1024).toFixed(1)} MB
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Documents */}
-                              {selectedActivity.categorizedFiles.documents.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                    <FileText className="w-4 h-4 mr-2 text-purple-600" />
-                                    Documents ({selectedActivity.categorizedFiles.documents.length})
-                                  </h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {selectedActivity.categorizedFiles.documents.map((doc: any, index: number) => (
-                                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
-                                        <div className="flex items-center space-x-3">
-                                          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                                            <FileText className="w-5 h-5 text-purple-600" />
-                    </div>
-                                          <div className="flex-1">
-                                            <h5 className="font-medium text-gray-900 truncate">{doc.filename}</h5>
-                                            <p className="text-sm text-gray-600">{doc.mimetype}</p>
-                                            <p className="text-xs text-gray-500">
-                                              {(doc.filesize / 1024).toFixed(1)} KB
-                                            </p>
-                  </div>
-                                          <Button size="sm" variant="outline">
-                                            <Download className="w-4 h-4 mr-2" />
-                                            Download
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Other Files */}
-                              {selectedActivity.categorizedFiles.other.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                    <File className="w-4 h-4 mr-2 text-gray-600" />
-                                    Other Files ({selectedActivity.categorizedFiles.other.length})
-                                  </h4>
-                                  <div className="space-y-2">
-                                    {selectedActivity.categorizedFiles.other.map((file: any, index: number) => (
-                                      <div key={index} className="border border-gray-200 rounded-lg p-3 bg-white">
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center space-x-3">
-                                            <File className="w-4 h-4 text-gray-500" />
-                    <div>
-                                              <p className="font-medium text-gray-900">{file.filename}</p>
-                                              <p className="text-sm text-gray-600">{file.mimetype}</p>
-                    </div>
-                    </div>
-                                          <div className="flex items-center space-x-2">
-                                            <span className="text-xs text-gray-500">
-                                              {(file.filesize / 1024).toFixed(1)} KB
-                                            </span>
-                                            <Button size="sm" variant="outline">
-                                              <Download className="w-4 h-4 mr-2" />
-                                              Download
-                                            </Button>
-                    </div>
-                    </div>
-                  </div>
-                                    ))}
-                </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          
-                          {/* Intro Files */}
-                          {selectedActivity.introfiles && selectedActivity.introfiles.length > 0 && (
-                            <div className="mb-6">
-                              <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction Files</h3>
-                              <div className="space-y-3">
-                                {selectedActivity.introfiles.map((item: any, index: number) => (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-blue-50">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="flex items-center space-x-2">
-                                        <FileText className="w-4 h-4 text-blue-500" />
-                                        <h4 className="font-medium text-gray-900">{item.filename || `Intro File ${index + 1}`}</h4>
-                                      </div>
-                                      <Button size="sm" variant="outline">
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download
-                  </Button>
-                </div>
-                                    {item.fileurl && (
-                                      <p className="text-sm text-gray-500">File URL: {item.fileurl}</p>
-                                    )}
-                                  </div>
-          ))}
-        </div>
-                            </div>
-                          )}
-                          
-                          {/* Activity Instructions */}
-                          {selectedActivity.instructions && (
-                            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                              <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
-                                <Target className="w-4 h-4 mr-2 text-yellow-600" />
-                                Instructions
-                              </h3>
-                              <div 
-                                className="prose prose-sm max-w-none text-gray-700"
-                                dangerouslySetInnerHTML={{ __html: selectedActivity.instructions }}
-                              />
-                            </div>
-                          )}
-                          
-                          {/* Activity Info */}
-                          {selectedActivity.activityInfo && (
-                            <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-                              <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
-                                <Info className="w-4 h-4 mr-2 text-green-600" />
-                                Activity Information
-                              </h3>
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                                  <span className="text-gray-600">Type:</span>
-                                  <p className="font-medium">{selectedActivity.activityInfo.type}</p>
-                  </div>
-                                <div>
-                                  <span className="text-gray-600">Status:</span>
-                                  <p className="font-medium">{selectedActivity.activityInfo.status}</p>
-                </div>
-                                {selectedActivity.activityInfo.dueDate && (
-                                  <div>
-                                    <span className="text-gray-600">Due Date:</span>
-                                    <p className="font-medium">{new Date(selectedActivity.activityInfo.dueDate).toLocaleDateString()}</p>
-              </div>
-                                )}
-                                {selectedActivity.activityInfo.grade && (
-                                  <div>
-                                    <span className="text-gray-600">Grade:</span>
-                                    <p className="font-medium">{selectedActivity.activityInfo.grade}%</p>
-                        </div>
-                                )}
-                        </div>
-                        </div>
-                          )}
-                        </div>
-                        </div>
-                  ) : (
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <BookOpen className="w-8 h-8 text-blue-600" />
-                      </div>
-                      <p className="text-gray-600 text-lg font-medium mb-2">Select an Activity</p>
-                      <p className="text-gray-500 text-sm">Click on any activity from the sidebar to view its content</p>
-                    </div>
-                  )}
-                      </div>
-                    </div>
-
-              {/* Course Information */}
-              <div className="bg-white rounded-lg border p-6">
-                {isLoadingCourseData ? (
-                  <div className="flex justify-center items-center py-12">
-                    <div className="text-center">
-                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                      <p className="text-gray-600">Loading course data from IOMAD API...</p>
-                      </div>
-                    </div>
-                ) : (
-                  <>
-                    <div className="mb-4">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {realCourseData?.courseInfo?.categoryname || selectedCourse.categoryname}
-                        </Badge>
-                      </div>
-                      <h2 className="text-2xl font-bold text-gray-900 mb-1">
-                        {realCourseData?.courseInfo?.fullname || selectedCourse.fullname}
-                      </h2>
-                      <p className="text-gray-600">
-                        Course ID: {selectedCourse.id} • 
-                        {realCourseData?.courseInfo?.format ? ` Format: ${realCourseData.courseInfo.format}` : ''}
-                      </p>
-                  </div>
-
-                    {/* Course Overview - All Activities and Resources */}
-                    {selectedCourse?.categorizedItems && (
-                      <div className="mb-8">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Overview</h3>
-                        
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                          <div className="bg-blue-50 rounded-lg p-4 text-center">
-                            <div className="text-2xl font-bold text-blue-600">{selectedCourse.totalResources || 0}</div>
-                            <div className="text-sm text-blue-800">Resources</div>
-                          </div>
-                          <div className="bg-green-50 rounded-lg p-4 text-center">
-                            <div className="text-2xl font-bold text-green-600">{selectedCourse.totalAssignments || 0}</div>
-                            <div className="text-sm text-green-800">Assignments</div>
-                          </div>
-                          <div className="bg-purple-50 rounded-lg p-4 text-center">
-                            <div className="text-2xl font-bold text-purple-600">{selectedCourse.totalQuizzes || 0}</div>
-                            <div className="text-sm text-purple-800">Quizzes</div>
-                          </div>
-                          <div className="bg-orange-50 rounded-lg p-4 text-center">
-                            <div className="text-2xl font-bold text-orange-600">{selectedCourse.totalActivities || 0}</div>
-                            <div className="text-sm text-orange-800">Total Items</div>
-                          </div>
-                        </div>
-
-                        {/* Categorized Activities and Resources */}
-                        <div className="space-y-6">
-                          
-                          {/* Resources */}
-                          {selectedCourse.categorizedItems.resources.length > 0 && (
-                            <div>
-                              <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                <FileText className="w-4 h-4 mr-2 text-blue-600" />
-                                Resources ({selectedCourse.categorizedItems.resources.length})
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {selectedCourse.categorizedItems.resources.map((resource: any, index: number) => (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-3 bg-blue-50 hover:bg-blue-100 cursor-pointer transition-colors">
-                                    <div className="flex items-center space-x-2 mb-2">
-                                      <FileText className="w-4 h-4 text-blue-600" />
-                                      <h5 className="font-medium text-gray-900 text-sm truncate">{resource.name}</h5>
-                                    </div>
-                                    <p className="text-xs text-gray-600 truncate">{resource.description || resource.intro || 'No description'}</p>
-                                    {resource.sectionName && (
-                                      <span className="text-xs text-blue-700 bg-blue-200 px-2 py-1 rounded mt-2 inline-block">
-                                        {resource.sectionName}
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Assignments */}
-                          {selectedCourse.categorizedItems.assignments.length > 0 && (
-                            <div>
-                              <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                <Edit className="w-4 h-4 mr-2 text-green-600" />
-                                Assignments ({selectedCourse.categorizedItems.assignments.length})
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {selectedCourse.categorizedItems.assignments.map((assignment: any, index: number) => (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-green-50 hover:bg-green-100 cursor-pointer transition-colors">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="flex items-center space-x-2">
-                                        <Edit className="w-4 h-4 text-green-600" />
-                                        <h5 className="font-medium text-gray-900 text-sm">{assignment.name}</h5>
-                                      </div>
-                                      <Badge variant={assignment.completion?.state === 1 ? 'default' : 'outline'} className="text-xs">
-                                        {assignment.completion?.state === 1 ? 'Completed' : 'Pending'}
-                                      </Badge>
-                                    </div>
-                                    <p className="text-xs text-gray-600 mb-2">{assignment.description || assignment.intro || 'No description'}</p>
-                                    {assignment.dates?.find((date: any) => date.label === 'Due date') && (
-                                      <div className="text-xs text-red-600">
-                                        Due: {new Date(assignment.dates.find((date: any) => date.label === 'Due date').timestamp * 1000).toLocaleDateString()}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Quizzes */}
-                          {selectedCourse.categorizedItems.quizzes.length > 0 && (
-                            <div>
-                              <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                <BarChart3 className="w-4 h-4 mr-2 text-purple-600" />
-                                Quizzes ({selectedCourse.categorizedItems.quizzes.length})
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {selectedCourse.categorizedItems.quizzes.map((quiz: any, index: number) => (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-purple-50 hover:bg-purple-100 cursor-pointer transition-colors">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="flex items-center space-x-2">
-                                        <BarChart3 className="w-4 h-4 text-purple-600" />
-                                        <h5 className="font-medium text-gray-900 text-sm">{quiz.name}</h5>
-                                      </div>
-                                      <Badge variant={quiz.completion?.state === 1 ? 'default' : 'outline'} className="text-xs">
-                                        {quiz.completion?.state === 1 ? 'Completed' : 'Available'}
-                                      </Badge>
-                                    </div>
-                                    <p className="text-xs text-gray-600">{quiz.description || quiz.intro || 'No description'}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Forums */}
-                          {selectedCourse.categorizedItems.forums.length > 0 && (
-                            <div>
-                              <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                <MessageSquare className="w-4 h-4 mr-2 text-orange-600" />
-                                Forums ({selectedCourse.categorizedItems.forums.length})
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {selectedCourse.categorizedItems.forums.map((forum: any, index: number) => (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-3 bg-orange-50 hover:bg-orange-100 cursor-pointer transition-colors">
-                                    <div className="flex items-center space-x-2 mb-2">
-                                      <MessageSquare className="w-4 h-4 text-orange-600" />
-                                      <h5 className="font-medium text-gray-900 text-sm">{forum.name}</h5>
-                                    </div>
-                                    <p className="text-xs text-gray-600">{forum.description || forum.intro || 'No description'}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Lessons */}
-                          {selectedCourse.categorizedItems.lessons.length > 0 && (
-                            <div>
-                              <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                <BookOpen className="w-4 h-4 mr-2 text-indigo-600" />
-                                Lessons ({selectedCourse.categorizedItems.lessons.length})
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {selectedCourse.categorizedItems.lessons.map((lesson: any, index: number) => (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-3 bg-indigo-50 hover:bg-indigo-100 cursor-pointer transition-colors">
-                                    <div className="flex items-center space-x-2 mb-2">
-                                      <BookOpen className="w-4 h-4 text-indigo-600" />
-                                      <h5 className="font-medium text-gray-900 text-sm">{lesson.name}</h5>
-                                    </div>
-                                    <p className="text-xs text-gray-600">{lesson.description || lesson.intro || 'No description'}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Other Activities */}
-                          {selectedCourse.categorizedItems.other.length > 0 && (
-                            <div>
-                              <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                <Circle className="w-4 h-4 mr-2 text-gray-600" />
-                                Other Activities ({selectedCourse.categorizedItems.other.length})
-                              </h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {selectedCourse.categorizedItems.other.map((item: any, index: number) => (
-                                  <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors">
-                                    <div className="flex items-center space-x-2 mb-2">
-                                      <Circle className="w-4 h-4 text-gray-600" />
-                                      <h5 className="font-medium text-gray-900 text-sm">{item.name}</h5>
-                                    </div>
-                                    <p className="text-xs text-gray-600">{item.description || item.intro || 'No description'}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Course Activities Summary */}
-                    {realCourseActivities.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-3">Course Activities ({realCourseActivities.length})</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {realCourseActivities.slice(0, 6).map((activity: any) => (
-                            <div key={activity.id} className="border border-gray-200 rounded-lg p-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <h4 className="font-medium text-gray-900 text-sm">{activity.name}</h4>
-                                <span className={`text-xs px-2 py-1 rounded ${
-                                  activity.completion?.state === 1 ? 'bg-green-100 text-green-800' :
-                                  activity.completion?.state === 0 ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {activity.completion?.state === 1 ? 'Completed' :
-                                   activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500 capitalize">{activity.type} Activity</p>
-                            </div>
-                          ))}
-                        </div>
-                        {realCourseActivities.length > 6 && (
-                          <p className="text-sm text-gray-500 mt-2">
-                            And {realCourseActivities.length - 6} more activities...
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Completed Courses Section */}
-                      <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                        Completed Courses ({completedCourses.length})
-                      </h3>
-                      {isLoadingCompletedCourses ? (
-                        <div className="flex justify-center items-center py-8">
-                          <div className="text-center">
-                            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                            <p className="text-sm text-gray-600">Loading completed courses...</p>
-                                </div>
-                        </div>
-                      ) : completedCourses.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {completedCourses.map((completedCourse: any) => (
-                            <div key={completedCourse.id} className="border border-green-200 bg-green-50 rounded-lg p-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-medium text-gray-900 text-sm">{completedCourse.fullname}</h4>
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                  Completed
-                                  </span>
-                                </div>
-                              <div className="space-y-1 text-xs text-gray-600">
-                                <p><strong>Course ID:</strong> {completedCourse.id}</p>
-                                <p><strong>Short Name:</strong> {completedCourse.shortname}</p>
-                                <p><strong>Category:</strong> {completedCourse.categoryname || 'General'}</p>
-                                <p><strong>Progress:</strong> {completedCourse.progress || 100}%</p>
-                                {completedCourse.startdate && (
-                                  <p><strong>Start Date:</strong> {new Date(completedCourse.startdate * 1000).toLocaleDateString()}</p>
-                                )}
-                                {completedCourse.enddate && (
-                                  <p><strong>End Date:</strong> {new Date(completedCourse.enddate * 1000).toLocaleDateString()}</p>
-                                )}
-                              </div>
-                              {completedCourse.summary && (
-                                <p className="text-xs text-gray-500 mt-2 line-clamp-2">{completedCourse.summary}</p>
-                                )}
-                              </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="bg-gray-50 rounded-lg p-6 text-center">
-                          <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <CheckCircle className="w-6 h-6 text-gray-400" />
-                          </div>
-                          <h4 className="font-medium text-gray-900 mb-1">No Completed Courses</h4>
-                          <p className="text-sm text-gray-500">
-                            You haven't completed any courses yet. Keep learning to see your completed courses here!
-                          </p>
-                        </div>
-                      )}
-                                      </div>
-                  </>
-                                    )}
-              </div>
-            </div>
-                                    
-            {/* Right Sidebar - Course Progress and Activities */}
+            {/* Right Sidebar */}
             <div className="bg-white rounded-lg border p-4 h-fit space-y-6">
-              {/* Real Course Progress */}
-                                      <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-3">Your Course Progress</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Course Progress</h3>
+              <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">Progress</span>
-                    <span className="text-sm text-gray-500">
-                      {realCourseCompletion?.completionstatus?.completion || selectedCourse.progress}%
-                    </span>
-                                            </div>
+                    <span className="text-sm text-gray-500">{selectedCourse.progress}%</span>
+                  </div>
                   <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                     <div 
                       className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                      style={{ 
-                        width: `${realCourseCompletion?.completionstatus?.completion || selectedCourse.progress}%` 
-                      }}
+                      style={{ width: `${selectedCourse.progress}%` }}
                     ></div>
-                                        </div>
-                  <p className="text-sm text-gray-600">
-                    {realCourseData?.completedModules || 0}/{realCourseData?.totalModules || realCourseContents.length} modules completed
-                  </p>
-                                    
-                  {/* Real Completion Details */}
-                  {realCourseCompletion && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                                      <div>
-                          <span className="text-gray-500">Activities:</span>
-                          <p className="font-medium">{realCourseActivities.length}</p>
-                                      </div>
-                                      <div>
-                          <span className="text-gray-500">Completed:</span>
-                          <p className="font-medium">
-                            {realCourseActivities.filter((a: any) => a.completion?.state === 1).length}
-                          </p>
-                                      </div>
-                        <div>
-                          <span className="text-gray-500">In Progress:</span>
-                          <p className="font-medium">
-                            {realCourseActivities.filter((a: any) => a.completion?.state === 0).length}
-                          </p>
-                                    </div>
-                        <div>
-                          <span className="text-gray-500">Not Started:</span>
-                          <p className="font-medium">
-                            {realCourseActivities.filter((a: any) => !a.completion?.state).length}
-                          </p>
-                                  </div>
-                              </div>
-                            </div>
-                  )}
-                        </div>
-                      </div>
-
-              {/* Real Course Activities */}
-                      <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-3">
-                  Course Activities ({realCourseActivities.length})
-                </h3>
-                <div className="space-y-2">
-                  {realCourseActivities.length > 0 ? (
-                    realCourseActivities.map((activity: any, index: number) => (
-                      <div 
-                        key={activity.id} 
-                        className={`bg-gray-50 rounded-lg p-3 cursor-pointer hover:shadow-md transition-shadow ${
-                          selectedActivity?.id === activity.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                        }`}
-                        onClick={() => handleActivityClick(activity, index)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center">
-                              {activity.completion?.state === 1 ? (
-                                <CheckCircle className="w-5 h-5 text-green-600" />
-                              ) : selectedActivity?.id === activity.id ? (
-                                <Play className="w-5 h-5 text-blue-600" />
-                              ) : (
-                                <Circle className="w-5 h-5 text-gray-400" />
-                              )}
-                        </div>
-                            <div className="flex-1">
-                              <h4 className="text-sm font-medium text-gray-900">{activity.name}</h4>
-                              <p className="text-xs text-gray-500 capitalize">
-                                {activity.type} • {activity.completion?.state === 1 ? 'Completed' :
-                                                 activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
-                              </p>
-                                  </div>
-                          </div>
-                          {activity.completion?.state === 1 && (
-                                      <CheckCircle className="w-4 h-4 text-green-600" />
-                                    )}
-                                  </div>
-                                </div>
-                    ))
-                  ) : (
-                    <div className="bg-gray-50 rounded-lg p-4 text-center">
-                      <p className="text-sm text-gray-500">No activities found</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Real Course Modules */}
-                                        <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-3">
-                  Course Sections ({realCourseContents.length})
-                </h3>
-                <div className="space-y-2">
-                  {realCourseContents.length > 0 ? (
-                    realCourseContents.map((section: any) => (
-                      <div key={section.id} className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                              <BookOpen className="w-4 h-4 text-blue-600" />
-                                        </div>
-                                        <div>
-                              <h4 className="text-sm font-medium text-gray-900">{section.name}</h4>
-                              <p className="text-xs text-gray-500">
-                                {section.modules?.length || 0} activities
-                              </p>
-                                        </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium text-gray-900">
-                              {section.modules?.length || 0}
-                            </div>
-                            <div className="text-xs text-gray-500">Activities</div>
-                          </div>
-                        </div>
-                        {section.summary && (
-                          <p className="text-xs text-gray-500 mt-2 line-clamp-2">{section.summary}</p>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="bg-gray-50 rounded-lg p-4 text-center">
-                      <p className="text-sm text-gray-500">No course sections found</p>
-                                        </div>
-                                      )}
-                </div>
-              </div>
-                                      
-              {/* Completed Courses Summary */}
-                                        <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-3">
-                  Completed Courses ({completedCourses.length})
-                </h3>
-                {isLoadingCompletedCourses ? (
-                  <div className="bg-gray-50 rounded-lg p-4 text-center">
-                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <p className="text-sm text-gray-500">Loading...</p>
-                                              </div>
-                ) : completedCourses.length > 0 ? (
-                  <div className="space-y-2">
-                    {completedCourses.slice(0, 3).map((completedCourse: any) => (
-                      <div key={completedCourse.id} className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="text-sm font-medium text-gray-900 line-clamp-1">{completedCourse.fullname}</h4>
-                          <CheckCircle className="w-4 h-4 text-green-600" />
-                                          </div>
-                        <p className="text-xs text-gray-500">{completedCourse.shortname}</p>
-                        <p className="text-xs text-green-600 font-medium">{completedCourse.progress || 100}% Complete</p>
-                                        </div>
-                    ))}
-                    {completedCourses.length > 3 && (
-                      <div className="bg-gray-50 rounded-lg p-3 text-center">
-                        <p className="text-sm text-gray-500">
-                          +{completedCourses.length - 3} more completed courses
-                        </p>
-                                    </div>
-                                  )}
-                                </div>
-                ) : (
-                  <div className="bg-gray-50 rounded-lg p-4 text-center">
-                    <CheckCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">No completed courses yet</p>
-                              </div>
-                )}
-                        </div>
-                      </div>
-                    </div>
                   </div>
-      ) : (
+                  <p className="text-sm text-gray-600">
+                    {selectedCourse.completedModules || 0}/{selectedCourse.totalModules || 0} modules completed
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+            ) : (
         // Courses List Page
         <div className="space-y-6">
           {/* Header */}
@@ -2191,7 +1505,7 @@ const Courses: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">My Courses</h1>
               <p className="text-gray-600 mt-1">Real-time course data from IOMAD Moodle API - {courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
-                </div>
+            </div>
             
             <div className="flex items-center space-x-3">
               <Button variant="outline" onClick={refreshData} disabled={refreshing}>
@@ -2202,8 +1516,8 @@ const Courses: React.FC = () => {
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </Button>
-              </div>
             </div>
+          </div>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -2228,7 +1542,7 @@ const Courses: React.FC = () => {
               <CardContent>
                 <div className="text-2xl font-bold">
                   {courses.filter(c => c.status === 'in_progress').length}
-          </div>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Active courses
                 </p>
@@ -2271,8 +1585,8 @@ const Courses: React.FC = () => {
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    type="text"
+                <Input
+                  type="text"
                   placeholder="Search courses..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -2291,7 +1605,7 @@ const Courses: React.FC = () => {
                 <SelectItem value="not_started">Not Started</SelectItem>
               </SelectContent>
             </Select>
-                </div>
+          </div>
                 
           {/* Enhanced Course Cards Grid - Design from First Image */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -2387,9 +1701,9 @@ const Courses: React.FC = () => {
               <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
               <p className="text-gray-500">Try adjusting your search or filter criteria.</p>
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
       )}
     </DashboardLayout>
   );
