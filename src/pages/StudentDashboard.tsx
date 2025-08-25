@@ -1388,35 +1388,151 @@ const StudentDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Charts Section */}
+      {/* Course Categories Section - Ultra Fast Loading */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-semibold text-gray-900">My Courses</h2>
+          <div className="flex items-center space-x-2">
+            {loadingStates.userCourses && (
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-gray-500">Loading courses...</span>
+              </div>
+            )}
+            <Link to="/dashboard/student/courses" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+              View All →
+            </Link>
+          </div>
+        </div>
+        
+        {/* Course Categories Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {loadingStates.userCourses ? (
+            // Show skeleton loaders while courses are loading
+            Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-start space-x-3 mb-4">
+                  <Skeleton className="w-12 h-12 rounded-lg" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                  <Skeleton className="h-2 w-full rounded-full" />
+                </div>
+              </div>
+            ))
+          ) : userCourses.length > 0 ? (
+                         // Group courses by category and display
+             (() => {
+               const courseCategories = (userCourses as Course[]).reduce((acc, course) => {
+                 const category = course.categoryid || 'General';
+                 if (!acc[category]) {
+                   acc[category] = [];
+                 }
+                 acc[category].push(course);
+                 return acc;
+               }, {} as Record<string, Course[]>);
+
+              return Object.entries(courseCategories).map(([categoryId, courses]) => {
+                const categoryName = courses[0]?.categoryname || `Category ${categoryId}`;
+                const totalProgress = Math.round(
+                  courses.reduce((sum, course) => sum + (course.progress || 0), 0) / courses.length
+                );
+
+                return (
+                  <div key={categoryId} className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                          <BookOpen className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900 text-sm">{categoryName}</h3>
+                          <p className="text-xs text-gray-600">{courses.length} course{courses.length !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-bold text-blue-600">{totalProgress}%</span>
+                        <p className="text-xs text-gray-500">Progress</p>
+                      </div>
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    <div className="w-full bg-blue-200 rounded-full h-2 mb-4">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${totalProgress}%` }}
+                      ></div>
+                    </div>
+
+                    {/* Course List */}
+                    <div className="space-y-2">
+                      {courses.slice(0, 3).map((course) => (
+                        <div key={course.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{course.shortname}</p>
+                            <p className="text-xs text-gray-600 truncate">{course.fullname}</p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-medium text-blue-600">{course.progress || 0}%</span>
+                            <div className="w-8 h-1 bg-gray-200 rounded-full">
+                              <div 
+                                className="h-1 bg-blue-500 rounded-full"
+                                style={{ width: `${course.progress || 0}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {courses.length > 3 && (
+                        <div className="text-center">
+                          <span className="text-xs text-blue-600 font-medium">
+                            +{courses.length - 3} more course{courses.length - 3 !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="mt-4 flex space-x-2">
+                      <button className="flex-1 bg-blue-500 text-white text-xs py-2 px-3 rounded hover:bg-blue-600 transition-colors">
+                        Continue Learning
+                      </button>
+                      <button className="bg-white text-blue-600 text-xs py-2 px-3 rounded border border-blue-200 hover:bg-blue-50 transition-colors">
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                );
+              });
+            })()
+          ) : (
+            // Empty state
+            <div className="col-span-full text-center py-8">
+              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Courses Available</h3>
+              <p className="text-gray-600 text-sm mb-4">You haven't been enrolled in any courses yet.</p>
+              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                Browse Available Courses
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Course Progress Analysis - Simplified */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Course Progress Analysis */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Course Progress Analysis</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Course Progress Overview</h2>
           </div>
           
-          {/* Filter Buttons */}
-          <div className="flex space-x-2 mb-6">
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
-              By Subject
-            </button>
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-              By Semester
-            </button>
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-              By Assignment
-            </button>
-          </div>
-
-          {/* Chart Placeholder */}
-          <div className="bg-blue-50 rounded-lg p-8 text-center mb-6">
-            <BarChart3 className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-            <p className="text-blue-700 text-sm">
-              Progress analysis chart showing {courseProgress.length > 0 ? Math.round(courseProgress.reduce((sum, course) => sum + course.progress, 0) / courseProgress.length) : 0}% average completion rate across all enrolled courses
-            </p>
-          </div>
-
           {/* Subject Breakdown */}
           <div className="space-y-3">
             {loadingStates.userCourses || loadingStates.courseProgress ? (
@@ -1482,51 +1598,125 @@ const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Recent Activities Section */}
+      {/* Course Activities Section - Independent Loading */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Activities</h2>
-          <Link to="/dashboard/student/courses" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-            View All Activities →
-          </Link>
+          <h2 className="text-lg font-semibold text-gray-900">Course Activities</h2>
+          <div className="flex items-center space-x-2">
+            {loadingStates.studentActivities && (
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-gray-500">Loading activities...</span>
+              </div>
+            )}
+            <Link to="/dashboard/student/activities" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+              View All →
+            </Link>
+          </div>
         </div>
         
-        <div className="space-y-4">
-          {loadingStates.recentActivities ? (
-            <>
-              <SkeletonActivityCard />
-              <SkeletonActivityCard />
-              <SkeletonActivityCard />
-              <SkeletonActivityCard />
-              <SkeletonActivityCard />
-            </>
-          ) : (
-            recentActivities.slice(0, 5).map((activity) => (
-              <div key={activity.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  {activity.type === 'course_access' && <BookOpen className="w-4 h-4 text-blue-600" />}
-                  {activity.type === 'assignment_submit' && <FileText className="w-4 h-4 text-green-600" />}
-                  {activity.type === 'quiz_complete' && <BarChart3 className="w-4 h-4 text-purple-600" />}
-                  {activity.type === 'resource_view' && <Play className="w-4 h-4 text-orange-600" />}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Recent Activities */}
+          <div>
+            <h3 className="font-medium text-gray-900 mb-4">Recent Activities</h3>
+            <div className="space-y-3">
+              {loadingStates.recentActivities ? (
+                <>
+                  <SkeletonActivityCard />
+                  <SkeletonActivityCard />
+                  <SkeletonActivityCard />
+                </>
+              ) : recentActivities.length > 0 ? (
+                recentActivities.slice(0, 5).map((activity, index) => (
+                  <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      {activity.type === 'course_access' ? (
+                        <BookOpen className="w-3 h-3 text-blue-600" />
+                      ) : activity.type === 'assignment_submit' ? (
+                        <CheckCircle className="w-3 h-3 text-green-600" />
+                      ) : (
+                        <Activity className="w-3 h-3 text-gray-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{activity.title}</p>
+                      <p className="text-xs text-gray-600 truncate">{activity.description}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(activity.timestamp).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {activity.grade && (
+                      <div className="text-right">
+                        <span className="text-xs font-semibold text-green-600">{activity.grade}%</span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <Activity className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600 text-xs">No recent activities</p>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-medium text-gray-900">{activity.title}</h3>
-                  <p className="text-sm text-gray-600">{activity.description}</p>
-                  {activity.courseName && (
-                    <p className="text-xs text-gray-500 mt-1">Course: {activity.courseName}</p>
-                  )}
+              )}
+            </div>
+          </div>
+
+          {/* Student Activities */}
+          <div>
+            <h3 className="font-medium text-gray-900 mb-4">My Assignments</h3>
+            <div className="space-y-3">
+              {loadingStates.studentActivities ? (
+                <>
+                  <SkeletonActivityCard />
+                  <SkeletonActivityCard />
+                  <SkeletonActivityCard />
+                </>
+              ) : studentActivities.length > 0 ? (
+                studentActivities.slice(0, 5).map((activity, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                        activity.status === 'completed' ? 'bg-green-100' :
+                        activity.status === 'overdue' ? 'bg-red-100' :
+                        activity.status === 'in_progress' ? 'bg-yellow-100' : 'bg-gray-100'
+                      }`}>
+                        {activity.status === 'completed' ? (
+                          <CheckCircle className="w-3 h-3 text-green-600" />
+                        ) : activity.status === 'overdue' ? (
+                          <Clock className="w-3 h-3 text-red-600" />
+                        ) : activity.status === 'in_progress' ? (
+                          <Activity className="w-3 h-3 text-yellow-600" />
+                        ) : (
+                          <Circle className="w-3 h-3 text-gray-600" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{activity.title}</p>
+                        <p className="text-xs text-gray-600 truncate">{activity.courseName}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {activity.grade ? (
+                        <span className="text-xs font-semibold text-green-600">{activity.grade}%</span>
+                      ) : (
+                        <span className={`text-xs font-medium ${
+                          activity.status === 'overdue' ? 'text-red-600' : 'text-gray-600'
+                        }`}>
+                          {activity.status === 'overdue' ? 'Overdue' : 
+                           activity.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600 text-xs">No assignments available</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">
-                    {new Date(activity.timestamp).toLocaleDateString()}
-                  </p>
-                  {activity.grade && (
-                    <p className="text-xs text-green-600 font-medium">Grade: {activity.grade}%</p>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
