@@ -57,6 +57,7 @@ const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 
 // Admin pages - lazy loaded
 const AdminTeachers = lazy(() => import("./pages/admin/Teachers"));
+const AdminStudents = lazy(() => import("./pages/admin/Students"));
 const MasterTrainers = lazy(() => import("./pages/admin/MasterTrainers"));
 const AdminCourses = lazy(() => import("./pages/admin/Courses"));
 const AdminCertifications = lazy(() => import("./pages/admin/Certifications"));
@@ -237,6 +238,15 @@ const App = () => {
                     <ErrorBoundary fallback={<LazyErrorFallback error={new Error("Failed to load Teachers")} />}>
                       <Suspense fallback={<LoadingSpinner />}>
                         <AdminTeachers />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/admin/students" element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ErrorBoundary fallback={<LazyErrorFallback error={new Error("Failed to load Students")} />}>
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <AdminStudents />
                       </Suspense>
                     </ErrorBoundary>
                   </ProtectedRoute>

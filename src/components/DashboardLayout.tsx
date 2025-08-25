@@ -225,9 +225,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           ]
         },
         {
-          title: 'TEACHERS',
+          title: 'STUDENTS',
           items: [
-            { name: 'Teachers', icon: Users, path: '/dashboard/admin/teachers' },
+            { name: 'Students', icon: Users, path: '/dashboard/admin/students' },
             { name: 'Master Trainers', icon: Award, path: '/dashboard/admin/master-trainers' },
           ]
         },
