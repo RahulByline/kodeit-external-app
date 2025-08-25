@@ -482,8 +482,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                   {[
                     { id: 'curriculum', label: 'Curriculum' },
                     { id: 'overview', label: 'Overview' },
-                    { id: 'instructors', label: 'Instructors' },
-                    { id: 'reviews', label: 'Reviews' }
+                    { id: 'instructors', label: 'Instructors' }
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -635,14 +634,6 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                          </div>
                        </div>
                     </div>
-                  </div>
-                )}
-
-                {activeTab === 'reviews' && (
-                  <div className="text-center py-8">
-                    <Star className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Reviews Yet</h3>
-                    <p className="text-gray-500">Be the first to review this course!</p>
                   </div>
                 )}
               </div>
