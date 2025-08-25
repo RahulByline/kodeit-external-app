@@ -1,14 +1,14 @@
 {
   "2": {
     "dashboard": {
-      "Dashboard": false,
+      "Dashboard": true,
       "Community": true,
       "Enrollments": true
     },
     "courses": {
       "My Courses": true,
       "Assignments": true,
-      "Assessments": true
+      "Assessments": false
     },
     "progress": {
       "My Grades": true,
@@ -16,7 +16,7 @@
     },
     "resources": {
       "Calendar": true,
-      "Messages": false
+      "Messages": true
     },
     "emulators": {
       "Code Editor": false,
