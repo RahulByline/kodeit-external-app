@@ -346,318 +346,356 @@ const Enrollments: React.FC = () => {
   }
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Enrollments</h1>
-            <p className="text-gray-600 mt-1">Manage your course enrollments and track your learning progress</p>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            <button className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </button>
-            <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-              <Plus className="w-4 h-4 mr-2" />
-              Enroll in Course
-            </button>
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <BookOpen className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Total Enrolled</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.totalEnrolled}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Completed</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.completedCourses}</p>
+    <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+        <div className="min-h-screen py-4">
+          <div className=" mx-auto space-y-6">
+            {/* Enhanced Header */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                      <GraduationCap className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-blue-600 bg-clip-text text-transparent">
+                        My Enrollments
+                      </h1>
+                      <p className="text-gray-600 mt-1">
+                        Manage your course enrollments and track your learning progress • {stats.totalEnrolled} courses
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <button className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-300 shadow-sm hover:shadow-md">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export
+                  </button>
+                  <button className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Enroll in Course
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Clock className="w-5 h-5 text-yellow-600" />
+            {/* Enhanced Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <BookOpen className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalEnrolled}</div>
+                    <p className="text-sm text-gray-500">Total</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Total Enrolled</h3>
+                <p className="text-sm text-gray-600">All your courses</p>
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">In Progress</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.inProgress}</p>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.completedCourses}</div>
+                    <p className="text-sm text-gray-500">Done</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Completed</h3>
+                <p className="text-sm text-gray-600">Finished courses</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.inProgress}</div>
+                    <p className="text-sm text-gray-500">Active</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">In Progress</h3>
+                <p className="text-sm text-gray-600">Currently learning</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.averageGrade}%</div>
+                    <p className="text-sm text-gray-500">Grade</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Avg Grade</h3>
+                <p className="text-sm text-gray-600">Overall performance</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Clock3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalHours}h</div>
+                    <p className="text-sm text-gray-500">Hours</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Total Hours</h3>
+                <p className="text-sm text-gray-600">Learning time</p>
+              </div>
+
+              <div className="group bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-all duration-500 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Award className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">{stats.certificates}</div>
+                    <p className="text-sm text-gray-500">Certs</p>
+                  </div>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Certificates</h3>
+                <p className="text-sm text-gray-600">Earned certificates</p>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <BarChart3 className="w-5 h-5 text-purple-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Avg Grade</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.averageGrade}%</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Clock3 className="w-5 h-5 text-orange-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Total Hours</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.totalHours}h</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <Award className="w-5 h-5 text-indigo-600" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-500">Certificates</p>
-                <p className="text-lg font-semibold text-gray-900">{stats.certificates}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search and Filters */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search courses, instructors, or categories..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">All Status</option>
-                <option value="enrolled">Enrolled</option>
-                <option value="completed">Completed</option>
-                <option value="dropped">Dropped</option>
-                <option value="pending">Pending</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Course List */}
-        <div className="space-y-4">
-          {filteredCourses.map(course => (
-            <div key={course.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-6">
-                <div className="flex items-start space-x-4">
-                  <img
-                    src={course.image}
-                    alt={course.title}
-                    className="w-24 h-16 object-cover rounded-lg"
+            {/* Enhanced Search and Filters */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search courses, instructors, or categories..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{course.title}</h3>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(course.status)}`}>
-                            {getStatusIcon(course.status)}
-                            <span className="ml-1 capitalize">{course.status}</span>
-                          </span>
-                        </div>
-                        
-                        <p className="text-gray-600 mb-3 line-clamp-2">{course.description}</p>
-                        
-                        <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
-                          <div className="flex items-center space-x-1">
-                            <User className="w-4 h-4" />
-                            <span>{course.instructor.name}</span>
-                            <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                            <span>{course.instructor.rating}</span>
-                          </div>
-                          <span>•</span>
-                          <span>{course.category}</span>
-                          <span>•</span>
-                          <span className="capitalize">{course.level}</span>
-                          <span>•</span>
-                          <span>{course.duration}</span>
-                        </div>
-                        
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
-                          <span>Last accessed: {course.lastAccessed}</span>
-                          {course.nextLesson && (
-                            <>
-                              <span>•</span>
-                              <span>Next: {course.nextLesson}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setExpandedCourse(expandedCourse === course.id ? null : course.id)}
-                          className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
-                        >
-                          {expandedCourse === course.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        </button>
-                        <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
-                          <Share2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Progress Bar */}
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-                        <span>Progress</span>
-                        <span>{course.progress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${
-                            course.progress === 100 ? 'bg-green-600' : 'bg-blue-600'
-                          }`}
-                          style={{ width: `${course.progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="enrolled">Enrolled</option>
+                    <option value="completed">Completed</option>
+                    <option value="dropped">Dropped</option>
+                    <option value="pending">Pending</option>
+                  </select>
                 </div>
               </div>
-              
-              {/* Expanded Details */}
-              {expandedCourse === course.id && (
-                <div className="border-t border-gray-200 p-6 bg-gray-50">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">Course Details</h4>
-                      <div className="space-y-2 text-sm text-gray-600">
-                        <div className="flex justify-between">
-                          <span>Start Date:</span>
-                          <span>{new Date(course.startDate).toLocaleDateString()}</span>
+            </div>
+
+            {/* Enhanced Course List */}
+            <div className="space-y-4">
+              {filteredCourses.map(course => (
+                <div key={course.id} className="group bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-500 hover:scale-[1.01] overflow-hidden">
+                  <div className="p-6">
+                    <div className="flex items-start space-x-4">
+                      <img
+                        src={course.image}
+                        alt={course.title}
+                        className="w-24 h-16 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors duration-300">{course.title}</h3>
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(course.status)}`}>
+                                {getStatusIcon(course.status)}
+                                <span className="ml-1 capitalize">{course.status}</span>
+                              </span>
+                            </div>
+                            
+                            <p className="text-gray-600 mb-3 line-clamp-2">{course.description}</p>
+                            
+                            <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                              <div className="flex items-center space-x-1">
+                                <User className="w-4 h-4" />
+                                <span>{course.instructor.name}</span>
+                                <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                <span>{course.instructor.rating}</span>
+                              </div>
+                              <span>•</span>
+                              <span>{course.category}</span>
+                              <span>•</span>
+                              <span className="capitalize">{course.level}</span>
+                              <span>•</span>
+                              <span>{course.duration}</span>
+                            </div>
+                            
+                            <div className="flex items-center space-x-4 text-sm text-gray-500">
+                              <span>Last accessed: {course.lastAccessed}</span>
+                              {course.nextLesson && (
+                                <>
+                                  <span>•</span>
+                                  <span>Next: {course.nextLesson}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => setExpandedCourse(expandedCourse === course.id ? null : course.id)}
+                              className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-300"
+                            >
+                              {expandedCourse === course.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                            <button className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-300">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-300">
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span>End Date:</span>
-                          <span>{new Date(course.endDate).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Total Lessons:</span>
-                          <span>{course.lessons}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Enrolled Students:</span>
-                          <span>{course.students}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Course Rating:</span>
-                          <span className="flex items-center">
-                            <Star className="w-3 h-3 text-yellow-500 fill-current mr-1" />
-                            {course.rating}
-                          </span>
+                        
+                        {/* Enhanced Progress Bar */}
+                        <div className="mt-4">
+                          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                            <span>Progress</span>
+                            <span className="font-semibold">{course.progress}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-500 ${
+                                course.progress === 100 ? 'bg-gradient-to-r from-green-500 to-emerald-500' : 'bg-gradient-to-r from-blue-500 to-cyan-500'
+                              }`}
+                              style={{ width: `${course.progress}%` }}
+                            ></div>
+                          </div>
                         </div>
                       </div>
                     </div>
                     
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">Assignments & Quizzes</h4>
-                      <div className="space-y-2 text-sm text-gray-600">
-                        <div className="flex justify-between">
-                          <span>Assignments:</span>
-                          <span>{course.completedAssignments}/{course.assignments}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Quizzes:</span>
-                          <span>{course.completedQuizzes}/{course.quizzes}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Completion Rate:</span>
-                          <span>{Math.round(((course.completedAssignments + course.completedQuizzes) / (course.assignments + course.quizzes)) * 100)}%</span>
+                    {/* Enhanced Expanded Details */}
+                    {expandedCourse === course.id && (
+                      <div className="border-t border-gray-200 p-6 bg-gradient-to-r from-gray-50 to-blue-50 mt-4 rounded-lg">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                              <BookOpen className="w-4 h-4 mr-2 text-blue-600" />
+                              Course Details
+                            </h4>
+                            <div className="space-y-2 text-sm text-gray-600">
+                              <div className="flex justify-between">
+                                <span>Start Date:</span>
+                                <span className="font-medium">{new Date(course.startDate).toLocaleDateString()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>End Date:</span>
+                                <span className="font-medium">{new Date(course.endDate).toLocaleDateString()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Total Lessons:</span>
+                                <span className="font-medium">{course.lessons}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Enrolled Students:</span>
+                                <span className="font-medium">{course.students}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Course Rating:</span>
+                                <span className="flex items-center font-medium">
+                                  <Star className="w-3 h-3 text-yellow-500 fill-current mr-1" />
+                                  {course.rating}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                              <Target className="w-4 h-4 mr-2 text-green-600" />
+                              Assignments & Quizzes
+                            </h4>
+                            <div className="space-y-2 text-sm text-gray-600">
+                              <div className="flex justify-between">
+                                <span>Assignments:</span>
+                                <span className="font-medium">{course.completedAssignments}/{course.assignments}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Quizzes:</span>
+                                <span className="font-medium">{course.completedQuizzes}/{course.quizzes}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Completion Rate:</span>
+                                <span className="font-medium">{Math.round(((course.completedAssignments + course.completedQuizzes) / (course.assignments + course.quizzes)) * 100)}%</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                              <Play className="w-4 h-4 mr-2 text-purple-600" />
+                              Actions
+                            </h4>
+                            <div className="space-y-2">
+                              {course.status === 'enrolled' && (
+                                <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all duration-300 shadow-sm hover:shadow-md">
+                                  Continue Learning
+                                </button>
+                              )}
+                              {course.status === 'completed' && course.certificate && (
+                                <button className="w-full px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all duration-300 shadow-sm hover:shadow-md">
+                                  Download Certificate
+                                </button>
+                              )}
+                              {course.status === 'dropped' && (
+                                <button 
+                                  onClick={() => handleResumeCourse(course.id)}
+                                  className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all duration-300 shadow-sm hover:shadow-md"
+                                >
+                                  Resume Course
+                                </button>
+                              )}
+                              {course.status === 'enrolled' && (
+                                <button 
+                                  onClick={() => handleDropCourse(course.id)}
+                                  className="w-full px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white rounded-lg transition-all duration-300 shadow-sm hover:shadow-md"
+                                >
+                                  Drop Course
+                                </button>
+                              )}
+                              <button className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-300 shadow-sm hover:shadow-md">
+                                View Details
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-3">Actions</h4>
-                      <div className="space-y-2">
-                        {course.status === 'enrolled' && (
-                          <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                            Continue Learning
-                          </button>
-                        )}
-                        {course.status === 'completed' && course.certificate && (
-                          <button className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                            Download Certificate
-                          </button>
-                        )}
-                        {course.status === 'dropped' && (
-                          <button 
-                            onClick={() => handleResumeCourse(course.id)}
-                            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                          >
-                            Resume Course
-                          </button>
-                        )}
-                        {course.status === 'enrolled' && (
-                          <button 
-                            onClick={() => handleDropCourse(course.id)}
-                            className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                          >
-                            Drop Course
-                          </button>
-                        )}
-                        <button className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                          View Details
-                        </button>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
 
-        {filteredCourses.length === 0 && (
-          <div className="text-center py-12">
-            <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
-            <p className="text-gray-500">Try adjusting your search or filter criteria.</p>
+            {filteredCourses.length === 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-xl font-medium text-gray-900 mb-2">No courses found</h3>
+                <p className="text-gray-500">Try adjusting your search or filter criteria.</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </DashboardLayout>
+        </div>
+      </DashboardLayout>
+    </div>
   );
 };
 
