@@ -149,6 +149,7 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
       return [
         ...baseRoutes,
         '/dashboard/admin/teachers',
+        '/dashboard/admin/students',
         '/dashboard/admin/master-trainers',
         '/dashboard/admin/courses',
         '/dashboard/admin/certifications',
