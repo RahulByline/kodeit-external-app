@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import {
-  BookOpen,
-  Clock,
-  Calendar,
-  Users,
-  Award,
-  TrendingUp,
-  Search,
+import { 
+  BookOpen, 
+  Clock, 
+  Calendar, 
+  Users, 
+  Award, 
+  TrendingUp, 
+  Search, 
   Filter,
   RefreshCw,
   Eye,
@@ -97,6 +97,22 @@ interface Course {
   totalResources?: number;
   totalAssignments?: number;
   totalQuizzes?: number;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  courseCount: number;
+  icon: string;
+  color: string;
+  description: string;
+  categoryId?: number;
+  parent?: number;
+  sortorder?: number;
+  visible?: number;
+  timemodified?: number;
+  image?: string; // Added for category images
+  subcategories?: Category[];
 }
 
 interface CourseActivity {
@@ -292,6 +308,42 @@ const getCategoryDescription = (categoryName: string): string => {
   return 'General course content and skills';
 };
 
+const getCategoryImage = (categoryName: string): string => {
+  const name = categoryName.toLowerCase();
+  if (name.includes('english') || name.includes('language')) return '/home-carousal-for-teachers.webp';
+  if (name.includes('digital') || name.includes('foundation')) return '/Innovative-ICT-Curricula.webp';
+  if (name.includes('discipline') || name.includes('positive')) return '/card3.webp';
+  if (name.includes('math') || name.includes('science')) return '/card1.webp';
+  if (name.includes('art') || name.includes('creative')) return '/card2.webp';
+  if (name.includes('business') || name.includes('management')) return '/card3.webp';
+  if (name.includes('safety') || name.includes('health')) return '/card1.webp';
+  if (name.includes('programming') || name.includes('coding')) return '/card1.webp';
+  return '/card1.webp'; // Default fallback
+};
+
+// Helper function to get the best course image from a list of courses
+const getBestCourseImage = (courses: Course[]): string => {
+  if (!courses || courses.length === 0) {
+    return getCategoryImage('General');
+  }
+  
+  // Find the first course with a real image
+  for (const course of courses) {
+    if (course.courseimage) {
+      return course.courseimage;
+    }
+    if (course.overviewfiles && course.overviewfiles.length > 0) {
+      return course.overviewfiles[0].fileurl;
+    }
+    if (course.summaryfiles && course.summaryfiles.length > 0) {
+      return course.summaryfiles[0].fileurl;
+    }
+  }
+  
+  // If no real images found, use fallback
+  return getCategoryImage('General');
+};
+
 const Courses: React.FC = () => {
   const { currentUser } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -300,7 +352,7 @@ const Courses: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
-
+  
   // Course details and activities
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [courseActivities, setCourseActivities] = useState<CourseActivity[]>([]);
@@ -309,7 +361,7 @@ const Courses: React.FC = () => {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showCourseDetails, setShowCourseDetails] = useState(false);
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
-
+  
   // Real course data state
   const [realCourseData, setRealCourseData] = useState<any>(null);
   const [realCourseContents, setRealCourseContents] = useState<any[]>([]);
@@ -317,11 +369,11 @@ const Courses: React.FC = () => {
   const [realCourseCompletion, setRealCourseCompletion] = useState<any>(null);
   const [realCourseGrades, setRealCourseGrades] = useState<any>(null);
   const [isLoadingCourseData, setIsLoadingCourseData] = useState(false);
-
+  
   // Completed courses state
   const [completedCourses, setCompletedCourses] = useState<any[]>([]);
   const [isLoadingCompletedCourses, setIsLoadingCompletedCourses] = useState(false);
-
+  
   // Selected activity state
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [isActivityLoading, setIsActivityLoading] = useState(false);
@@ -334,32 +386,7 @@ const Courses: React.FC = () => {
   const [viewMode, setViewMode] = useState<'categories' | 'subcategories' | 'courses'>('categories');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
-  const [categories, setCategories] = useState<Array<{
-    id: string;
-    name: string;
-    courseCount: number;
-    icon: string;
-    color: string;
-    description: string;
-    categoryId?: number;
-    parent?: number;
-    sortorder?: number;
-    visible?: number;
-    timemodified?: number;
-    subcategories?: Array<{
-      id: string;
-      name: string;
-      courseCount: number;
-      icon: string;
-      color: string;
-      description: string;
-      categoryId?: number;
-      parent?: number;
-      sortorder?: number;
-      visible?: number;
-      timemodified?: number;
-    }>;
-  }>>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     fetchCourses();
@@ -369,22 +396,22 @@ const Courses: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-
+      
       console.log('🔍 Fetching real courses from IOMAD Moodle API...');
-
+      
       if (!currentUser?.id) {
         throw new Error('No current user ID available');
       }
 
       console.log('👤 Current user:', currentUser);
-
+      
       // Fetch real user courses from IOMAD API
       const userCourses = await moodleService.getUserCourses(currentUser.id);
 
       console.log('📊 Real user courses fetched:', userCourses.length);
 
       // Process real course data - NO MOCK DATA
-      const enrolledCourses = userCourses.filter(course =>
+      const enrolledCourses = userCourses.filter(course => 
         course.visible !== 0 && course.categoryid && course.categoryid > 0
       );
 
@@ -396,50 +423,50 @@ const Courses: React.FC = () => {
           // Fetch real completion data for each course
           const courseCompletion = await moodleService.getCourseCompletion(course.id);
           const courseContents = await moodleService.getCourseContents(course.id);
-
+          
           // Calculate real progress and statistics from actual data
           const totalModules = courseContents?.length || 0;
           const completedModules = courseCompletion?.completionstatus?.completed || 0;
           const progress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-
-          return {
-            id: course.id,
-            fullname: course.fullname,
-            shortname: course.shortname,
-            progress,
+            
+            return {
+              id: course.id,
+              fullname: course.fullname,
+              shortname: course.shortname,
+              progress,
             grade: courseCompletion?.completionstatus?.grade || 0,
-            lastAccess: course.startdate,
-            completionDate: course.enddate,
-            status: progress === 100 ? 'completed' :
-              progress > 0 ? 'in_progress' : 'not_started',
-            categoryname: course.categoryname || 'General',
+              lastAccess: course.startdate,
+              completionDate: course.enddate,
+              status: progress === 100 ? 'completed' : 
+                     progress > 0 ? 'in_progress' : 'not_started',
+              categoryname: course.categoryname || 'General',
             categoryid: course.categoryid,
-            startdate: course.startdate,
-            enddate: course.enddate,
-            visible: course.visible,
+              startdate: course.startdate,
+              enddate: course.enddate,
+              visible: course.visible,
                           description: course.summary || '',
               instructor: (course as any).instructor || '', // Use real instructor data if available
               enrolledStudents: (course as any).enrolledusercount || 0, // Use real enrollment data
-            totalModules,
+              totalModules,
             completedModules,
             // Include image fields from real course data
             courseimage: course.courseimage,
             overviewfiles: (course as any).overviewfiles,
             summaryfiles: (course as any).summaryfiles
-          };
+            };
         }));
 
-        setCourses(processedCourses);
-        console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
+          setCourses(processedCourses);
+          console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
         
         // Fetch real categories from IOMAD Moodle API
         await fetchRealCategories(processedCourses);
-      } else {
+        } else {
         console.log('⚠️ No enrolled courses found');
-        setCourses([]);
+          setCourses([]);
         setError('No enrolled courses available.');
       }
-
+      
     } catch (error: any) {
       console.error('❌ Error fetching courses:', error);
       setError('Failed to load courses. Please try again.');
@@ -506,6 +533,9 @@ const Courses: React.FC = () => {
             course.categoryname === category.name
           );
           
+          // Get the best course image from this category's courses
+          const categoryImage = getBestCourseImage(categoryCourses);
+          
           return {
             id: category.id.toString(),
             name: category.name || category.fullname || 'Unnamed Category',
@@ -513,6 +543,7 @@ const Courses: React.FC = () => {
             icon: getCategoryIcon(category.name || category.fullname || ''),
             color: getCategoryColor(category.name || category.fullname || ''),
             description: category.description || getCategoryDescription(category.name || category.fullname || ''),
+            image: categoryImage, // Use real course image from this category
             // Additional real category data
             categoryId: category.id,
             parent: category.parent,
@@ -530,13 +561,29 @@ const Courses: React.FC = () => {
         const hierarchicalCategories = mainCategories.map(mainCat => {
           const categorySubcategories = subcategories.filter(sub => sub.parent === mainCat.categoryId);
           
+          // Update subcategories with real course images
+          const updatedSubcategories = categorySubcategories.map(subcat => {
+            const subcategoryCourses = enrolledCourses.filter(course => 
+              course.categoryid === subcat.categoryId || 
+              course.categoryname === subcat.name
+            );
+            
+            // Get the best course image from this subcategory's courses
+            const subcategoryImage = getBestCourseImage(subcategoryCourses);
+            
+            return {
+              ...subcat,
+              image: subcategoryImage // Use real course image from this subcategory
+            };
+          });
+          
           // Calculate total course count including subcategories
-          const totalCourseCount = categorySubcategories.reduce((sum, sub) => sum + sub.courseCount, 0) + mainCat.courseCount;
+          const totalCourseCount = updatedSubcategories.reduce((sum, sub) => sum + sub.courseCount, 0) + mainCat.courseCount;
           
           return {
             ...mainCat,
             courseCount: totalCourseCount,
-            subcategories: categorySubcategories
+            subcategories: updatedSubcategories
           };
         }).filter(category => category.courseCount > 0); // Only show categories with enrolled courses
         
@@ -561,14 +608,20 @@ const Courses: React.FC = () => {
           categoryMap.get(categoryName)!.courses.push(course);
         });
         
-        const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => ({
-          id: name.toLowerCase().replace(/\s+/g, '-'),
-          name,
-          courseCount: data.count,
-          icon: getCategoryIcon(name),
-          color: getCategoryColor(name),
-          description: getCategoryDescription(name)
-        }));
+        const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => {
+          // Get the best course image from this category's courses
+          const categoryImage = getBestCourseImage(data.courses);
+          
+          return {
+            id: name.toLowerCase().replace(/\s+/g, '-'),
+            name,
+            courseCount: data.count,
+            icon: getCategoryIcon(name),
+            color: getCategoryColor(name),
+            description: getCategoryDescription(name),
+            image: categoryImage // Use real course image from this category
+          };
+        });
         
         setCategories(fallbackCategories);
         console.log('✅ Fallback categories processed:', fallbackCategories.length);
@@ -588,14 +641,20 @@ const Courses: React.FC = () => {
         categoryMap.get(categoryName)!.courses.push(course);
       });
       
-      const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => ({
-        id: name.toLowerCase().replace(/\s+/g, '-'),
-        name,
-        courseCount: data.count,
-        icon: getCategoryIcon(name),
-        color: getCategoryColor(name),
-        description: getCategoryDescription(name)
-      }));
+      const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => {
+        // Get the best course image from this category's courses
+        const categoryImage = getBestCourseImage(data.courses);
+        
+        return {
+          id: name.toLowerCase().replace(/\s+/g, '-'),
+          name,
+          courseCount: data.count,
+          icon: getCategoryIcon(name),
+          color: getCategoryColor(name),
+          description: getCategoryDescription(name),
+          image: categoryImage // Use real course image from this category
+        };
+      });
       
       setCategories(fallbackCategories);
       console.log('✅ Fallback categories processed:', fallbackCategories.length);
@@ -607,10 +666,10 @@ const Courses: React.FC = () => {
     setShowCourseDetails(true);
     setIsLoadingCourseData(true);
     setIsLoadingCompletedCourses(true);
-
+    
     console.log('📚 Opening course details for:', course.fullname);
     console.log('🔍 Fetching ALL real course data from IOMAD API...');
-
+    
     try {
       // Fetch ALL real course data from IOMAD API in parallel
       const [
@@ -628,7 +687,7 @@ const Courses: React.FC = () => {
         moodleService.getCourseDetails(course.id),
         moodleService.getUserCourses(currentUser?.id || '1')
       ]);
-
+      
       console.log('✅ All real course data fetched:', {
         contents: courseContents?.length || 0,
         activities: courseActivities?.length || 0,
@@ -637,35 +696,35 @@ const Courses: React.FC = () => {
         details: courseDetails ? 'Yes' : 'No',
         userCourses: userCourses?.length || 0
       });
-
+      
       // Store all real course data in state
       setRealCourseData(courseDetails);
       setRealCourseContents(courseContents || []);
       setRealCourseActivities(courseActivities || []);
       setRealCourseCompletion(courseCompletion);
       setRealCourseGrades(courseGrades);
-
+      
       // Process completed courses
       if (userCourses && userCourses.length > 0) {
         const completedCoursesData = userCourses.filter((userCourse: any) => {
           // Check if course is completed (progress = 100 or has completion status)
-          return userCourse.progress === 100 ||
-            (courseCompletion && courseCompletion.completionstatus?.completion === 100) ||
-            userCourse.status === 'completed';
+          return userCourse.progress === 100 || 
+                 (courseCompletion && courseCompletion.completionstatus?.completion === 100) ||
+                 userCourse.status === 'completed';
         });
-
+        
         setCompletedCourses(completedCoursesData);
         console.log(`✅ Found ${completedCoursesData.length} completed courses`);
       }
-
+      
       if (courseContents && courseActivities) {
         // Process real course modules from contents
         const realModules: CourseModule[] = courseContents.map((section: any, sectionIndex: number) => {
           // Find completion data for this section
-          const sectionCompletion = courseCompletion?.completionstatus?.find((status: any) =>
+          const sectionCompletion = courseCompletion?.completionstatus?.find((status: any) => 
             status.sectionid === section.id
           );
-
+          
           return {
             id: section.id,
             name: section.name || `Section ${sectionIndex + 1}`,
@@ -677,13 +736,13 @@ const Courses: React.FC = () => {
             maxGrade: 100
           };
         });
-
+        
         setCourseModules(realModules);
         console.log(`✅ Processed ${realModules.length} real course modules from IOMAD API`);
-
+        
         // Process ALL course items (activities and resources) from BOTH API endpoints
         const allCourseItems: any[] = [];
-
+        
         // Add activities from getCourseActivities
         if (courseActivities && Array.isArray(courseActivities)) {
           courseActivities.forEach((activity: any) => {
@@ -694,7 +753,7 @@ const Courses: React.FC = () => {
             });
           });
         }
-
+        
         // Add resources and activities from course contents
         if (courseContents && Array.isArray(courseContents)) {
           courseContents.forEach((section: any) => {
@@ -710,33 +769,33 @@ const Courses: React.FC = () => {
             }
           });
         }
-
+        
         // Categorize all items by type for course overview
         const categorizedItems = {
-          assignments: allCourseItems.filter(item =>
+          assignments: allCourseItems.filter(item => 
             item.modname === 'assign' || item.type === 'assignment'
           ),
-          quizzes: allCourseItems.filter(item =>
+          quizzes: allCourseItems.filter(item => 
             item.modname === 'quiz' || item.type === 'quiz'
           ),
-          resources: allCourseItems.filter(item =>
-            item.modname === 'resource' ||
+          resources: allCourseItems.filter(item => 
+            item.modname === 'resource' || 
             item.modname === 'folder' ||
             item.modname === 'book' ||
             item.modname === 'page' ||
             item.type === 'resource'
           ),
-          forums: allCourseItems.filter(item =>
+          forums: allCourseItems.filter(item => 
             item.modname === 'forum' || item.type === 'forum'
           ),
-          lessons: allCourseItems.filter(item =>
+          lessons: allCourseItems.filter(item => 
             item.modname === 'lesson' || item.type === 'lesson'
           ),
-          workshops: allCourseItems.filter(item =>
+          workshops: allCourseItems.filter(item => 
             item.modname === 'workshop' || item.type === 'workshop'
           ),
-          videos: allCourseItems.filter(item =>
-            item.modname === 'url' ||
+          videos: allCourseItems.filter(item => 
+            item.modname === 'url' || 
             item.modname === 'label' ||
             item.type === 'video'
           ),
@@ -745,7 +804,7 @@ const Courses: React.FC = () => {
             return !knownTypes.includes(item.modname) && !knownTypes.includes(item.type);
           })
         };
-
+        
         // Store categorized items in selectedCourse state
         setSelectedCourse({
           ...course,
@@ -756,20 +815,20 @@ const Courses: React.FC = () => {
           totalAssignments: categorizedItems.assignments.length,
           totalQuizzes: categorizedItems.quizzes.length
         });
-
+        
         console.log('📊 Categorized course items:', categorizedItems);
         console.log(`📋 Total items found: ${allCourseItems.length}`);
         console.log(`📚 Resources: ${categorizedItems.resources.length}`);
         console.log(`📝 Assignments: ${categorizedItems.assignments.length}`);
         console.log(`❓ Quizzes: ${categorizedItems.quizzes.length}`);
-
+        
         // Process activities for sidebar (excluding videos as requested)
         const realActivities: CourseActivity[] = allCourseItems
           .filter((item: any) => {
             const itemType = item.modname || item.type;
-            return itemType !== 'url' &&
-              itemType !== 'label' &&
-              itemType !== 'video';
+            return itemType !== 'url' && 
+                   itemType !== 'label' &&
+                   itemType !== 'video';
           })
           .map((item: any) => {
             // Determine status based on completion data
@@ -781,7 +840,7 @@ const Courses: React.FC = () => {
                 status = 'in_progress';
               }
             }
-
+            
             return {
               id: item.id.toString(),
               name: item.name || item.title || 'Unnamed Item',
@@ -801,10 +860,10 @@ const Courses: React.FC = () => {
               itemType: item.itemType
             };
           });
-
+        
         setCourseActivities(realActivities);
         console.log(`✅ Processed ${realActivities.length} real course activities from IOMAD API`);
-
+        
       } else {
         console.log('⚠️ Could not fetch real course data, using fallback data');
         generateFallbackCourseData(course);
@@ -833,7 +892,7 @@ const Courses: React.FC = () => {
       'scorm': 'video',
       'h5pactivity': 'video'
     };
-
+    
     return typeMap[moodleType] || 'resource';
   };
 
@@ -841,11 +900,11 @@ const Courses: React.FC = () => {
     console.log('📊 Viewing activities for course:', course.fullname);
     setSelectedCourse(course);
     setShowCourseDetails(true);
-
+    
     try {
       // Fetch real course activities from IOMAD API
       const courseActivities = await moodleService.getCourseActivities(course.id);
-
+      
       if (courseActivities && courseActivities.length > 0) {
         // Process real course activities from API
         const realActivities: CourseActivity[] = courseActivities.map((activity: any) => {
@@ -858,7 +917,7 @@ const Courses: React.FC = () => {
               status = 'in_progress';
             }
           }
-
+          
           return {
             id: activity.id.toString(),
             name: activity.name || 'Activity',
@@ -876,7 +935,7 @@ const Courses: React.FC = () => {
             maxAttempts: 3
           };
         });
-
+        
         setCourseActivities(realActivities);
         console.log(`✅ Loaded ${realActivities.length} real activities from IOMAD API`);
       } else {
@@ -929,20 +988,20 @@ const Courses: React.FC = () => {
     console.log('📈 Viewing progress for course:', course.fullname);
     setSelectedCourse(course);
     setShowCourseDetails(true);
-
+    
     try {
       // Fetch real course contents and completion data from IOMAD API
       const courseContents = await moodleService.getCourseContents(course.id);
       const courseCompletion = await moodleService.getCourseCompletion(course.id);
-
+      
       if (courseContents) {
         // Process real course modules from contents with completion data
         const progressModules: CourseModule[] = courseContents.map((section: any, sectionIndex: number) => {
           // Calculate completion based on course progress or completion data
-          const completion = courseCompletion?.completionstatus?.find((status: any) =>
+          const completion = courseCompletion?.completionstatus?.find((status: any) => 
             status.sectionid === section.id
           );
-
+          
           return {
             id: section.id,
             name: section.name || `Section ${sectionIndex + 1}`,
@@ -954,7 +1013,7 @@ const Courses: React.FC = () => {
             maxGrade: 100
           };
         });
-
+        
         setCourseModules(progressModules);
         console.log(`✅ Loaded ${progressModules.length} real progress modules from IOMAD API`);
       } else {
@@ -1017,22 +1076,22 @@ const Courses: React.FC = () => {
     console.log('🎯 Activity clicked:', activity.name, 'Index:', index);
     setSelectedActivity(activity);
     setIsActivityLoading(true);
-
+    
     try {
       // Fetch activity details from IOMAD API
       const activityDetails = await moodleService.getCourseContents(selectedCourse?.id || '');
-
+      
       if (activityDetails) {
         // Find the specific activity in the course contents
-        const foundActivity = activityDetails.flatMap((section: any) =>
+        const foundActivity = activityDetails.flatMap((section: any) => 
           section.modules || []
         ).find((module: any) => module.id.toString() === activity.id);
-
+        
         if (foundActivity) {
           // Fetch detailed activity information
           const detailedActivity = await moodleService.getCourseActivities(selectedCourse?.id || '');
           const activityInfo = detailedActivity?.find((act: any) => act.id.toString() === activity.id);
-
+          
           // Extract all media files from content and introfiles
           const allMediaFiles = [
             ...(foundActivity.contents || []),
@@ -1040,23 +1099,23 @@ const Courses: React.FC = () => {
             ...(foundActivity.descriptionfiles || []),
             ...(foundActivity.contentfiles || [])
           ];
-
+          
           // Categorize files by type
           const categorizedFiles = {
-            images: allMediaFiles.filter((file: any) =>
-              file.mimetype?.startsWith('image/') ||
+            images: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('image/') || 
               file.filename?.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i)
             ),
-            videos: allMediaFiles.filter((file: any) =>
-              file.mimetype?.startsWith('video/') ||
+            videos: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('video/') || 
               file.filename?.match(/\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/i)
             ),
-            audio: allMediaFiles.filter((file: any) =>
-              file.mimetype?.startsWith('audio/') ||
+            audio: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('audio/') || 
               file.filename?.match(/\.(mp3|wav|ogg|aac|flac|m4a|wma)$/i)
             ),
-            documents: allMediaFiles.filter((file: any) =>
-              file.mimetype?.startsWith('application/') ||
+            documents: allMediaFiles.filter((file: any) => 
+              file.mimetype?.startsWith('application/') || 
               file.filename?.match(/\.(pdf|doc|docx|ppt|pptx|xls|xlsx|txt|rtf)$/i)
             ),
             other: allMediaFiles.filter((file: any) => {
@@ -1067,7 +1126,7 @@ const Courses: React.FC = () => {
               return !isImage && !isVideo && !isAudio && !isDocument;
             })
           };
-
+          
           setSelectedActivity({
             ...activity,
             details: foundActivity,
@@ -1093,7 +1152,7 @@ const Courses: React.FC = () => {
   // Fallback function for when API fails
   const generateFallbackCourseData = (course: Course) => {
     console.log('📝 Generating fallback course data...');
-
+    
     // Generate sample modules for the selected course
     const modules: CourseModule[] = [
       {
@@ -1141,7 +1200,7 @@ const Courses: React.FC = () => {
     ];
 
     setCourseModules(modules);
-
+    
     // Generate course-specific activities
     const courseActivities: CourseActivity[] = [
       {
@@ -1189,7 +1248,7 @@ const Courses: React.FC = () => {
         maxAttempts: 1
       }
     ];
-
+    
     setCourseActivities(courseActivities);
   };
 
@@ -1218,7 +1277,7 @@ const Courses: React.FC = () => {
       goals: ['Complete course objectives'],
       achievements: []
     };
-
+    
     addStudentActivity(newActivity);
     setShowActivityModal(false);
   };
@@ -1273,8 +1332,8 @@ const Courses: React.FC = () => {
 
   const filteredCourses = courses.filter(course => {
     const matchesSearch = course.fullname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.shortname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.categoryname?.toLowerCase().includes(searchTerm.toLowerCase());
+                         course.shortname.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         course.categoryname?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || course.status === filterStatus;
     
     // Add category filtering when in courses view
@@ -1383,7 +1442,7 @@ const Courses: React.FC = () => {
         />
       ) : showCourseDetails && selectedCourse ? (
         // Course Details Page
-        <div className="space-y-6">
+      <div className="space-y-6">
           {/* Page Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -1393,22 +1452,22 @@ const Courses: React.FC = () => {
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <div>
+          <div>
                 <h1 className="text-2xl font-bold text-gray-900">{selectedCourse.fullname}</h1>
                 <p className="text-sm text-gray-600">Course Details • {selectedCourse.shortname}</p>
-              </div>
+          </div>
             </div>
-            <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3">
               <Button variant="outline" size="sm">
                 <Search className="w-4 h-4 mr-2" />
                 Search
-              </Button>
+            </Button>
               <Button className="bg-green-600 hover:bg-green-700">
                 <Play className="w-4 h-4 mr-2" />
                 See Tutorial
-              </Button>
-            </div>
+            </Button>
           </div>
+        </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content Area */}
@@ -1420,310 +1479,310 @@ const Courses: React.FC = () => {
                     <div className="text-center">
                       <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                       <p className="text-gray-600">Loading activity content...</p>
-                    </div>
-                  ) : selectedActivity ? (
-                    <div className="w-full h-full p-6">
-                      <div className="bg-white rounded-lg shadow-sm border p-6 h-full overflow-y-auto">
-                        <div className="mb-6">
-                          <div className="flex items-center space-x-2 mb-3">
-                            <Badge variant="secondary" className="text-xs">
-                              {selectedActivity.modname || selectedActivity.type}
-                            </Badge>
-                            <Badge variant={selectedActivity.status === 'completed' ? 'default' : 'outline'} className="text-xs">
-                              {selectedActivity.status === 'completed' ? 'Completed' :
-                                selectedActivity.status === 'in_progress' ? 'In Progress' : 'Not Started'}
-                            </Badge>
-                          </div>
-                          <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                            {selectedActivity.name}
-                          </h2>
+              </div>
+                                      ) : selectedActivity ? (
+                      <div className="w-full h-full p-6">
+                        <div className="bg-white rounded-lg shadow-sm border p-6 h-full overflow-y-auto">
+                          <div className="mb-6">
+                            <div className="flex items-center space-x-2 mb-3">
+                              <Badge variant="secondary" className="text-xs">
+                                {selectedActivity.modname || selectedActivity.type}
+                              </Badge>
+                              <Badge variant={selectedActivity.status === 'completed' ? 'default' : 'outline'} className="text-xs">
+                                {selectedActivity.status === 'completed' ? 'Completed' : 
+                                 selectedActivity.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+                              </Badge>
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                              {selectedActivity.name}
+                            </h2>
+                            
+                            {/* Activity Description in HTML Format */}
+                            {selectedActivity.htmlContent && (
+                              <div className="mb-6">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-3">Activity Description</h3>
+                                <div 
+                                  className="prose prose-sm max-w-none bg-gray-50 rounded-lg p-4 border"
+                                  dangerouslySetInnerHTML={{ __html: selectedActivity.htmlContent }}
+                                />
+              </div>
+                            )}
+                            
+                            {/* Activity Intro */}
+                            {selectedActivity.intro && selectedActivity.intro !== selectedActivity.htmlContent && (
+                              <div className="mb-6">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction</h3>
+                                <div 
+                                  className="prose prose-sm max-w-none bg-blue-50 rounded-lg p-4 border border-blue-200"
+                                  dangerouslySetInnerHTML={{ __html: selectedActivity.intro }}
+                                />
+              </div>
+                            )}
+        </div>
 
-                          {/* Activity Description in HTML Format */}
-                          {selectedActivity.htmlContent && (
+                          {/* All Media Content */}
+                          {selectedActivity.allMediaFiles && selectedActivity.allMediaFiles.length > 0 && (
                             <div className="mb-6">
-                              <h3 className="text-lg font-semibold text-gray-900 mb-3">Activity Description</h3>
-                              <div
-                                className="prose prose-sm max-w-none bg-gray-50 rounded-lg p-4 border"
-                                dangerouslySetInnerHTML={{ __html: selectedActivity.htmlContent }}
+                              <h3 className="text-lg font-semibold text-gray-900 mb-3">All Course Media</h3>
+                              
+                              {/* Images */}
+                              {selectedActivity.categorizedFiles.images.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <Image className="w-4 h-4 mr-2 text-blue-600" />
+                                    Images ({selectedActivity.categorizedFiles.images.length})
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {selectedActivity.categorizedFiles.images.map((image: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                                        <div className="aspect-video bg-gray-100 flex items-center justify-center">
+                                                                                     <img 
+                                             src={image.fileurl} 
+                                             alt={image.filename || `Image ${index + 1}`}
+                                             className="w-full h-full object-cover"
+                                             onError={(e) => {
+                                               (e.currentTarget as HTMLElement).style.display = 'none';
+                                               ((e.currentTarget as HTMLElement).nextElementSibling as HTMLElement)!.style.display = 'flex';
+                                             }}
+                                           />
+                                          <div className="hidden w-full h-full items-center justify-center text-gray-400">
+                                            <Image className="w-8 h-8" />
+                </div>
+              </div>
+                                        <div className="p-3">
+                                          <p className="text-sm font-medium text-gray-900 truncate">{image.filename}</p>
+                                          <div className="flex items-center justify-between mt-2">
+                                            <span className="text-xs text-gray-500">
+                                              {(image.filesize / 1024).toFixed(1)} KB
+                                            </span>
+                                            <Button size="sm" variant="outline">
+                                              <Download className="w-3 h-3 mr-1" />
+                                              Download
+                                            </Button>
+              </div>
+            </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Videos */}
+                              {selectedActivity.categorizedFiles.videos.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <Video className="w-4 h-4 mr-2 text-red-600" />
+                                    Videos ({selectedActivity.categorizedFiles.videos.length})
+                                  </h4>
+                                  <div className="space-y-4">
+                                    {selectedActivity.categorizedFiles.videos.map((video: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                                        <div className="aspect-video bg-gray-900 flex items-center justify-center">
+                                          <video 
+                                            controls 
+                                            className="w-full h-full"
+                                            poster={video.fileurl}
+                                          >
+                                            <source src={video.fileurl} type={video.mimetype} />
+                                            Your browser does not support the video tag.
+                                          </video>
+                                        </div>
+                                        <div className="p-4">
+                                          <h5 className="font-medium text-gray-900 mb-2">{video.filename}</h5>
+                                          <div className="flex items-center justify-between">
+                                            <div className="text-sm text-gray-600">
+                                              <p>Type: {video.mimetype}</p>
+                                              <p>Size: {(video.filesize / 1024 / 1024).toFixed(1)} MB</p>
+                                            </div>
+                                            <Button size="sm" variant="outline">
+                                              <Download className="w-4 h-4 mr-2" />
+                                              Download
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Audio */}
+                              {selectedActivity.categorizedFiles.audio.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <MessageSquare className="w-4 h-4 mr-2 text-green-600" />
+                                    Audio ({selectedActivity.categorizedFiles.audio.length})
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {selectedActivity.categorizedFiles.audio.map((audio: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                                        <div className="flex items-center space-x-3 mb-3">
+                                          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                            <MessageSquare className="w-5 h-5 text-green-600" />
+                                          </div>
+                  <div className="flex-1">
+                                            <h5 className="font-medium text-gray-900">{audio.filename}</h5>
+                                            <p className="text-sm text-gray-600">{audio.mimetype}</p>
+                  </div>
+                                          <Button size="sm" variant="outline">
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download
+                                          </Button>
+                </div>
+                                        <audio controls className="w-full">
+                                          <source src={audio.fileurl} type={audio.mimetype} />
+                                          Your browser does not support the audio element.
+                                        </audio>
+                                        <p className="text-xs text-gray-500 mt-2">
+                                          Size: {(audio.filesize / 1024 / 1024).toFixed(1)} MB
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Documents */}
+                              {selectedActivity.categorizedFiles.documents.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <FileText className="w-4 h-4 mr-2 text-purple-600" />
+                                    Documents ({selectedActivity.categorizedFiles.documents.length})
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {selectedActivity.categorizedFiles.documents.map((doc: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                                        <div className="flex items-center space-x-3">
+                                          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                            <FileText className="w-5 h-5 text-purple-600" />
+                    </div>
+                                          <div className="flex-1">
+                                            <h5 className="font-medium text-gray-900 truncate">{doc.filename}</h5>
+                                            <p className="text-sm text-gray-600">{doc.mimetype}</p>
+                                            <p className="text-xs text-gray-500">
+                                              {(doc.filesize / 1024).toFixed(1)} KB
+                                            </p>
+                  </div>
+                                          <Button size="sm" variant="outline">
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Other Files */}
+                              {selectedActivity.categorizedFiles.other.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                                    <File className="w-4 h-4 mr-2 text-gray-600" />
+                                    Other Files ({selectedActivity.categorizedFiles.other.length})
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {selectedActivity.categorizedFiles.other.map((file: any, index: number) => (
+                                      <div key={index} className="border border-gray-200 rounded-lg p-3 bg-white">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center space-x-3">
+                                            <File className="w-4 h-4 text-gray-500" />
+                    <div>
+                                              <p className="font-medium text-gray-900">{file.filename}</p>
+                                              <p className="text-sm text-gray-600">{file.mimetype}</p>
+                    </div>
+                    </div>
+                                          <div className="flex items-center space-x-2">
+                                            <span className="text-xs text-gray-500">
+                                              {(file.filesize / 1024).toFixed(1)} KB
+                                            </span>
+                                            <Button size="sm" variant="outline">
+                                              <Download className="w-4 h-4 mr-2" />
+                                              Download
+                                            </Button>
+                    </div>
+                    </div>
+                  </div>
+                                    ))}
+                </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Intro Files */}
+                          {selectedActivity.introfiles && selectedActivity.introfiles.length > 0 && (
+                            <div className="mb-6">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction Files</h3>
+                              <div className="space-y-3">
+                                {selectedActivity.introfiles.map((item: any, index: number) => (
+                                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-blue-50">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center space-x-2">
+                                        <FileText className="w-4 h-4 text-blue-500" />
+                                        <h4 className="font-medium text-gray-900">{item.filename || `Intro File ${index + 1}`}</h4>
+                                      </div>
+                                      <Button size="sm" variant="outline">
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Download
+                  </Button>
+                </div>
+                                    {item.fileurl && (
+                                      <p className="text-sm text-gray-500">File URL: {item.fileurl}</p>
+                                    )}
+                                  </div>
+          ))}
+        </div>
+                            </div>
+                          )}
+                          
+                          {/* Activity Instructions */}
+                          {selectedActivity.instructions && (
+                            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                              <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
+                                <Target className="w-4 h-4 mr-2 text-yellow-600" />
+                                Instructions
+                              </h3>
+                              <div 
+                                className="prose prose-sm max-w-none text-gray-700"
+                                dangerouslySetInnerHTML={{ __html: selectedActivity.instructions }}
                               />
                             </div>
                           )}
-
-                          {/* Activity Intro */}
-                          {selectedActivity.intro && selectedActivity.intro !== selectedActivity.htmlContent && (
-                            <div className="mb-6">
-                              <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction</h3>
-                              <div
-                                className="prose prose-sm max-w-none bg-blue-50 rounded-lg p-4 border border-blue-200"
-                                dangerouslySetInnerHTML={{ __html: selectedActivity.intro }}
-                              />
-                            </div>
+                          
+                          {/* Activity Info */}
+                          {selectedActivity.activityInfo && (
+                            <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                              <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
+                                <Info className="w-4 h-4 mr-2 text-green-600" />
+                                Activity Information
+                              </h3>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                                  <span className="text-gray-600">Type:</span>
+                                  <p className="font-medium">{selectedActivity.activityInfo.type}</p>
+                  </div>
+                                <div>
+                                  <span className="text-gray-600">Status:</span>
+                                  <p className="font-medium">{selectedActivity.activityInfo.status}</p>
+                </div>
+                                {selectedActivity.activityInfo.dueDate && (
+                                  <div>
+                                    <span className="text-gray-600">Due Date:</span>
+                                    <p className="font-medium">{new Date(selectedActivity.activityInfo.dueDate).toLocaleDateString()}</p>
+              </div>
+                                )}
+                                {selectedActivity.activityInfo.grade && (
+                                  <div>
+                                    <span className="text-gray-600">Grade:</span>
+                                    <p className="font-medium">{selectedActivity.activityInfo.grade}%</p>
+                        </div>
+                                )}
+                        </div>
+                        </div>
                           )}
                         </div>
-
-                        {/* All Media Content */}
-                        {selectedActivity.allMediaFiles && selectedActivity.allMediaFiles.length > 0 && (
-                          <div className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-3">All Course Media</h3>
-
-                            {/* Images */}
-                            {selectedActivity.categorizedFiles.images.length > 0 && (
-                              <div className="mb-6">
-                                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                  <Image className="w-4 h-4 mr-2 text-blue-600" />
-                                  Images ({selectedActivity.categorizedFiles.images.length})
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {selectedActivity.categorizedFiles.images.map((image: any, index: number) => (
-                                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                                      <div className="aspect-video bg-gray-100 flex items-center justify-center">
-                                        <img
-                                          src={image.fileurl}
-                                          alt={image.filename || `Image ${index + 1}`}
-                                          className="w-full h-full object-cover"
-                                          onError={(e) => {
-                                            (e.currentTarget as HTMLElement).style.display = 'none';
-                                            ((e.currentTarget as HTMLElement).nextElementSibling as HTMLElement)!.style.display = 'flex';
-                                          }}
-                                        />
-                                        <div className="hidden w-full h-full items-center justify-center text-gray-400">
-                                          <Image className="w-8 h-8" />
-                                        </div>
-                                      </div>
-                                      <div className="p-3">
-                                        <p className="text-sm font-medium text-gray-900 truncate">{image.filename}</p>
-                                        <div className="flex items-center justify-between mt-2">
-                                          <span className="text-xs text-gray-500">
-                                            {(image.filesize / 1024).toFixed(1)} KB
-                                          </span>
-                                          <Button size="sm" variant="outline">
-                                            <Download className="w-3 h-3 mr-1" />
-                                            Download
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Videos */}
-                            {selectedActivity.categorizedFiles.videos.length > 0 && (
-                              <div className="mb-6">
-                                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                  <Video className="w-4 h-4 mr-2 text-red-600" />
-                                  Videos ({selectedActivity.categorizedFiles.videos.length})
-                                </h4>
-                                <div className="space-y-4">
-                                  {selectedActivity.categorizedFiles.videos.map((video: any, index: number) => (
-                                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                                      <div className="aspect-video bg-gray-900 flex items-center justify-center">
-                                        <video
-                                          controls
-                                          className="w-full h-full"
-                                          poster={video.fileurl}
-                                        >
-                                          <source src={video.fileurl} type={video.mimetype} />
-                                          Your browser does not support the video tag.
-                                        </video>
-                                      </div>
-                                      <div className="p-4">
-                                        <h5 className="font-medium text-gray-900 mb-2">{video.filename}</h5>
-                                        <div className="flex items-center justify-between">
-                                          <div className="text-sm text-gray-600">
-                                            <p>Type: {video.mimetype}</p>
-                                            <p>Size: {(video.filesize / 1024 / 1024).toFixed(1)} MB</p>
-                                          </div>
-                                          <Button size="sm" variant="outline">
-                                            <Download className="w-4 h-4 mr-2" />
-                                            Download
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Audio */}
-                            {selectedActivity.categorizedFiles.audio.length > 0 && (
-                              <div className="mb-6">
-                                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                  <MessageSquare className="w-4 h-4 mr-2 text-green-600" />
-                                  Audio ({selectedActivity.categorizedFiles.audio.length})
-                                </h4>
-                                <div className="space-y-3">
-                                  {selectedActivity.categorizedFiles.audio.map((audio: any, index: number) => (
-                                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
-                                      <div className="flex items-center space-x-3 mb-3">
-                                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                          <MessageSquare className="w-5 h-5 text-green-600" />
-                                        </div>
-                                        <div className="flex-1">
-                                          <h5 className="font-medium text-gray-900">{audio.filename}</h5>
-                                          <p className="text-sm text-gray-600">{audio.mimetype}</p>
-                                        </div>
-                                        <Button size="sm" variant="outline">
-                                          <Download className="w-4 h-4 mr-2" />
-                                          Download
-                                        </Button>
-                                      </div>
-                                      <audio controls className="w-full">
-                                        <source src={audio.fileurl} type={audio.mimetype} />
-                                        Your browser does not support the audio element.
-                                      </audio>
-                                      <p className="text-xs text-gray-500 mt-2">
-                                        Size: {(audio.filesize / 1024 / 1024).toFixed(1)} MB
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Documents */}
-                            {selectedActivity.categorizedFiles.documents.length > 0 && (
-                              <div className="mb-6">
-                                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                  <FileText className="w-4 h-4 mr-2 text-purple-600" />
-                                  Documents ({selectedActivity.categorizedFiles.documents.length})
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {selectedActivity.categorizedFiles.documents.map((doc: any, index: number) => (
-                                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
-                                      <div className="flex items-center space-x-3">
-                                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                                          <FileText className="w-5 h-5 text-purple-600" />
-                                        </div>
-                                        <div className="flex-1">
-                                          <h5 className="font-medium text-gray-900 truncate">{doc.filename}</h5>
-                                          <p className="text-sm text-gray-600">{doc.mimetype}</p>
-                                          <p className="text-xs text-gray-500">
-                                            {(doc.filesize / 1024).toFixed(1)} KB
-                                          </p>
-                                        </div>
-                                        <Button size="sm" variant="outline">
-                                          <Download className="w-4 h-4 mr-2" />
-                                          Download
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Other Files */}
-                            {selectedActivity.categorizedFiles.other.length > 0 && (
-                              <div className="mb-6">
-                                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                                  <File className="w-4 h-4 mr-2 text-gray-600" />
-                                  Other Files ({selectedActivity.categorizedFiles.other.length})
-                                </h4>
-                                <div className="space-y-2">
-                                  {selectedActivity.categorizedFiles.other.map((file: any, index: number) => (
-                                    <div key={index} className="border border-gray-200 rounded-lg p-3 bg-white">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-3">
-                                          <File className="w-4 h-4 text-gray-500" />
-                                          <div>
-                                            <p className="font-medium text-gray-900">{file.filename}</p>
-                                            <p className="text-sm text-gray-600">{file.mimetype}</p>
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                          <span className="text-xs text-gray-500">
-                                            {(file.filesize / 1024).toFixed(1)} KB
-                                          </span>
-                                          <Button size="sm" variant="outline">
-                                            <Download className="w-4 h-4 mr-2" />
-                                            Download
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Intro Files */}
-                        {selectedActivity.introfiles && selectedActivity.introfiles.length > 0 && (
-                          <div className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-3">Introduction Files</h3>
-                            <div className="space-y-3">
-                              {selectedActivity.introfiles.map((item: any, index: number) => (
-                                <div key={index} className="border border-gray-200 rounded-lg p-4 bg-blue-50">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center space-x-2">
-                                      <FileText className="w-4 h-4 text-blue-500" />
-                                      <h4 className="font-medium text-gray-900">{item.filename || `Intro File ${index + 1}`}</h4>
-                                    </div>
-                                    <Button size="sm" variant="outline">
-                                      <Download className="w-4 h-4 mr-2" />
-                                      Download
-                                    </Button>
-                                  </div>
-                                  {item.fileurl && (
-                                    <p className="text-sm text-gray-500">File URL: {item.fileurl}</p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Activity Instructions */}
-                        {selectedActivity.instructions && (
-                          <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                            <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
-                              <Target className="w-4 h-4 mr-2 text-yellow-600" />
-                              Instructions
-                            </h3>
-                            <div
-                              className="prose prose-sm max-w-none text-gray-700"
-                              dangerouslySetInnerHTML={{ __html: selectedActivity.instructions }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Activity Info */}
-                        {selectedActivity.activityInfo && (
-                          <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-                            <h3 className="font-semibold text-gray-900 mb-2 flex items-center">
-                              <Info className="w-4 h-4 mr-2 text-green-600" />
-                              Activity Information
-                            </h3>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <span className="text-gray-600">Type:</span>
-                                <p className="font-medium">{selectedActivity.activityInfo.type}</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Status:</span>
-                                <p className="font-medium">{selectedActivity.activityInfo.status}</p>
-                              </div>
-                              {selectedActivity.activityInfo.dueDate && (
-                                <div>
-                                  <span className="text-gray-600">Due Date:</span>
-                                  <p className="font-medium">{new Date(selectedActivity.activityInfo.dueDate).toLocaleDateString()}</p>
-                                </div>
-                              )}
-                              {selectedActivity.activityInfo.grade && (
-                                <div>
-                                  <span className="text-gray-600">Grade:</span>
-                                  <p className="font-medium">{selectedActivity.activityInfo.grade}%</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                        </div>
                   ) : (
                     <div className="text-center">
                       <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1733,8 +1792,8 @@ const Courses: React.FC = () => {
                       <p className="text-gray-500 text-sm">Click on any activity from the sidebar to view its content</p>
                     </div>
                   )}
-                </div>
-              </div>
+                      </div>
+                    </div>
 
               {/* Course Information */}
               <div className="bg-white rounded-lg border p-6">
@@ -1743,8 +1802,8 @@ const Courses: React.FC = () => {
                     <div className="text-center">
                       <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                       <p className="text-gray-600">Loading course data from IOMAD API...</p>
+                      </div>
                     </div>
-                  </div>
                 ) : (
                   <>
                     <div className="mb-4">
@@ -1757,16 +1816,16 @@ const Courses: React.FC = () => {
                         {realCourseData?.courseInfo?.fullname || selectedCourse.fullname}
                       </h2>
                       <p className="text-gray-600">
-                        Course ID: {selectedCourse.id} •
+                        Course ID: {selectedCourse.id} • 
                         {realCourseData?.courseInfo?.format ? ` Format: ${realCourseData.courseInfo.format}` : ''}
                       </p>
-                    </div>
+                  </div>
 
                     {/* Course Overview - All Activities and Resources */}
                     {selectedCourse?.categorizedItems && (
                       <div className="mb-8">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Overview</h3>
-
+                        
                         {/* Summary Stats */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                           <div className="bg-blue-50 rounded-lg p-4 text-center">
@@ -1789,7 +1848,7 @@ const Courses: React.FC = () => {
 
                         {/* Categorized Activities and Resources */}
                         <div className="space-y-6">
-
+                          
                           {/* Resources */}
                           {selectedCourse.categorizedItems.resources.length > 0 && (
                             <div>
@@ -1949,11 +2008,11 @@ const Courses: React.FC = () => {
                               <div className="flex items-center justify-between mb-1">
                                 <h4 className="font-medium text-gray-900 text-sm">{activity.name}</h4>
                                 <span className={`text-xs px-2 py-1 rounded ${activity.completion?.state === 1 ? 'bg-green-100 text-green-800' :
-                                    activity.completion?.state === 0 ? 'bg-yellow-100 text-yellow-800' :
-                                      'bg-gray-100 text-gray-800'
-                                  }`}>
+                                  activity.completion?.state === 0 ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
                                   {activity.completion?.state === 1 ? 'Completed' :
-                                    activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
+                                   activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
                                 </span>
                               </div>
                               <p className="text-xs text-gray-500 capitalize">{activity.type} Activity</p>
@@ -1969,7 +2028,7 @@ const Courses: React.FC = () => {
                     )}
 
                     {/* Completed Courses Section */}
-                    <div>
+                      <div>
                       <h3 className="text-lg font-semibold text-gray-900 mb-3">
                         Completed Courses ({completedCourses.length})
                       </h3>
@@ -1978,7 +2037,7 @@ const Courses: React.FC = () => {
                           <div className="text-center">
                             <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                             <p className="text-sm text-gray-600">Loading completed courses...</p>
-                          </div>
+                                </div>
                         </div>
                       ) : completedCourses.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1988,8 +2047,8 @@ const Courses: React.FC = () => {
                                 <h4 className="font-medium text-gray-900 text-sm">{completedCourse.fullname}</h4>
                                 <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
                                   Completed
-                                </span>
-                              </div>
+                                  </span>
+                                </div>
                               <div className="space-y-1 text-xs text-gray-600">
                                 <p><strong>Course ID:</strong> {completedCourse.id}</p>
                                 <p><strong>Short Name:</strong> {completedCourse.shortname}</p>
@@ -2004,8 +2063,8 @@ const Courses: React.FC = () => {
                               </div>
                               {completedCourse.summary && (
                                 <p className="text-xs text-gray-500 mt-2 line-clamp-2">{completedCourse.summary}</p>
-                              )}
-                            </div>
+                                )}
+                              </div>
                           ))}
                         </div>
                       ) : (
@@ -2019,16 +2078,16 @@ const Courses: React.FC = () => {
                           </p>
                         </div>
                       )}
-                    </div>
+                                      </div>
                   </>
-                )}
+                                    )}
               </div>
             </div>
-
+                                    
             {/* Right Sidebar - Course Progress and Activities */}
             <div className="bg-white rounded-lg border p-4 h-fit space-y-6">
               {/* Real Course Progress */}
-              <div>
+                                      <div>
                 <h3 className="text-base font-semibold text-gray-900 mb-3">Your Course Progress</h3>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -2036,63 +2095,63 @@ const Courses: React.FC = () => {
                     <span className="text-sm text-gray-500">
                       {realCourseCompletion?.completionstatus?.completion || selectedCourse.progress}%
                     </span>
-                  </div>
+                                            </div>
                   <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${realCourseCompletion?.completionstatus?.completion || selectedCourse.progress}%`
+                    <div 
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                      style={{ 
+                        width: `${realCourseCompletion?.completionstatus?.completion || selectedCourse.progress}%` 
                       }}
                     ></div>
-                  </div>
+                                        </div>
                   <p className="text-sm text-gray-600">
                     {realCourseData?.completedModules || 0}/{realCourseData?.totalModules || realCourseContents.length} modules completed
                   </p>
-
+                                    
                   {/* Real Completion Details */}
                   {realCourseCompletion && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
+                                      <div>
                           <span className="text-gray-500">Activities:</span>
                           <p className="font-medium">{realCourseActivities.length}</p>
-                        </div>
-                        <div>
+                                      </div>
+                                      <div>
                           <span className="text-gray-500">Completed:</span>
                           <p className="font-medium">
                             {realCourseActivities.filter((a: any) => a.completion?.state === 1).length}
                           </p>
-                        </div>
+                                      </div>
                         <div>
                           <span className="text-gray-500">In Progress:</span>
                           <p className="font-medium">
                             {realCourseActivities.filter((a: any) => a.completion?.state === 0).length}
                           </p>
-                        </div>
+                                    </div>
                         <div>
                           <span className="text-gray-500">Not Started:</span>
                           <p className="font-medium">
                             {realCourseActivities.filter((a: any) => !a.completion?.state).length}
                           </p>
+                                  </div>
+                              </div>
+                            </div>
+                  )}
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
 
               {/* Real Course Activities */}
-              <div>
+                      <div>
                 <h3 className="text-base font-semibold text-gray-900 mb-3">
                   Course Activities ({realCourseActivities.length})
                 </h3>
                 <div className="space-y-2">
                   {realCourseActivities.length > 0 ? (
                     realCourseActivities.map((activity: any, index: number) => (
-                      <div
-                        key={activity.id}
+                      <div 
+                        key={activity.id} 
                         className={`bg-gray-50 rounded-lg p-3 cursor-pointer hover:shadow-md transition-shadow ${selectedActivity?.id === activity.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                          }`}
+                        }`}
                         onClick={() => handleActivityClick(activity, index)}
                       >
                         <div className="flex items-center justify-between">
@@ -2105,20 +2164,20 @@ const Courses: React.FC = () => {
                               ) : (
                                 <Circle className="w-5 h-5 text-gray-400" />
                               )}
-                            </div>
+                        </div>
                             <div className="flex-1">
                               <h4 className="text-sm font-medium text-gray-900">{activity.name}</h4>
                               <p className="text-xs text-gray-500 capitalize">
                                 {activity.type} • {activity.completion?.state === 1 ? 'Completed' :
-                                  activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
+                                                 activity.completion?.state === 0 ? 'In Progress' : 'Not Started'}
                               </p>
-                            </div>
+                                  </div>
                           </div>
                           {activity.completion?.state === 1 && (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          )}
-                        </div>
-                      </div>
+                                      <CheckCircle className="w-4 h-4 text-green-600" />
+                                    )}
+                                  </div>
+                                </div>
                     ))
                   ) : (
                     <div className="bg-gray-50 rounded-lg p-4 text-center">
@@ -2129,7 +2188,7 @@ const Courses: React.FC = () => {
               </div>
 
               {/* Real Course Modules */}
-              <div>
+                                        <div>
                 <h3 className="text-base font-semibold text-gray-900 mb-3">
                   Course Sections ({realCourseContents.length})
                 </h3>
@@ -2141,13 +2200,13 @@ const Courses: React.FC = () => {
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                               <BookOpen className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div>
+                                        </div>
+                                        <div>
                               <h4 className="text-sm font-medium text-gray-900">{section.name}</h4>
                               <p className="text-xs text-gray-500">
                                 {section.modules?.length || 0} activities
                               </p>
-                            </div>
+                                        </div>
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-medium text-gray-900">
@@ -2164,13 +2223,13 @@ const Courses: React.FC = () => {
                   ) : (
                     <div className="bg-gray-50 rounded-lg p-4 text-center">
                       <p className="text-sm text-gray-500">No course sections found</p>
-                    </div>
-                  )}
+                                        </div>
+                                      )}
                 </div>
               </div>
-
+                                      
               {/* Completed Courses Summary */}
-              <div>
+                                        <div>
                 <h3 className="text-base font-semibold text-gray-900 mb-3">
                   Completed Courses ({completedCourses.length})
                 </h3>
@@ -2178,7 +2237,7 @@ const Courses: React.FC = () => {
                   <div className="bg-gray-50 rounded-lg p-4 text-center">
                     <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                     <p className="text-sm text-gray-500">Loading...</p>
-                  </div>
+                                              </div>
                 ) : completedCourses.length > 0 ? (
                   <div className="space-y-2">
                     {completedCourses.slice(0, 3).map((completedCourse: any) => (
@@ -2186,29 +2245,29 @@ const Courses: React.FC = () => {
                         <div className="flex items-center justify-between mb-1">
                           <h4 className="text-sm font-medium text-gray-900 line-clamp-1">{completedCourse.fullname}</h4>
                           <CheckCircle className="w-4 h-4 text-green-600" />
-                        </div>
+                                          </div>
                         <p className="text-xs text-gray-500">{completedCourse.shortname}</p>
                         <p className="text-xs text-green-600 font-medium">{completedCourse.progress || 100}% Complete</p>
-                      </div>
+                                        </div>
                     ))}
                     {completedCourses.length > 3 && (
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
                         <p className="text-sm text-gray-500">
                           +{completedCourses.length - 3} more completed courses
                         </p>
-                      </div>
-                    )}
-                  </div>
+                                    </div>
+                                  )}
+                                </div>
                 ) : (
                   <div className="bg-gray-50 rounded-lg p-4 text-center">
                     <CheckCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">No completed courses yet</p>
-                  </div>
+                              </div>
                 )}
-              </div>
-            </div>
-          </div>
-        </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
       ) : (
         // Courses List Page
         <div className="space-y-6">
@@ -2217,8 +2276,8 @@ const Courses: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">My Courses</h1>
               <p className="text-gray-600 mt-1">Real-time course data from IOMAD Moodle API - {courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
-            </div>
-
+                </div>
+            
             <div className="flex items-center space-x-3">
               <Button variant="outline" onClick={refreshData} disabled={refreshing}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
@@ -2228,8 +2287,8 @@ const Courses: React.FC = () => {
                 <Download className="w-4 h-4 mr-2" />
                 Export
               </Button>
+              </div>
             </div>
-          </div>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -2254,7 +2313,7 @@ const Courses: React.FC = () => {
               <CardContent>
                 <div className="text-2xl font-bold">
                   {courses.filter(c => c.status === 'in_progress').length}
-                </div>
+          </div>
                 <p className="text-xs text-muted-foreground">
                   Active courses
                 </p>
@@ -2297,8 +2356,8 @@ const Courses: React.FC = () => {
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  type="text"
+                  <Input
+                    type="text"
                   placeholder="Search courses..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -2317,12 +2376,12 @@ const Courses: React.FC = () => {
                 <SelectItem value="not_started">Not Started</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
+                </div>
+                
           {/* Category View */}
           {viewMode === 'categories' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900">Course Categories</h2>
                 <p className="text-sm text-gray-600">Select a category to view subcategories or courses</p>
               </div>
@@ -2337,6 +2396,19 @@ const Courses: React.FC = () => {
                   >
                     {/* Category Header */}
                     <div className="relative h-48 bg-gradient-to-br from-gray-800 to-gray-900">
+                      {/* Category Background Image */}
+                      <div className="absolute inset-0">
+                        <img 
+                          src={category.image || getCategoryImage(category.name)} 
+                          alt={category.name}
+                          className="w-full h-full object-cover opacity-30"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      
                       {/* Abstract Background Pattern */}
                       <div className="absolute inset-0 opacity-20">
                         <div className={`absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-tl ${category.color} rounded-full blur-xl`}></div>
@@ -2354,8 +2426,8 @@ const Courses: React.FC = () => {
                       <div className="absolute top-4 right-4">
                         <Badge className="bg-white/20 text-white border-0 text-xs px-2 py-1">
                           {category.courseCount} Courses
-                        </Badge>
-                      </div>
+                    </Badge>
+                    </div>
 
                       {/* Subcategory Indicator */}
                       {category.subcategories && category.subcategories.length > 0 && (
@@ -2363,7 +2435,7 @@ const Courses: React.FC = () => {
                           <Badge className="bg-blue-500/20 text-blue-300 border-0 text-xs px-2 py-1">
                             {category.subcategories.length} Subcategories
                           </Badge>
-                        </div>
+                  </div>
                       )}
 
                       {/* Category Name */}
@@ -2371,8 +2443,8 @@ const Courses: React.FC = () => {
                         <h3 className="text-xl font-bold text-white mb-2">{category.name}</h3>
                         <p className="text-sm text-gray-300 line-clamp-2">{category.description}</p>
                       </div>
-                    </div>
-
+                </div>
+                
                     {/* Category Footer */}
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
@@ -2383,7 +2455,7 @@ const Courses: React.FC = () => {
                           }
                         </span>
                         <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-                      </div>
+                </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -2405,7 +2477,7 @@ const Courses: React.FC = () => {
                     <ArrowLeft className="w-4 h-4" />
                     <span>Back to Categories</span>
                   </Button>
-                  <div>
+                <div>
                     <h2 className="text-2xl font-bold text-gray-900">
                       {categories.find(cat => cat.id === selectedCategory)?.name} - Subcategories
                     </h2>
@@ -2424,6 +2496,19 @@ const Courses: React.FC = () => {
                   >
                     {/* Subcategory Header */}
                     <div className="relative h-40 bg-gradient-to-br from-gray-700 to-gray-800">
+                      {/* Subcategory Background Image */}
+                      <div className="absolute inset-0">
+                        <img 
+                          src={subcategory.image || getCategoryImage(subcategory.name)} 
+                          alt={subcategory.name}
+                          className="w-full h-full object-cover opacity-25"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      
                       {/* Abstract Background Pattern */}
                       <div className="absolute inset-0 opacity-20">
                         <div className={`absolute bottom-0 right-0 w-24 h-24 bg-gradient-to-tl ${subcategory.color} rounded-full blur-lg`}></div>
@@ -2519,8 +2604,8 @@ const Courses: React.FC = () => {
               >
                 <Info className="w-4 h-4" />
                 <span>Debug</span>
-              </Button>
-            </div>
+                </Button>
+              </div>
           )}
 
           {/* Enhanced Courses Grid */}
@@ -2573,7 +2658,7 @@ const Courses: React.FC = () => {
                         </Badge>
                       )}
                     
-                    </div>
+            </div>
 
                     {/* Course Icon Overlay */}
                     <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2">
@@ -2666,11 +2751,11 @@ const Courses: React.FC = () => {
                         course.status === 'in_progress' ? 'Continue' : 'Start'} 
                        <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                      </Button>
-                  </CardContent>
-                </Card>
+                </CardContent>
+              </Card>
               );
             })}
-            </div>
+          </div>
           )}
 
           {viewMode === 'courses' && filteredCourses.length === 0 && (
@@ -2678,9 +2763,9 @@ const Courses: React.FC = () => {
               <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
               <p className="text-gray-500">Try adjusting your search or filter criteria.</p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
       )}
     </DashboardLayout>
   );
