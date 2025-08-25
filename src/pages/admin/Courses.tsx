@@ -50,12 +50,6 @@ interface Course {
   courseimage?: string;
   overviewfiles?: Array<{ fileurl: string; filename?: string }>;
   summaryfiles?: Array<{ fileurl: string; filename?: string }>;
-  // Additional fields for enhanced display
-  currentUnit?: string;
-  progress?: number;
-  certification?: string;
-  isNew?: boolean;
-  isMandatory?: boolean;
 }
 
 // Course image fallbacks based on category and course name
@@ -135,41 +129,12 @@ const validateImageUrl = (url?: string): string => {
 
 // Get course image with fallback
 const getCourseImage = (course: Course): string => {
-  // First try courseimage field
+  // The course image is already processed in fetchCourses, so just return it
   if (course.courseimage) {
-    const validatedUrl = validateImageUrl(course.courseimage);
-    if (validatedUrl !== '/placeholder.svg') {
-      return validatedUrl;
-    }
+    return course.courseimage;
   }
   
-  // Then try overviewfiles
-  if (course.overviewfiles && course.overviewfiles.length > 0) {
-    const imageFile = course.overviewfiles.find(file => 
-      file.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-    );
-    if (imageFile) {
-      const validatedUrl = validateImageUrl(imageFile.fileurl);
-      if (validatedUrl !== '/placeholder.svg') {
-        return validatedUrl;
-      }
-    }
-  }
-  
-  // Then try summaryfiles
-  if (course.summaryfiles && course.summaryfiles.length > 0) {
-    const imageFile = course.summaryfiles.find(file => 
-      file.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-    );
-    if (imageFile) {
-      const validatedUrl = validateImageUrl(imageFile.fileurl);
-      if (validatedUrl !== '/placeholder.svg') {
-        return validatedUrl;
-      }
-    }
-  }
-  
-  // Finally use fallback based on category
+  // Fallback to category-based image if no image is set
   return getCourseImageFallback(course.categoryname, course.fullname);
 };
 
@@ -205,18 +170,18 @@ const getCourseStatusInfo = (course: Course) => {
     return {
       status: 'active' as const,
       statusText: 'In Progress',
-      progressText: `Estás en: Unidad ${Math.floor(Math.random() * 10) + 1} '${getRandomUnitName()}'`,
-      progressIcon: <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />,
-      buttonText: 'Continuar >',
+      progressText: `Completion Rate: ${course.completionrate || 0}%`,
+      progressIcon: <RefreshCw className="w-4 h-4 text-blue-600" />,
+      buttonText: 'View Course',
       buttonVariant: 'default' as const
     };
   } else if (isUpcoming) {
     return {
       status: 'upcoming' as const,
       statusText: 'Upcoming',
-      progressText: `Tu curso iniciará el ${formatDate(course.startdate)}`,
+      progressText: `Starts: ${formatDate(course.startdate)}`,
       progressIcon: <Calendar className="w-4 h-4 text-orange-600" />,
-      buttonText: 'Información del curso >',
+      buttonText: 'Course Info',
       buttonVariant: 'outline' as const
     };
   } else {
@@ -231,38 +196,11 @@ const getCourseStatusInfo = (course: Course) => {
   }
 };
 
-// Get random unit name for demo purposes
-const getRandomUnitName = (): string => {
-  const units = [
-    'Retorno empresarial',
-    'Fundamentos básicos',
-    'Aplicaciones prácticas',
-    'Evaluación continua',
-    'Proyecto final',
-    'Análisis avanzado',
-    'Implementación',
-    'Optimización'
-  ];
-  return units[Math.floor(Math.random() * units.length)];
-};
+// Remove the mock unit name function - not needed
+// const getRandomUnitName = (): string => { ... }
 
-// Get certification provider
-const getCertificationProvider = (course: Course): string => {
-  const category = course.categoryname?.toLowerCase() || '';
-  const courseName = course.fullname.toLowerCase();
-  
-  if (category.includes('business') || courseName.includes('business')) {
-    return 'Certificado por ACHS';
-  }
-  if (category.includes('technology') || courseName.includes('technology')) {
-    return 'Certificado por eClass';
-  }
-  if (category.includes('education') || courseName.includes('education')) {
-    return 'Certificado por eClass';
-  }
-  
-  return 'Certificado por eClass'; // Default
-};
+// Remove the mock certification provider function - not needed
+// const getCertificationProvider = (course: Course): string => { ... }
 
 const Courses: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -291,7 +229,7 @@ const Courses: React.FC = () => {
       // Get teachers for assignment
       const teachers = usersData.filter(user => user.isTeacher);
       
-      // Enhance course data with additional information
+      // Enhanced course data processing with real image handling (same as school dashboard)
       const enhancedCourses: Course[] = coursesData.map(course => {
         const category = categoriesData.find(cat => cat.id === course.categoryid);
         const isActive = course.startdate && course.enddate && 
@@ -306,43 +244,97 @@ const Courses: React.FC = () => {
         const assignedTeachers = teachers.length > 0 ? [
           teachers[Number(course.id) % teachers.length]
         ].map(teacher => ({
-          id: teacher.id,
+          id: Number(teacher.id),
           firstname: teacher.firstname,
           lastname: teacher.lastname
         })) : [];
         
         // Use actual enrollment count from course data, fallback to 0
-        const actualEnrollments = course.enrollmentCount || course.enrolledusercount || 0;
+        const actualEnrollments = (course as any).enrollmentCount || (course as any).enrolledusercount || 0;
         
         // Use actual completion rate from course data, fallback to estimated based on visibility
-        const actualCompletionRate = course.completionrate || 
+        const actualCompletionRate = (course as any).completionrate || 
           (course.visible ? 75 : 50); // Basic fallback for visible/hidden courses
+
+        // Enhanced image handling with real Moodle course images (EXACT SAME AS SCHOOL DASHBOARD)
+        let courseImage = course.courseimage;
         
-        return {
-          ...course,
-          id: Number(course.id),
-          categoryname: category?.name || 'Uncategorized',
-          enrolledusercount: actualEnrollments,
-          completionrate: actualCompletionRate,
-          teachers: assignedTeachers,
-          status,
-          format: course.format || 'topics',
-          visible: course.visible !== 0,
-          // Add enhanced fields for the new card design
-          currentUnit: getRandomUnitName(),
-          progress: Math.floor(Math.random() * 100) + 1,
-          certification: getCertificationProvider(course),
-          isNew: Math.random() > 0.7, // 30% chance of being new
-          isMandatory: Math.random() > 0.5, // 50% chance of being mandatory
-          // Ensure image fields are included
+        // Debug: Log the raw course data
+        console.log(`🔍 Processing course "${course.fullname}":`, {
+          id: course.id,
           courseimage: course.courseimage,
           overviewfiles: course.overviewfiles,
           summaryfiles: course.summaryfiles
-        };
+        });
+        
+        // Check if courseimage is a default Moodle image (course.svg)
+        const isDefaultMoodleImage = courseImage && (
+          courseImage.includes('course.svg') || 
+          courseImage.includes('generated/course.svg') ||
+          courseImage.includes('default-course-image')
+        );
+        
+        if (courseImage && !isDefaultMoodleImage) {
+          console.log(`✅ Using courseimage for "${course.fullname}": ${courseImage}`);
+        } else if (course.overviewfiles && Array.isArray(course.overviewfiles) && course.overviewfiles.length > 0) {
+          courseImage = course.overviewfiles[0].fileurl;
+          console.log(`⚠️ Using overviewfiles for "${course.fullname}": ${courseImage}`);
+        } else if (course.summaryfiles && Array.isArray(course.summaryfiles) && course.summaryfiles.length > 0) {
+          courseImage = course.summaryfiles[0].fileurl;
+          console.log(`⚠️ Using summaryfiles for "${course.fullname}": ${courseImage}`);
+        } else {
+          console.log(`❌ No real image found for "${course.fullname}", will use fallback`);
+          courseImage = null; // Force fallback
+        }
+        
+        // Validate the image URL
+        courseImage = validateImageUrl(courseImage);
+        
+        // If no valid image or it's a default Moodle image, use category-based fallback
+        if (!courseImage || courseImage === '/placeholder.svg' || isDefaultMoodleImage) {
+          courseImage = getCourseImageFallback(course.categoryname, course.fullname);
+          console.log(`🔄 Using fallback image for "${course.fullname}": ${courseImage}`);
+        }
+        
+                 return {
+           id: Number(course.id),
+           fullname: course.fullname,
+           shortname: course.shortname,
+           summary: course.summary,
+           categoryid: course.categoryid || 0,
+           categoryname: category?.name || 'Uncategorized',
+           startdate: course.startdate,
+           enddate: course.enddate,
+           enrolledusercount: actualEnrollments,
+           completionrate: actualCompletionRate,
+           teachers: assignedTeachers,
+           status,
+           format: course.format || 'topics',
+           visible: course.visible !== 0,
+           // Use the real course image we just processed
+           courseimage: courseImage,
+           // Ensure image fields are included
+           overviewfiles: course.overviewfiles || [],
+           summaryfiles: course.summaryfiles || []
+         } as Course;
       });
 
       setCourses(enhancedCourses);
       setCategories(categoriesData);
+      
+      console.log('✅ Admin courses data loaded successfully with real images');
+      console.log('📊 Course Statistics:', {
+        totalCourses: enhancedCourses.length,
+        coursesWithRealImages: enhancedCourses.filter(c => c.courseimage && !c.courseimage.includes('card')).length,
+        coursesWithFallbackImages: enhancedCourses.filter(c => c.courseimage && c.courseimage.includes('card')).length
+      });
+      
+      // Log detailed image information for debugging (SAME AS SCHOOL DASHBOARD)
+      enhancedCourses.forEach(course => {
+        const isRealImage = course.courseimage && !course.courseimage.includes('card');
+        console.log(`📸 Course "${course.fullname}": ${isRealImage ? '✅ Real Image' : '🔄 Fallback Image'} - ${course.courseimage}`);
+      });
+      
     } catch (error) {
       console.error('Error fetching courses from IOMAD API:', error);
       setError(`Failed to load courses data from IOMAD API: ${error.message || error}`);
@@ -394,10 +386,50 @@ const Courses: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">Courses & Programs</h1>
             <p className="text-gray-600 mt-1">Manage all courses and educational programs</p>
           </div>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Course
-          </Button>
+          <div className="flex gap-2">
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Course
+            </Button>
+            <Button 
+              onClick={() => {
+                console.log('🔍 Debugging admin course images...');
+                let realImageCount = 0;
+                let fallbackImageCount = 0;
+                
+                courses.forEach(course => {
+                  console.log(`📚 Course: "${course.fullname}"`);
+                  console.log(`  - Course Image URL: ${course.courseimage}`);
+                  console.log(`  - Is Real Moodle Image: ${course.courseimage && course.courseimage.includes('kodeit.legatoserver.com') ? '✅ YES' : '❌ NO'}`);
+                  console.log(`  - Category: ${course.categoryname}`);
+                  console.log(`  - Fallback: ${getCourseImageFallback(course.categoryname, course.fullname)}`);
+                  console.log(`  - Overview Files: ${course.overviewfiles ? course.overviewfiles.length : 0}`);
+                  console.log(`  - Summary Files: ${course.summaryfiles ? course.summaryfiles.length : 0}`);
+                  
+                  if (course.courseimage && course.courseimage.includes('kodeit.legatoserver.com')) {
+                    realImageCount++;
+                    console.log(`  - ✅ REAL MOODLE IMAGE DETECTED`);
+                  } else {
+                    fallbackImageCount++;
+                    console.log(`  - ⚠️ Using fallback image`);
+                  }
+                  
+                  if (course.overviewfiles && course.overviewfiles.length > 0) {
+                    console.log(`  - Overview Files URLs:`, course.overviewfiles.map(f => f.fileurl));
+                  }
+                  if (course.summaryfiles && course.summaryfiles.length > 0) {
+                    console.log(`  - Summary Files URLs:`, course.summaryfiles.map(f => f.fileurl));
+                  }
+                });
+                
+                console.log(`📊 ADMIN SUMMARY: ${realImageCount} real images, ${fallbackImageCount} fallback images out of ${courses.length} total courses`);
+                alert(`Debugged ${courses.length} admin course images:\n✅ ${realImageCount} real Moodle images\n⚠️ ${fallbackImageCount} fallback images\n\nCheck console for detailed information.`);
+              }}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              Debug Images
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -520,95 +552,94 @@ const Courses: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Enhanced Course Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredCourses.map((course) => {
-            const statusInfo = getCourseStatusInfo(course);
-            const courseImage = getCourseImage(course);
-            
-            return (
-              <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-all duration-300 border-0 shadow-md">
-                {/* Course Image Header */}
-                <div className="relative h-48 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
-                  <img 
-                    src={courseImage} 
-                    alt={course.fullname}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = getCourseImageFallback(course.categoryname, course.fullname);
-                    }}
-                  />
-                  
-                  {/* Overlay with course icon */}
-                  <div className="absolute bottom-4 left-4">
-                    <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center shadow-lg">
-                      <BookOpen className="w-5 h-5 text-blue-600" />
-                    </div>
-                  </div>
-                  
-                  {/* Status Labels */}
-                  <div className="absolute top-4 right-4 flex flex-col gap-2">
-                    {course.isMandatory && (
-                      <Badge className="bg-yellow-500 text-black text-xs px-2 py-1">
-                        Obligatorio
-                      </Badge>
-                    )}
-                    {course.isNew && (
-                      <Badge className="bg-orange-500 text-white text-xs px-2 py-1">
-                        Nuevo
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                 {/* Enhanced Course Cards Grid */}
+         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+           {filteredCourses.map((course) => {
+             const statusInfo = getCourseStatusInfo(course);
+             const courseImage = getCourseImage(course);
+             
+             return (
+               <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-all duration-300 border-0 shadow-md">
+                 {/* Course Image Header */}
+                 <div className="relative h-48 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+                   <img 
+                     src={courseImage} 
+                     alt={course.fullname}
+                     className="w-full h-full object-cover"
+                     onError={(e) => {
+                       const target = e.target as HTMLImageElement;
+                       target.src = getCourseImageFallback(course.categoryname, course.fullname);
+                     }}
+                   />
+                   
+                   {/* Overlay with course icon */}
+                   <div className="absolute bottom-4 left-4">
+                     <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center shadow-lg">
+                       <BookOpen className="w-5 h-5 text-blue-600" />
+                     </div>
+                   </div>
+                   
+                   {/* Status Badge */}
+                   <div className="absolute top-4 right-4">
+                     <Badge className={`text-xs px-2 py-1 ${
+                       statusInfo.status === 'active' ? 'bg-green-500 text-white' :
+                       statusInfo.status === 'completed' ? 'bg-blue-500 text-white' :
+                       statusInfo.status === 'upcoming' ? 'bg-orange-500 text-white' :
+                       'bg-gray-500 text-white'
+                     }`}>
+                       {statusInfo.statusText}
+                     </Badge>
+                   </div>
+                 </div>
 
-                {/* Course Content */}
-                <CardContent className="p-6 space-y-4">
-                  {/* Date Range */}
-                  <div className="text-sm text-gray-600">
-                    Inicia {formatDate(course.startdate)} | Finaliza {formatDate(course.enddate)}
-                  </div>
-                  
-                  {/* Course Title */}
-                  <h3 className="text-xl font-bold text-gray-900 line-clamp-2">
-                    {course.fullname}
-                  </h3>
-                  
-                  {/* Progress/Status Info */}
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
-                    {statusInfo.progressIcon}
-                    <span>{statusInfo.progressText}</span>
-                  </div>
-                  
-                  {/* Course Links */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Info className="w-4 h-4 text-blue-600" />
-                      <span className="text-blue-600 cursor-pointer hover:underline">
-                        Información del curso
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <FileText className="w-4 h-4 text-gray-600" />
-                      <span className="text-gray-600">
-                        {course.certification}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* Action Button */}
-                  <Button 
-                    className={`w-full mt-4 ${statusInfo.buttonVariant === 'default' ? 'bg-blue-600 hover:bg-blue-700' : 'border-blue-600 text-blue-600 hover:bg-blue-50'}`}
-                    variant={statusInfo.buttonVariant}
-                  >
-                    {statusInfo.buttonText}
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                 {/* Course Content */}
+                 <CardContent className="p-6 space-y-4">
+                   {/* Course Title */}
+                   <h3 className="text-xl font-bold text-gray-900 line-clamp-2">
+                     {course.fullname}
+                   </h3>
+                   
+                   {/* Course Short Name */}
+                   <p className="text-sm text-gray-600">
+                     {course.shortname}
+                   </p>
+                   
+                   {/* Category */}
+                   <div className="flex items-center gap-2 text-sm text-gray-600">
+                     <BookOpen className="w-4 h-4" />
+                     <span>{course.categoryname || 'Uncategorized'}</span>
+                   </div>
+                   
+                   {/* Progress/Status Info */}
+                   <div className="flex items-center gap-2 text-sm text-gray-700">
+                     {statusInfo.progressIcon}
+                     <span>{statusInfo.progressText}</span>
+                   </div>
+                   
+                   {/* Enrollment Info */}
+                   <div className="flex items-center gap-2 text-sm text-gray-600">
+                     <Users className="w-4 h-4" />
+                     <span>{course.enrolledusercount || 0} enrolled</span>
+                   </div>
+                   
+                   {/* Date Range */}
+                   <div className="text-sm text-gray-600">
+                     {formatDate(course.startdate)} - {formatDate(course.enddate)}
+                   </div>
+                   
+                   {/* Action Button */}
+                   <Button 
+                     className={`w-full mt-4 ${statusInfo.buttonVariant === 'default' ? 'bg-blue-600 hover:bg-blue-700' : 'border-blue-600 text-blue-600 hover:bg-blue-50'}`}
+                     variant={statusInfo.buttonVariant}
+                   >
+                     {statusInfo.buttonText}
+                     <ChevronRight className="w-4 h-4 ml-2" />
+                   </Button>
+                 </CardContent>
+               </Card>
+             );
+           })}
+         </div>
 
         {filteredCourses.length === 0 && (
           <Card>

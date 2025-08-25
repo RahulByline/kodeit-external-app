@@ -44,7 +44,79 @@ import {
   Target as TargetIcon,
   ArrowLeft,
   Bell,
-  Info
+  Info,
+  User,
+  GraduationCap,
+  Clock3,
+  CalendarDays,
+  BookMarked,
+  Video as VideoIcon,
+  FileText as FileTextIcon,
+  MessageCircle,
+  CheckCircle2,
+  PlayCircle,
+  Pause,
+  SkipForward,
+  Volume2,
+  Settings,
+  MoreHorizontal,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight as ChevronRightIcon,
+  Minus,
+  Plus as PlusIcon,
+  ExternalLink,
+  Lock,
+  Unlock,
+  EyeOff,
+  Eye as EyeIcon,
+  Download as DownloadIcon,
+  Share as ShareIcon,
+  Bookmark as BookmarkIcon,
+  Heart as HeartIcon,
+  ThumbsUp as ThumbsUpIcon,
+  ThumbsDown as ThumbsDownIcon,
+  MessageSquare as MessageSquareIcon,
+  Users as UsersIcon,
+  Globe,
+  Mail,
+  Phone,
+  MapPin,
+  Clock as ClockIcon,
+  Calendar as CalendarIcon,
+  Award as AwardIcon,
+  TrendingUp as TrendingUpIcon,
+  BarChart3 as BarChart3Icon,
+  PieChart,
+  Activity,
+  Target as TargetIcon2,
+  Zap as ZapIcon,
+  Lightbulb as LightbulbIcon,
+  Brain as BrainIcon,
+  Rocket as RocketIcon,
+  Star as StarIcon,
+  Crown,
+  Trophy,
+  Medal,
+  Scroll,
+  BookOpen as BookOpenIcon,
+  Book as BookIcon,
+  Library,
+  School,
+  University,
+  GraduationCap as GraduationCapIcon,
+  UserCheck,
+  UserPlus,
+  UserMinus,
+  UserX,
+  UserCog,
+  UserSearch,
+  UserCheck as UserCheckIcon,
+  UserPlus as UserPlusIcon,
+  UserMinus as UserMinusIcon,
+  UserX as UserXIcon,
+  UserCog as UserCogIcon,
+  UserSearch as UserSearchIcon
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import moodleService from '../../services/moodleApi';
@@ -74,7 +146,155 @@ interface Course {
   enrolledStudents?: number;
   totalModules?: number;
   completedModules?: number;
+  // Image-related fields for real course images
+  courseimage?: string;
+  overviewfiles?: Array<{ fileurl: string; filename?: string }>;
+  summaryfiles?: Array<{ fileurl: string; filename?: string }>;
 }
+
+// Course image fallbacks based on category and course name (same as admin)
+const getCourseImageFallback = (categoryName?: string, courseName?: string): string => {
+  const category = categoryName?.toLowerCase() || '';
+  const course = courseName?.toLowerCase() || '';
+  
+  // Programming/IT courses
+  if (category.includes('programming') || category.includes('coding') || category.includes('development') ||
+      course.includes('programming') || course.includes('coding') || course.includes('development') ||
+      course.includes('kodeit') || course.includes('digital')) {
+    return '/card1.webp'; // Programming image
+  }
+  
+  // Business/Management courses
+  if (category.includes('business') || category.includes('management') || category.includes('leadership') ||
+      course.includes('business') || course.includes('management') || course.includes('leadership')) {
+    return '/card2.webp'; // Business image
+  }
+  
+  // Education/Teaching courses
+  if (category.includes('education') || category.includes('teaching') || category.includes('pedagogy') ||
+      course.includes('education') || course.includes('teaching') || course.includes('pedagogy') ||
+      course.includes('discipline')) {
+    return '/card3.webp'; // Education image
+  }
+  
+  // Technology/ICT courses
+  if (category.includes('technology') || category.includes('ict') || category.includes('digital') ||
+      course.includes('technology') || course.includes('ict') || course.includes('digital')) {
+    return '/Innovative-ICT-Curricula.webp';
+  }
+  
+  // Primary/Grade courses
+  if (category.includes('primary') || category.includes('grade') || course.includes('grade')) {
+    return '/home-carousal-for-teachers.webp';
+  }
+  
+  // Assessment courses
+  if (category.includes('assessment') || course.includes('assessment')) {
+    return '/home-carousel-for-schools.webp';
+  }
+  
+  // Default fallback - use a more appealing default image
+  return '/card1.webp'; // Use programming image as default since it's most relevant
+};
+
+// Validate and fix image URL (same as admin)
+const validateImageUrl = (url?: string): string => {
+  if (!url) return '/placeholder.svg';
+  
+  // If it's already a full URL, return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    // For Moodle URLs, prefer the regular pluginfile.php over webservice/pluginfile.php
+    if (url.includes('webservice/pluginfile.php')) {
+      // Convert webservice URL to regular pluginfile URL
+      const regularUrl = url.replace('webservice/pluginfile.php', 'pluginfile.php');
+      console.log(`🔄 Converting webservice URL to regular URL: ${url} -> ${regularUrl}`);
+      return regularUrl;
+    }
+    return url;
+  }
+  
+  // If it's a relative path, make it absolute
+  if (url.startsWith('/')) {
+    return url;
+  }
+  
+  // If it's a Moodle file URL, ensure it has the token
+  if (url.includes('webservice/rest/server.php')) {
+    return url;
+  }
+  
+  // Default fallback
+  return '/placeholder.svg';
+};
+
+// Get course image with fallback (same as admin)
+const getCourseImage = (course: Course): string => {
+  // The course image is already processed in fetchCourses, so just return it
+  if (course.courseimage) {
+    return course.courseimage;
+  }
+  
+  // Fallback to category-based image if no image is set
+  return getCourseImageFallback(course.categoryname, course.fullname);
+};
+
+// Format date for display
+const formatDate = (timestamp?: number): string => {
+  if (!timestamp) return 'TBD';
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleDateString('en-US', { 
+    day: 'numeric', 
+    month: 'short', 
+    year: 'numeric' 
+  });
+};
+
+// Get course status and progress info (same as admin)
+const getCourseStatusInfo = (course: Course) => {
+  const now = Date.now() / 1000;
+  const isActive = course.startdate && course.enddate && 
+    course.startdate <= now && course.enddate >= now;
+  const isCompleted = course.enddate && course.enddate < now;
+  const isUpcoming = course.startdate && course.startdate > now;
+  
+  if (isCompleted) {
+    return {
+      status: 'completed' as const,
+      statusText: 'Completed',
+      progressText: 'Course completed',
+      progressIcon: <CheckCircle className="w-4 h-4 text-green-600" />,
+      buttonText: 'View Certificate',
+      buttonVariant: 'default' as const
+    };
+  } else if (isActive) {
+    return {
+      status: 'active' as const,
+      statusText: 'In Progress',
+      progressText: `Completion Rate: ${course.progress || 0}%`,
+      progressIcon: <RefreshCw className="w-4 h-4 text-blue-600" />,
+      buttonText: 'Continue Learning',
+      buttonVariant: 'default' as const
+    };
+  } else if (isUpcoming) {
+    return {
+      status: 'upcoming' as const,
+      statusText: 'Upcoming',
+      progressText: `Starts: ${formatDate(course.startdate)}`,
+      progressIcon: <Calendar className="w-4 h-4 text-orange-600" />,
+      buttonText: 'Course Info',
+      buttonVariant: 'outline' as const
+    };
+  } else {
+    return {
+      status: 'inactive' as const,
+      statusText: 'Inactive',
+      progressText: 'Course not available',
+      progressIcon: <Clock className="w-4 h-4 text-gray-600" />,
+      buttonText: 'View Details',
+      buttonVariant: 'outline' as const
+    };
+  }
+};
 
 interface CourseActivity {
   id: string;
@@ -197,34 +417,86 @@ const Courses: React.FC = () => {
           const progress = courseCompletion?.completionstatus?.completion || 0;
           const totalModules = courseContents?.length || 0;
           const completedModules = courseCompletion?.completionstatus?.completed || 0;
+
+          // Enhanced image handling with real Moodle course images (SAME AS ADMIN DASHBOARD)
+          let courseImage = course.courseimage;
+          
+          // Debug: Log the raw course data
+          console.log(`🔍 Processing course "${course.fullname}":`, {
+            id: course.id,
+            courseimage: course.courseimage,
+            overviewfiles: (course as any).overviewfiles,
+            summaryfiles: (course as any).summaryfiles
+          });
+          
+          // Check if courseimage is a default Moodle image (course.svg)
+          const isDefaultMoodleImage = courseImage && (
+            courseImage.includes('course.svg') || 
+            courseImage.includes('generated/course.svg') ||
+            courseImage.includes('default-course-image')
+          );
+          
+          if (courseImage && !isDefaultMoodleImage) {
+            console.log(`✅ Using courseimage for "${course.fullname}": ${courseImage}`);
+          } else if ((course as any).overviewfiles && Array.isArray((course as any).overviewfiles) && (course as any).overviewfiles.length > 0) {
+            courseImage = (course as any).overviewfiles[0].fileurl;
+            console.log(`⚠️ Using overviewfiles for "${course.fullname}": ${courseImage}`);
+          } else if ((course as any).summaryfiles && Array.isArray((course as any).summaryfiles) && (course as any).summaryfiles.length > 0) {
+            courseImage = (course as any).summaryfiles[0].fileurl;
+            console.log(`⚠️ Using summaryfiles for "${course.fullname}": ${courseImage}`);
+          } else {
+            console.log(`❌ No real image found for "${course.fullname}", will use fallback`);
+            courseImage = null; // Force fallback
+          }
+          
+          // Validate the image URL
+          courseImage = validateImageUrl(courseImage);
+          
+          // If no valid image or it's a default Moodle image, use category-based fallback
+          if (!courseImage || courseImage === '/placeholder.svg' || isDefaultMoodleImage) {
+            courseImage = getCourseImageFallback(course.categoryname, course.fullname);
+            console.log(`🔄 Using fallback image for "${course.fullname}": ${courseImage}`);
+          }
             
-            return {
-              id: course.id,
-              fullname: course.fullname,
-              shortname: course.shortname,
-              progress,
+          return {
+            id: course.id,
+            fullname: course.fullname,
+            shortname: course.shortname,
+            progress,
             grade: courseCompletion?.completionstatus?.grade || 0,
-              lastAccess: course.startdate,
-              completionDate: course.enddate,
-              status: progress === 100 ? 'completed' : 
-                     progress > 0 ? 'in_progress' : 'not_started',
-              categoryname: course.categoryname || 'General',
-              startdate: course.startdate,
-              enddate: course.enddate,
-              visible: course.visible,
+            lastAccess: course.startdate,
+            completionDate: course.enddate,
+            status: progress === 100 ? 'completed' : 
+                   progress > 0 ? 'in_progress' : 'not_started',
+            categoryname: course.categoryname || 'General',
+            startdate: course.startdate,
+            enddate: course.enddate,
+            visible: course.visible,
             description: course.summary || `Course covering ${course.shortname.toLowerCase()} concepts.`,
             instructor: 'Course Instructor', // Real instructor data would come from API
             enrolledStudents: 0, // Real enrollment data would come from API
-              totalModules,
-              completedModules
-            };
+            totalModules,
+            completedModules,
+            // Use the real course image we just processed
+            courseimage: courseImage,
+            // Ensure image fields are included
+            overviewfiles: (course as any).overviewfiles || [],
+            summaryfiles: (course as any).summaryfiles || []
+          };
         }));
 
-          setCourses(processedCourses);
-          console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
-        } else {
+        setCourses(processedCourses);
+        console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
+        
+        // Log detailed image information for debugging (SAME AS ADMIN DASHBOARD)
+        processedCourses.forEach(course => {
+          const isRealImage = course.courseimage && !course.courseimage.includes('card');
+          console.log(`📸 Course "${course.fullname}": ${isRealImage ? '✅ Real Image' : '🔄 Fallback Image'} - ${course.courseimage}`);
+        });
+        
+      } else {
         console.log('⚠️ No enrolled courses found');
-          setCourses([]);
+        setCourses([]);
         setError('No enrolled courses available.');
       }
       
@@ -969,8 +1241,8 @@ const Courses: React.FC = () => {
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       {showCourseDetails && selectedCourse ? (
-        // Course Details Page
-      <div className="space-y-6">
+        // Course Details Page - Design from Second Image
+        <div className="space-y-6">
           {/* Page Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -980,39 +1252,152 @@ const Courses: React.FC = () => {
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-          <div>
+              <div>
                 <h1 className="text-2xl font-bold text-gray-900">{selectedCourse.fullname}</h1>
                 <p className="text-sm text-gray-600">Course Details • {selectedCourse.shortname}</p>
-          </div>
+              </div>
             </div>
-          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3">
               <Button variant="outline" size="sm">
                 <Search className="w-4 h-4 mr-2" />
                 Search
-            </Button>
+              </Button>
               <Button className="bg-green-600 hover:bg-green-700">
                 <Play className="w-4 h-4 mr-2" />
-                See Tutorial
+                Continue Learning
+              </Button>
+            </div>
+          </div>
+
+          {/* Breadcrumbs */}
+          <div className="text-sm text-gray-600">
+            Courses / {selectedCourse.categoryname} / {selectedCourse.fullname}
+          </div>
+
+          {/* Course Statistics */}
+          <div className="flex items-center space-x-6 text-sm text-gray-600">
+            <div className="flex items-center space-x-2">
+              <BookOpen className="w-4 h-4" />
+              <span>{realCourseContents.length} lessons</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Clock className="w-4 h-4" />
+              <span>4h 30min</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Star className="w-4 h-4 text-yellow-500" />
+              <span>4.5 (126 reviews)</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end space-x-3">
+            <Button variant="outline" size="sm">
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </Button>
+            <Button className="bg-purple-600 hover:bg-purple-700">
+              <Lock className="w-4 h-4 mr-2" />
+              Enroll Now
             </Button>
           </div>
-        </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content Area */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Activity Content Area */}
+              {/* Video Player Area */}
               <div className="bg-white rounded-lg border">
-                <div className="h-96 bg-gray-50 flex items-center justify-center">
+                <div className="relative h-96 bg-gray-900 flex items-center justify-center">
                   {isActivityLoading ? (
                     <div className="text-center">
                       <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                       <p className="text-gray-600">Loading activity content...</p>
+                    </div>
+                                    ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      {/* Video Player Placeholder - Design from Second Image */}
+                      <div className="text-center">
+                        <div className="relative w-96 h-64 bg-gray-800 rounded-lg flex items-center justify-center mb-4">
+                          <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center">
+                            <Play className="w-8 h-8 text-white ml-1" />
+                          </div>
+                        </div>
+                        <p className="text-gray-400 text-sm">Course video content will appear here</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tabs Navigation - Design from Second Image */}
+                <div className="border-b border-gray-200">
+                  <nav className="flex space-x-8 px-6">
+                    <button className="py-4 px-1 border-b-2 border-purple-500 text-purple-600 font-medium text-sm">
+                      Overview
+                    </button>
+                    <button className="py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm">
+                      Author
+                    </button>
+                    <button className="py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm">
+                      FAQ
+                    </button>
+                    <button className="py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm">
+                      Announcements
+                    </button>
+                    <button className="py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 font-medium text-sm">
+                      Reviews
+                    </button>
+                  </nav>
+                </div>
+
+                {/* Course Content */}
+                <div className="p-6 space-y-6">
+                  {/* About Course Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">About Course</h3>
+                    <p className="text-gray-700 leading-relaxed">
+                      {selectedCourse.description || `Unlock the power of ${selectedCourse.shortname}, with our comprehensive online course. Whether you're a novice or looking to enhance your skills, this course will guide you through essential concepts and practical applications. Perfect for students and anyone interested in learning new skills. Join us to elevate your knowledge and boost your productivity!`}
+                    </p>
+                  </div>
+
+                  {/* What You'll Learn Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">What You'll Learn</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-gray-700">Setting up the environment</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-gray-700">Advanced concepts and practices</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-gray-700">Build practical projects</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-gray-700">Responsive design principles</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-gray-700">Understand core concepts</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-gray-700">Start building beautiful projects</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-                                      ) : selectedActivity ? (
-                      <div className="w-full h-full p-6">
-                        <div className="bg-white rounded-lg shadow-sm border p-6 h-full overflow-y-auto">
-                          <div className="mb-6">
-                            <div className="flex items-center space-x-2 mb-3">
+
+                             {/* Course Activities Section */}
+               {selectedActivity && (
+                 <div className="bg-white rounded-lg border">
+                   <div className="p-6">
+                     <div className="mb-6">
+                       <div className="flex items-center space-x-2 mb-3">
                               <Badge variant="secondary" className="text-xs">
                                 {selectedActivity.modname || selectedActivity.type}
                               </Badge>
@@ -1908,59 +2293,93 @@ const Courses: React.FC = () => {
             </Select>
                 </div>
                 
-          {/* Courses Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCourses.map((course) => (
-              <Card key={course.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => handleCourseClick(course)}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <Badge variant={course.status === 'completed' ? 'default' : course.status === 'in_progress' ? 'secondary' : 'outline'}>
-                      {course.status === 'completed' ? 'Completed' : course.status === 'in_progress' ? 'In Progress' : 'Not Started'}
-                    </Badge>
-                    <div className="text-xs text-gray-500">
-                      {course.categoryname}
+          {/* Enhanced Course Cards Grid - Design from First Image */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredCourses.map((course) => {
+              const statusInfo = getCourseStatusInfo(course);
+              const courseImage = getCourseImage(course);
+              
+              return (
+                <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-all duration-300 border-0 shadow-md cursor-pointer" onClick={() => handleCourseClick(course)}>
+                  {/* Course Image Header */}
+                  <div className="relative h-48 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+                    <img 
+                      src={courseImage} 
+                      alt={course.fullname}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = getCourseImageFallback(course.categoryname, course.fullname);
+                      }}
+                    />
+                    
+                    {/* Overlay with course icon */}
+                    <div className="absolute bottom-4 left-4">
+                      <div className="w-8 h-8 bg-white rounded-md flex items-center justify-center shadow-lg">
+                        <BookOpen className="w-5 h-5 text-blue-600" />
+                      </div>
+                    </div>
+                    
+                    {/* Status Badge */}
+                    <div className="absolute top-4 right-4">
+                      <Badge className={`text-xs px-2 py-1 ${
+                        statusInfo.status === 'active' ? 'bg-green-500 text-white' :
+                        statusInfo.status === 'completed' ? 'bg-blue-500 text-white' :
+                        statusInfo.status === 'upcoming' ? 'bg-orange-500 text-white' :
+                        'bg-gray-500 text-white'
+                      }`}>
+                        {statusInfo.statusText}
+                      </Badge>
                     </div>
                   </div>
-                  <CardTitle className="text-lg">{course.fullname}</CardTitle>
-                  <CardDescription className="line-clamp-2">
-                    {course.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-3">
-                <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Progress</span>
-                        <span className="font-medium">{course.progress}%</span>
-                      </div>
-                      <Progress value={course.progress} className="h-2" />
-                </div>
-                
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                <div>
-                        <span>Grade: </span>
-                        <span className="font-medium">{course.grade || 0}%</span>
-                </div>
-                <div>
-                        <span>Modules: </span>
-                        <span className="font-medium">{course.completedModules || 0}/{course.totalModules || 0}</span>
-                </div>
-              </div>
-              
-                    <div className="flex justify-between items-center pt-2">
-                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleViewProgress(course); }}>
-                        <Eye className="w-4 h-4 mr-1" />
-                        View Progress
-                </Button>
-                      <Button size="sm" onClick={(e) => { e.stopPropagation(); handleCourseClick(course); }}>
-                        <BookOpen className="w-4 h-4 mr-1" />
-                        View Details
-                </Button>
-              </div>
-            </div>
-                </CardContent>
-              </Card>
-            ))}
+
+                  {/* Course Content */}
+                  <CardContent className="p-6 space-y-4">
+                    {/* Course Title */}
+                    <h3 className="text-xl font-bold text-gray-900 line-clamp-2">
+                      {course.fullname}
+                    </h3>
+                    
+                    {/* Course Short Name */}
+                    <p className="text-sm text-gray-600">
+                      {course.shortname}
+                    </p>
+                    
+                    {/* Category */}
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <BookOpen className="w-4 h-4" />
+                      <span>{course.categoryname || 'Uncategorized'}</span>
+                    </div>
+                    
+                    {/* Progress/Status Info */}
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      {statusInfo.progressIcon}
+                      <span>{statusInfo.progressText}</span>
+                    </div>
+                    
+                    {/* Enrollment Info */}
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Users className="w-4 h-4" />
+                      <span>{course.enrolledStudents || 0} enrolled</span>
+                    </div>
+                    
+                    {/* Date Range */}
+                    <div className="text-sm text-gray-600">
+                      {formatDate(course.startdate)} - {formatDate(course.enddate)}
+                    </div>
+                    
+                    {/* Action Button */}
+                    <Button 
+                      className={`w-full mt-4 ${statusInfo.buttonVariant === 'default' ? 'bg-blue-600 hover:bg-blue-700' : 'border-blue-600 text-blue-600 hover:bg-blue-50'}`}
+                      variant={statusInfo.buttonVariant}
+                    >
+                      {statusInfo.buttonText}
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           {filteredCourses.length === 0 && (
