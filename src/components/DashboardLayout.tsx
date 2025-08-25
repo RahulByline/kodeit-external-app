@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -31,6 +31,37 @@ import LogoutDialog from './ui/logout-dialog';
 import { authService } from '../services/authService';
 import { moodleService } from '../services/moodleApi';
 import { useAuth } from '../context/AuthContext';
+import { Skeleton } from './ui/skeleton';
+
+// Cache utilities for sidebar
+const SIDEBAR_CACHE_PREFIX = 'sidebar_';
+const SIDEBAR_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
+const getSidebarCachedData = (key: string) => {
+  try {
+    const cached = localStorage.getItem(`${SIDEBAR_CACHE_PREFIX}${key}`);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < SIDEBAR_CACHE_DURATION) {
+        return data;
+      }
+    }
+  } catch (error) {
+    console.warn('Sidebar cache read error:', error);
+  }
+  return null;
+};
+
+const setSidebarCachedData = (key: string, data: any) => {
+  try {
+    localStorage.setItem(`${SIDEBAR_CACHE_PREFIX}${key}`, JSON.stringify({
+      data,
+      timestamp: Date.now()
+    }));
+  } catch (error) {
+    console.warn('Sidebar cache write error:', error);
+  }
+};
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -44,9 +75,22 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const { currentUser } = useAuth();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const [cohortNavigationSettings, setCohortNavigationSettings] = useState<any>(null);
-  const [studentCohort, setStudentCohort] = useState<any>(null);
+  const [cohortNavigationSettings, setCohortNavigationSettings] = useState<any>(() => {
+    // Initialize with cached data if available
+    if (userRole === 'student') {
+      return getSidebarCachedData('cohortNavigationSettings');
+    }
+    return null;
+  });
+  const [studentCohort, setStudentCohort] = useState<any>(() => {
+    // Initialize with cached data if available
+    if (userRole === 'student') {
+      return getSidebarCachedData('studentCohort');
+    }
+    return null;
+  });
   const [isLoadingCohortSettings, setIsLoadingCohortSettings] = useState(false);
+  const [isLoadingSidebar, setIsLoadingSidebar] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debug logging
@@ -54,60 +98,109 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   console.log('DashboardLayout - userName:', userName);
   console.log('DashboardLayout - current location:', location.pathname);
 
+  // Enhanced sidebar loading with caching and progressive loading
+  const fetchStudentCohortAndSettings = useCallback(async () => {
+    if (!currentUser?.id || userRole !== 'student') return;
+
+    try {
+      setIsLoadingSidebar(true);
+      console.log('🎓 Fetching student cohort and navigation settings...');
+      
+      // Check cache first for instant display
+      const cachedCohort = getSidebarCachedData('studentCohort');
+      const cachedSettings = getSidebarCachedData('cohortNavigationSettings');
+      
+      if (cachedCohort && cachedSettings) {
+        setStudentCohort(cachedCohort);
+        setCohortNavigationSettings(cachedSettings);
+        console.log('✅ Using cached sidebar data');
+      }
+      
+      // Fetch fresh data in background
+      const fetchFreshData = async () => {
+        try {
+          setIsLoadingCohortSettings(true);
+          
+          // Get student's cohort
+          const cohort = await moodleService.getStudentCohort(currentUser.id.toString());
+          console.log('🎓 Student cohort:', cohort);
+          setStudentCohort(cohort);
+          setSidebarCachedData('studentCohort', cohort);
+          
+          if (cohort) {
+            console.log('🎓 Cohort ID:', cohort.id);
+            console.log('🎓 Cohort name:', cohort.name);
+            
+            // Get navigation settings for this cohort
+            const settings = await moodleService.getCohortNavigationSettingsFromStorage(cohort.id.toString());
+            console.log('⚙️ Cohort navigation settings loaded:', settings);
+            setCohortNavigationSettings(settings);
+            setSidebarCachedData('cohortNavigationSettings', settings);
+            
+            // Debug: Check backend API directly
+            try {
+              const apiResponse = await fetch(`http://localhost:5000/api/cohort-settings/${cohort.id}`);
+              const apiData = await apiResponse.json();
+              console.log('🔍 Backend API check for cohort:', cohort.id);
+              console.log('🔍 Backend API response:', apiData);
+            } catch (error) {
+              console.log('🔍 Backend API check failed:', error);
+            }
+          } else {
+            console.warn('⚠️ No cohort found for student, using default settings');
+            // Use default settings if no cohort found
+            const defaultSettings = moodleService.getDefaultNavigationSettings();
+            console.log('⚙️ Using default navigation settings:', defaultSettings);
+            setCohortNavigationSettings(defaultSettings);
+            setSidebarCachedData('cohortNavigationSettings', defaultSettings);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching cohort settings:', error);
+          // Fallback to default settings
+          const defaultSettings = moodleService.getDefaultNavigationSettings();
+          console.log('⚙️ Fallback to default settings:', defaultSettings);
+          setCohortNavigationSettings(defaultSettings);
+          setSidebarCachedData('cohortNavigationSettings', defaultSettings);
+        } finally {
+          setIsLoadingCohortSettings(false);
+        }
+      };
+
+      // Start background fetch
+      fetchFreshData();
+
+    } catch (error) {
+      console.error('❌ Error in sidebar data fetch:', error);
+    } finally {
+      setIsLoadingSidebar(false);
+    }
+  }, [currentUser?.id, userRole]);
+
   // Fetch student cohort and navigation settings
   useEffect(() => {
     if (userRole === 'student' && currentUser?.id) {
       fetchStudentCohortAndSettings();
     }
-  }, [userRole, currentUser?.id]);
+  }, [userRole, currentUser?.id, fetchStudentCohortAndSettings]);
 
-  const fetchStudentCohortAndSettings = async () => {
-    try {
-      setIsLoadingCohortSettings(true);
-      console.log('🎓 Fetching student cohort and navigation settings...');
-      console.log('👤 Current user ID:', currentUser.id);
-      console.log('👤 Current user object:', currentUser);
-      
-      // Get student's cohort
-      const cohort = await moodleService.getStudentCohort(currentUser.id.toString());
-      console.log('🎓 Student cohort:', cohort);
-      setStudentCohort(cohort);
-      
-      if (cohort) {
-        console.log('🎓 Cohort ID:', cohort.id);
-        console.log('🎓 Cohort name:', cohort.name);
-        
-        // Get navigation settings for this cohort
-        const settings = await moodleService.getCohortNavigationSettingsFromStorage(cohort.id.toString());
-        console.log('⚙️ Cohort navigation settings loaded:', settings);
-        setCohortNavigationSettings(settings);
-        
-        // Debug: Check backend API directly
-        try {
-          const apiResponse = await fetch(`http://localhost:5000/api/cohort-settings/${cohort.id}`);
-          const apiData = await apiResponse.json();
-          console.log('🔍 Backend API check for cohort:', cohort.id);
-          console.log('🔍 Backend API response:', apiData);
-        } catch (error) {
-          console.log('🔍 Backend API check failed:', error);
-        }
-      } else {
-        console.warn('⚠️ No cohort found for student, using default settings');
-        // Use default settings if no cohort found
-        const defaultSettings = moodleService.getDefaultNavigationSettings();
-        console.log('⚙️ Using default navigation settings:', defaultSettings);
-        setCohortNavigationSettings(defaultSettings);
-      }
-    } catch (error) {
-      console.error('❌ Error fetching cohort settings:', error);
-      // Fallback to default settings
-      const defaultSettings = moodleService.getDefaultNavigationSettings();
-      console.log('⚙️ Fallback to default settings:', defaultSettings);
-      setCohortNavigationSettings(defaultSettings);
-    } finally {
-      setIsLoadingCohortSettings(false);
-    }
-  };
+  // Skeleton navigation components
+  const SkeletonNavigationItem = () => (
+    <div className="flex items-center space-x-3 px-3 py-2">
+      <Skeleton className="w-4 h-4 rounded" />
+      <Skeleton className="h-4 w-24 rounded" />
+    </div>
+  );
+
+  const SkeletonNavigationSection = () => (
+    <div className="space-y-3">
+      <Skeleton className="h-3 w-16 rounded" />
+      <div className="space-y-1">
+        <SkeletonNavigationItem />
+        <SkeletonNavigationItem />
+        <SkeletonNavigationItem />
+      </div>
+    </div>
+  );
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -247,13 +340,50 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
     }
 
     if (userRole === 'student') {
-      // Show loading state while fetching cohort settings
-      if (isLoadingCohortSettings) {
+      // Show skeleton navigation while loading cohort settings
+      if (isLoadingCohortSettings && !cohortNavigationSettings) {
         return [
           {
-            title: 'LOADING',
+            title: 'DASHBOARD',
             items: [
-              { name: 'Loading navigation...', icon: LayoutDashboard, path: `/dashboard/${userRole}` }
+              { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
+              { name: 'Community', icon: Users, path: `/dashboard/${userRole}/community` },
+              { name: 'Enrollments', icon: GraduationCap, path: `/dashboard/${userRole}/enrollments` },
+            ]
+          },
+          {
+            title: 'COURSES',
+            items: [
+              { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+              { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
+              { name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' },
+            ]
+          },
+          {
+            title: 'PROGRESS',
+            items: [
+              { name: 'My Grades', icon: BarChart3, path: '/dashboard/student/grades' },
+              { name: 'Progress Tracking', icon: TrendingUp, path: '/dashboard/student/progress' },
+            ]
+          },
+          {
+            title: 'RESOURCES',
+            items: [
+              { name: 'Calendar', icon: Calendar, path: '/dashboard/student/calendar' },
+              { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
+            ]
+          },
+          {
+            title: 'EMULATORS',
+            items: [
+              { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
+              { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+            ]
+          },
+          {
+            title: 'SETTINGS',
+            items: [
+              { name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' },
             ]
           }
         ];
@@ -430,37 +560,48 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
 
         {/* Navigation */}
         <nav className="p-4 space-y-6 pb-20">
-          {navigationItems.map((section, sectionIndex) => (
-            <div key={sectionIndex}>
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                {section.title}
-              </h3>
-              <ul className="space-y-1">
-                {section.items.map((item, itemIndex) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <li key={itemIndex}>
-                      <button
-                        onClick={() => {
-                          console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
-                          navigate(item.path);
-                        }}
-                        className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span>{item.name}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+          {isLoadingSidebar && userRole === 'student' ? (
+            // Show skeleton navigation while loading
+            <>
+              <SkeletonNavigationSection />
+              <SkeletonNavigationSection />
+              <SkeletonNavigationSection />
+              <SkeletonNavigationSection />
+              <SkeletonNavigationSection />
+            </>
+          ) : (
+            navigationItems.map((section, sectionIndex) => (
+              <div key={sectionIndex}>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  {section.title}
+                </h3>
+                <ul className="space-y-1">
+                  {section.items.map((item, itemIndex) => {
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.path;
+                    return (
+                      <li key={itemIndex}>
+                        <button
+                          onClick={() => {
+                            console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                            navigate(item.path);
+                          }}
+                          className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span>{item.name}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          )}
         </nav>
       </div>
 

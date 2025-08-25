@@ -1294,7 +1294,7 @@ const Courses: React.FC = () => {
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
-            <span className="text-gray-600">Loading real courses from IOMAD Moodle API...</span>
+            <span className="text-gray-600">Loading...</span>
           </div>
         </div>
       </DashboardLayout>

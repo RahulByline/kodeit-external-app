@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   BookOpen, 
   FileText, 
@@ -44,6 +44,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import ScratchEditor from './ScratchEditor';
 import { getDashboardTypeByGrade, extractGradeFromCohortName, getGradeCohortInfo } from '../utils/gradeCohortMapping';
+import { Skeleton } from '../components/ui/skeleton';
 
 interface Stats {
   enrolledCourses: number;
@@ -151,33 +152,190 @@ interface LearningModule {
   total: number;
 }
 
+// Cache utilities
+const CACHE_PREFIX = 'student_dashboard_';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+const getCachedData = (key: string) => {
+  try {
+    const cached = localStorage.getItem(`${CACHE_PREFIX}${key}`);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        return data;
+      }
+    }
+  } catch (error) {
+    console.warn('Cache read error:', error);
+  }
+  return null;
+};
+
+const setCachedData = (key: string, data: any) => {
+  try {
+    localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify({
+      data,
+      timestamp: Date.now()
+    }));
+  } catch (error) {
+    console.warn('Cache write error:', error);
+  }
+};
+
 const StudentDashboard: React.FC = () => {
   const { currentUser } = useAuth();
-  const [stats, setStats] = useState<Stats>({
-    enrolledCourses: 0,
-    completedAssignments: 0,
-    pendingAssignments: 0,
-    averageGrade: 0,
-    totalActivities: 0,
-    activeStudents: 0
+  
+  // Enhanced state management with loading states for different sections
+  const [stats, setStats] = useState<Stats>(() => {
+    const cached = getCachedData('stats');
+    return cached || {
+      enrolledCourses: 0,
+      completedAssignments: 0,
+      pendingAssignments: 0,
+      averageGrade: 0,
+      totalActivities: 0,
+      activeStudents: 0
+    };
   });
-  const [loading, setLoading] = useState(true);
+  
+  const [loading, setLoading] = useState(false); // Changed to false for instant render
   const [error, setError] = useState('');
   const [showScratchEditor, setShowScratchEditor] = useState(false);
   const [savedProjects, setSavedProjects] = useState<any[]>([]);
   
   // Grade-based dashboard state
-  const [studentGrade, setStudentGrade] = useState<number>(8); // Default to grade 8+
+  const [studentGrade, setStudentGrade] = useState<number>(8);
   const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G8_PLUS');
   const [studentCohort, setStudentCohort] = useState<any>(null);
   
-  // Real data states
-  const [courseProgress, setCourseProgress] = useState<CourseProgress[]>([]);
-  const [gradeBreakdown, setGradeBreakdown] = useState<GradeBreakdown[]>([]);
-  const [studentActivities, setStudentActivities] = useState<StudentActivity[]>([]);
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
-  const [userCourses, setUserCourses] = useState<any[]>([]);
-  const [userAssignments, setUserAssignments] = useState<any[]>([]);
+  // Real data states with individual loading states
+  const [courseProgress, setCourseProgress] = useState<CourseProgress[]>(() => {
+    const cached = getCachedData('courseProgress');
+    return cached || [];
+  });
+  const [gradeBreakdown, setGradeBreakdown] = useState<GradeBreakdown[]>(() => {
+    const cached = getCachedData('gradeBreakdown');
+    return cached || [];
+  });
+  const [studentActivities, setStudentActivities] = useState<StudentActivity[]>(() => {
+    const cached = getCachedData('studentActivities');
+    return cached || [];
+  });
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>(() => {
+    const cached = getCachedData('recentActivities');
+    return cached || [];
+  });
+  const [userCourses, setUserCourses] = useState<any[]>(() => {
+    const cached = getCachedData('userCourses');
+    return cached || [];
+  });
+  const [userAssignments, setUserAssignments] = useState<any[]>(() => {
+    const cached = getCachedData('userAssignments');
+    return cached || [];
+  });
+
+  // Individual loading states for progressive loading
+  const [loadingStates, setLoadingStates] = useState({
+    stats: false,
+    courseProgress: false,
+    gradeBreakdown: false,
+    studentActivities: false,
+    recentActivities: false,
+    userCourses: false,
+    userAssignments: false,
+    profile: false
+  });
+
+  // Skeleton loader components
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="flex justify-between items-start">
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+        <Skeleton className="h-12 w-12 rounded-lg" />
+      </div>
+    </div>
+  );
+
+  const SkeletonCourseSection = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="flex justify-between items-center mb-6">
+        <Skeleton className="h-6 w-48" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-start space-x-4 mb-4">
+              <Skeleton className="w-16 h-16 rounded-2xl" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            </div>
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+              <Skeleton className="h-3 w-full rounded-full" />
+            </div>
+            <div className="flex justify-between items-center">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-8 w-20 rounded-lg" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const SkeletonCourseCard = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="flex items-start space-x-4 mb-4">
+        <Skeleton className="w-16 h-16 rounded-2xl" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      </div>
+      <div className="space-y-2 mb-4">
+        <div className="flex justify-between">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-12" />
+        </div>
+        <Skeleton className="h-3 w-full rounded-full" />
+      </div>
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-8 w-20 rounded-lg" />
+      </div>
+    </div>
+  );
+
+  const SkeletonActivityCard = () => (
+    <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+      <Skeleton className="w-8 h-8 rounded-lg" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+      <Skeleton className="h-6 w-16 rounded-full" />
+    </div>
+  );
+
+  const SkeletonProgressBar = () => (
+    <div className="space-y-3">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex justify-between items-center">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-4 w-12" />
+        </div>
+      ))}
+    </div>
+  );
 
   // Mock data for G1-G3 and G4-G7 dashboards
   const courses: SimpleCourse[] = [
@@ -285,13 +443,24 @@ const StudentDashboard: React.FC = () => {
     localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
   };
 
-  const determineStudentGradeAndDashboard = async () => {
+  const determineStudentGradeAndDashboard = useCallback(async () => {
     try {
       console.log('🎓 Determining student grade and dashboard type...');
+      
+      // Check cache first
+      const cachedCohort = getCachedData('studentCohort');
+      if (cachedCohort) {
+        setStudentCohort(cachedCohort);
+        const grade = extractGradeFromCohortName(cachedCohort.name) || 8;
+        setStudentGrade(grade);
+        setDashboardType(getDashboardTypeByGrade(grade));
+        return;
+      }
       
       // Get student's cohort
       const cohort = await moodleService.getStudentCohort(currentUser?.id.toString());
       setStudentCohort(cohort);
+      setCachedData('studentCohort', cohort);
       
       let grade = 8; // Default to grade 8+
       
@@ -304,7 +473,6 @@ const StudentDashboard: React.FC = () => {
           grade = extractedGrade;
           console.log('🎓 Grade extracted from cohort name:', grade);
         } else {
-          // If no grade in cohort name, try to get from user profile or use default
           console.log('🎓 No grade found in cohort name, using default grade 8+');
         }
       } else {
@@ -330,7 +498,320 @@ const StudentDashboard: React.FC = () => {
       setStudentGrade(8);
       setDashboardType('G8_PLUS');
     }
-  };
+  }, [currentUser?.id]);
+
+  // Enhanced data fetching with progressive loading
+  const fetchStudentData = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      setError('');
+      
+      // Start with cached data for instant display
+      const cachedStats = getCachedData('stats');
+      const cachedCourses = getCachedData('userCourses');
+      const cachedProgress = getCachedData('courseProgress');
+      
+      if (cachedStats) setStats(cachedStats);
+      if (cachedCourses) setUserCourses(cachedCourses);
+      if (cachedProgress) setCourseProgress(cachedProgress);
+      
+      console.log('🔄 Fetching real student data from IOMAD API...');
+      
+      // Determine student's grade and dashboard type first (non-blocking)
+      determineStudentGradeAndDashboard();
+
+      // ULTRA-FAST COURSE LOADING: Show courses immediately
+      setLoadingStates(prev => ({ ...prev, userCourses: true }));
+      
+      // Show cached courses instantly if available
+      if (cachedCourses && cachedCourses.length > 0) {
+        setUserCourses(cachedCourses);
+        setLoadingStates(prev => ({ ...prev, userCourses: false }));
+        console.log('✅ Cached courses displayed instantly:', cachedCourses.length);
+      }
+      
+      // Show cached course progress instantly if available
+      if (cachedProgress && cachedProgress.length > 0) {
+        setCourseProgress(cachedProgress);
+        console.log('✅ Cached course progress displayed instantly');
+      }
+      
+      // Load real course data in background (non-blocking)
+      const loadRealCourseData = async () => {
+        try {
+          console.log('🔄 Loading real course data in background...');
+          
+          // Fetch real course data
+          const userCourses = await moodleService.getUserCourses(currentUser.id);
+          
+          // Process and display real courses
+          const enrolledCourses = userCourses.filter(course => 
+            course.visible !== 0 && course.categoryid && course.categoryid > 0
+          );
+          
+          setUserCourses(enrolledCourses);
+          setCachedData('userCourses', enrolledCourses);
+          setLoadingStates(prev => ({ ...prev, userCourses: false }));
+          
+          console.log('✅ Real courses loaded:', enrolledCourses.length);
+          
+          // Show real course progress
+          const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => ({
+            subject: course.shortname,
+            progress: course.progress || Math.floor(Math.random() * 100),
+            courseId: course.id,
+            courseName: course.fullname,
+            instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
+            lastAccess: course.lastaccess || course.startdate || Date.now() / 1000
+          }));
+          
+          setCourseProgress(realCourseProgress);
+          setCachedData('courseProgress', realCourseProgress);
+          
+        } catch (error) {
+          console.error('❌ Error loading real course data:', error);
+          setLoadingStates(prev => ({ ...prev, userCourses: false }));
+          
+          // If no cached data and API fails, show mock courses for better UX
+          if (!cachedCourses || cachedCourses.length === 0) {
+            const mockCourses = [
+              {
+                id: '1',
+                fullname: 'Loading Course 1...',
+                shortname: 'LC1',
+                progress: 0,
+                visible: 1,
+                categoryid: 1,
+                lastaccess: Date.now() / 1000,
+                startdate: Date.now() / 1000
+              },
+              {
+                id: '2',
+                fullname: 'Loading Course 2...',
+                shortname: 'LC2',
+                progress: 0,
+                visible: 1,
+                categoryid: 1,
+                lastaccess: Date.now() / 1000,
+                startdate: Date.now() / 1000
+              }
+            ];
+            setUserCourses(mockCourses);
+            setLoadingStates(prev => ({ ...prev, userCourses: false }));
+          }
+        }
+      };
+      
+      // Start background course loading
+      loadRealCourseData();
+
+      // Load user profile in parallel (non-blocking)
+      const loadUserProfile = async () => {
+        try {
+          setLoadingStates(prev => ({ ...prev, profile: true }));
+          const userProfile = await moodleService.getProfile();
+          setLoadingStates(prev => ({ ...prev, profile: false }));
+        } catch (error) {
+          console.error('❌ Error loading user profile:', error);
+          setLoadingStates(prev => ({ ...prev, profile: false }));
+        }
+      };
+      
+      loadUserProfile();
+
+      // Load detailed course data in background (non-blocking)
+      const loadDetailedCourseData = async () => {
+        try {
+          console.log('🔄 Loading detailed course data in background...');
+          
+          const [
+            courseEnrollments,
+            courseCompletion,
+            teacherAssignments
+          ] = await Promise.all([
+            moodleService.getCourseEnrollments(),
+            moodleService.getCourseCompletionStats(),
+            moodleService.getTeacherAssignments()
+          ]);
+
+          // Update course progress with real data
+          setLoadingStates(prev => ({ ...prev, courseProgress: true }));
+          
+          const enrolledCourses = getCachedData('userCourses') || [];
+          const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => {
+            const enrollment = courseEnrollments.find(e => e.courseId === course.id);
+            const completion = courseCompletion.find(c => c.courseId === course.id);
+            
+            return {
+              subject: course.shortname,
+              progress: completion?.completionRate || course.progress || Math.floor(Math.random() * 100),
+              courseId: course.id,
+              courseName: course.fullname,
+              instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
+              lastAccess: course.lastaccess || course.startdate || Date.now() / 1000
+            };
+          });
+          
+          setCourseProgress(realCourseProgress);
+          setCachedData('courseProgress', realCourseProgress);
+          setLoadingStates(prev => ({ ...prev, courseProgress: false }));
+          
+          console.log('✅ Detailed course data loaded');
+          
+        } catch (error) {
+          console.error('❌ Error loading detailed course data:', error);
+          setLoadingStates(prev => ({ ...prev, courseProgress: false }));
+        }
+      };
+
+      // Load stats and activities in background (non-blocking)
+      const loadStatsAndActivities = async () => {
+        try {
+          console.log('🔄 Loading stats and activities in background...');
+          
+          const [
+            userActivity,
+            userAssignments
+          ] = await Promise.all([
+            moodleService.getUserActivityData(currentUser.id),
+            moodleService.getAssignmentSubmissions('1')
+          ]);
+
+          // Process stats
+          setLoadingStates(prev => ({ ...prev, stats: true }));
+          
+          const enrolledCourses = getCachedData('userCourses') || [];
+          const courseEnrollments = getCachedData('courseEnrollments') || [];
+          const teacherAssignments = getCachedData('teacherAssignments') || [];
+          
+          const totalAssignments = teacherAssignments.length > 0 ? 
+            teacherAssignments.length : 
+            Math.floor(enrolledCourses.length * 3); // Estimate based on course count
+          
+          const completedAssignments = userAssignments.filter(submission => 
+            submission.status === 'submitted' || submission.gradingstatus === 'graded'
+          ).length;
+          
+          const pendingAssignments = Math.max(totalAssignments - completedAssignments, 0);
+          
+          const gradedAssignments = userAssignments.filter(submission => submission.grade);
+          const totalGrade = gradedAssignments.reduce((sum, submission) => sum + (submission.grade || 0), 0);
+          const averageGrade = gradedAssignments.length > 0 ? Math.round(totalGrade / gradedAssignments.length) : 85;
+
+          const newStats = {
+            enrolledCourses: enrolledCourses.length,
+            completedAssignments,
+            pendingAssignments,
+            averageGrade,
+            totalActivities: teacherAssignments.length,
+            activeStudents: userActivity.filter(activity => activity.isActive).length
+          };
+
+          setStats(newStats);
+          setCachedData('stats', newStats);
+          setLoadingStates(prev => ({ ...prev, stats: false }));
+
+          // Process activities
+          setLoadingStates(prev => ({ ...prev, studentActivities: true, recentActivities: true }));
+          
+          const realStudentActivities: StudentActivity[] = teacherAssignments.map(assignment => {
+            const submission = userAssignments.find(s => s.assignmentid === assignment.id);
+            const isCompleted = submission && (submission.status === 'submitted' || submission.gradingstatus === 'graded');
+            const isOverdue = assignment.duedate && assignment.duedate < Date.now() / 1000 && !isCompleted;
+            
+            let status: StudentActivity['status'] = 'not_started';
+            if (isCompleted) {
+              status = 'completed';
+            } else if (isOverdue) {
+              status = 'overdue';
+            } else if (submission && submission.status === 'draft') {
+              status = 'in_progress';
+            }
+
+            return {
+              id: assignment.id.toString(),
+              type: 'assignment',
+              title: assignment.name,
+              courseName: assignment.courseName,
+              status,
+              dueDate: assignment.duedate ? assignment.duedate * 1000 : undefined,
+              grade: submission?.grade,
+              maxGrade: 100,
+              timestamp: submission?.timecreated ? submission.timecreated * 1000 : Date.now()
+            };
+          });
+
+          const realRecentActivities: RecentActivity[] = [];
+          
+          // Add course access activities
+          enrolledCourses.forEach((course: Course) => {
+            if (course.lastaccess) {
+              realRecentActivities.push({
+                id: `course-${course.id}`,
+                type: 'course_access',
+                title: `Accessed ${course.shortname}`,
+                description: `Viewed course materials for ${course.fullname}`,
+                timestamp: course.lastaccess * 1000,
+                courseName: course.fullname
+              });
+            }
+          });
+
+          // Add assignment submission activities
+          userAssignments.forEach(submission => {
+            if (submission.status === 'submitted') {
+              const assignment = teacherAssignments.find(a => a.id === submission.assignmentid);
+              realRecentActivities.push({
+                id: `submission-${submission.id}`,
+                type: 'assignment_submit',
+                title: `Submitted Assignment`,
+                description: `Submitted assignment for ${assignment?.courseName || 'Course'}`,
+                timestamp: submission.timecreated * 1000,
+                courseName: assignment?.courseName,
+                grade: submission.grade
+              });
+            }
+          });
+
+          realRecentActivities.sort((a, b) => b.timestamp - a.timestamp);
+
+          setStudentActivities(realStudentActivities);
+          setRecentActivities(realRecentActivities.slice(0, 10));
+          setUserAssignments(userAssignments);
+          
+          setCachedData('studentActivities', realStudentActivities);
+          setCachedData('recentActivities', realRecentActivities.slice(0, 10));
+          setCachedData('userAssignments', userAssignments);
+          
+          setLoadingStates(prev => ({ 
+            ...prev, 
+            studentActivities: false, 
+            recentActivities: false 
+          }));
+          
+          console.log('✅ Stats and activities loaded');
+          
+        } catch (error) {
+          console.error('❌ Error loading stats and activities:', error);
+          setLoadingStates(prev => ({ 
+            ...prev, 
+            stats: false,
+            studentActivities: false, 
+            recentActivities: false 
+          }));
+        }
+      };
+
+      // Start background loading
+      loadDetailedCourseData();
+      loadStatsAndActivities();
+
+    } catch (error) {
+      console.error('❌ Error in initial data fetch:', error);
+      setError('Failed to load dashboard data. Please check your connection and try again.');
+    }
+  }, [currentUser, determineStudentGradeAndDashboard]);
 
   useEffect(() => {
     fetchStudentData();
@@ -341,221 +822,9 @@ const StudentDashboard: React.FC = () => {
     }, 5 * 60 * 1000);
     
     return () => clearInterval(interval);
-  }, [currentUser]);
+  }, [fetchStudentData]);
 
-  const fetchStudentData = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      console.log('🔄 Fetching real student data from IOMAD API...');
-      console.log('👤 Current user:', currentUser);
-      console.log('🆔 Current user ID:', currentUser?.id);
-      
-      if (!currentUser?.id) {
-        throw new Error('No current user ID available');
-      }
 
-      // Determine student's grade and dashboard type
-      await determineStudentGradeAndDashboard();
-
-      // Fetch all real data from IOMAD API in parallel
-      const [
-        userProfile,
-        userCourses,
-        allCourses,
-        courseEnrollments,
-        courseCompletion,
-        userActivity,
-        teacherAssignments,
-        userAssignments
-      ] = await Promise.all([
-        moodleService.getProfile(),
-        moodleService.getUserCourses(currentUser.id),
-        moodleService.getAllCourses(),
-        moodleService.getCourseEnrollments(),
-        moodleService.getCourseCompletionStats(),
-        moodleService.getUserActivityData(currentUser.id),
-        moodleService.getTeacherAssignments(),
-        moodleService.getAssignmentSubmissions('1') // Get submissions for first assignment
-      ]);
-
-      console.log('📊 Real data fetched:', {
-        userProfile,
-        userCourses: userCourses.length,
-        allCourses: allCourses.length,
-        courseEnrollments: courseEnrollments.length,
-        courseCompletion: courseCompletion.length,
-        userActivity: userActivity.length,
-        teacherAssignments: teacherAssignments.length,
-        userAssignments: userAssignments.length
-      });
-
-      // Process real course data
-      const enrolledCourses = userCourses.filter(course => 
-        course.visible !== 0 && course.categoryid && course.categoryid > 0
-      );
-      
-      // Get enrollment data for enrolled courses
-      const studentEnrollments = courseEnrollments.filter(enrollment => 
-        enrolledCourses.some(course => course.id === enrollment.courseId)
-      );
-      
-      // Calculate real assignments based on course enrollments and teacher assignments
-      const totalAssignments = teacherAssignments.length > 0 ? 
-        teacherAssignments.length : 
-        studentEnrollments.reduce((sum, enrollment) => {
-          return sum + Math.floor(enrollment.totalEnrolled * 0.3);
-        }, 0);
-      
-      const completedAssignments = userAssignments.filter(submission => 
-        submission.status === 'submitted' || submission.gradingstatus === 'graded'
-      ).length;
-      
-      const pendingAssignments = Math.max(totalAssignments - completedAssignments, 0);
-      
-      // Calculate average grade from real data
-      const gradedAssignments = userAssignments.filter(submission => submission.grade);
-      const totalGrade = gradedAssignments.reduce((sum, submission) => sum + (submission.grade || 0), 0);
-      const averageGrade = gradedAssignments.length > 0 ? Math.round(totalGrade / gradedAssignments.length) : 85;
-
-      // Process real course progress data
-      const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => {
-        const enrollment = studentEnrollments.find(e => e.courseId === course.id);
-        const completion = courseCompletion.find(c => c.courseId === course.id);
-        
-        return {
-          subject: course.shortname,
-          progress: completion?.completionRate || course.progress || Math.floor(Math.random() * 100),
-          courseId: course.id,
-          courseName: course.fullname,
-          instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-          lastAccess: course.lastaccess || course.startdate || Date.now() / 1000
-        };
-      });
-
-      // Process real grade breakdown data
-      const gradeRanges = [
-        { range: 'A (90-100)', min: 90, max: 100 },
-        { range: 'B (80-89)', min: 80, max: 89 },
-        { range: 'C (70-79)', min: 70, max: 79 },
-        { range: 'D (60-69)', min: 60, max: 69 }
-      ];
-
-      const realGradeBreakdown: GradeBreakdown[] = gradeRanges.map(range => {
-        const count = gradedAssignments.filter(submission => {
-          const grade = submission.grade || 0;
-          return grade >= range.min && grade <= range.max;
-        }).length;
-        
-        return {
-          grade: range.range,
-          count,
-          percentage: gradedAssignments.length > 0 ? Math.round((count / gradedAssignments.length) * 100) : 0
-        };
-      });
-
-      // Process real student activities
-      const realStudentActivities: StudentActivity[] = teacherAssignments.map(assignment => {
-        const submission = userAssignments.find(s => s.assignmentid === assignment.id);
-        const isCompleted = submission && (submission.status === 'submitted' || submission.gradingstatus === 'graded');
-        const isOverdue = assignment.duedate && assignment.duedate < Date.now() / 1000 && !isCompleted;
-        
-        let status: StudentActivity['status'] = 'not_started';
-        if (isCompleted) {
-          status = 'completed';
-        } else if (isOverdue) {
-          status = 'overdue';
-        } else if (submission && submission.status === 'draft') {
-          status = 'in_progress';
-        }
-
-        return {
-          id: assignment.id.toString(),
-          type: 'assignment',
-          title: assignment.name,
-          courseName: assignment.courseName,
-          status,
-          dueDate: assignment.duedate ? assignment.duedate * 1000 : undefined,
-          grade: submission?.grade,
-          maxGrade: 100,
-          timestamp: submission?.timecreated ? submission.timecreated * 1000 : Date.now()
-        };
-      });
-
-      // Process real recent activities
-      const realRecentActivities: RecentActivity[] = [];
-      
-      // Add course access activities
-      enrolledCourses.forEach((course: Course) => {
-        if (course.lastaccess) {
-          realRecentActivities.push({
-            id: `course-${course.id}`,
-            type: 'course_access',
-            title: `Accessed ${course.shortname}`,
-            description: `Viewed course materials for ${course.fullname}`,
-            timestamp: course.lastaccess * 1000,
-            courseName: course.fullname
-          });
-        }
-      });
-
-      // Add assignment submission activities
-      userAssignments.forEach(submission => {
-        if (submission.status === 'submitted') {
-          const assignment = teacherAssignments.find(a => a.id === submission.assignmentid);
-          realRecentActivities.push({
-            id: `submission-${submission.id}`,
-            type: 'assignment_submit',
-            title: `Submitted Assignment`,
-            description: `Submitted assignment for ${assignment?.courseName || 'Course'}`,
-            timestamp: submission.timecreated * 1000,
-            courseName: assignment?.courseName,
-            grade: submission.grade
-          });
-        }
-      });
-
-      // Sort activities by timestamp (most recent first)
-      realRecentActivities.sort((a, b) => b.timestamp - a.timestamp);
-
-      // Update state with real data
-      setStats({
-        enrolledCourses: enrolledCourses.length,
-        completedAssignments,
-        pendingAssignments,
-        averageGrade,
-        totalActivities: realStudentActivities.length,
-        activeStudents: userActivity.filter(activity => activity.isActive).length
-      });
-
-      setCourseProgress(realCourseProgress);
-      setGradeBreakdown(realGradeBreakdown);
-      setStudentActivities(realStudentActivities);
-      setRecentActivities(realRecentActivities.slice(0, 10)); // Show only 10 most recent
-      setUserCourses(enrolledCourses);
-      setUserAssignments(userAssignments);
-
-      console.log('✅ Real student data processed successfully:', {
-        stats: {
-          enrolledCourses: enrolledCourses.length,
-          completedAssignments,
-          pendingAssignments,
-          averageGrade
-        },
-        courseProgress: realCourseProgress.length,
-        gradeBreakdown: realGradeBreakdown.length,
-        studentActivities: realStudentActivities.length,
-        recentActivities: realRecentActivities.length
-      });
-
-    } catch (error) {
-      console.error('❌ Error fetching student data:', error);
-      setError('Failed to load dashboard data from IOMAD API. Please check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -579,15 +848,88 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-        <div className="flex items-center justify-center h-64">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="animate-spin h-6 w-6 text-blue-600" />
-            <span className="text-gray-600">Loading real data from IOMAD API...</span>
+  // Show skeleton loaders for individual sections while data is loading
+  const renderSkeletonDashboard = () => (
+    <div className="space-y-6">
+      {/* Header Skeleton */}
+      <div className="flex justify-between items-start">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="flex items-center space-x-3">
+          <Skeleton className="h-10 w-32 rounded-lg" />
+          <Skeleton className="h-10 w-10 rounded-lg" />
+          <Skeleton className="h-10 w-10 rounded-lg" />
+        </div>
+      </div>
+
+      {/* KPI Cards Skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[1, 2, 3, 4].map((i) => (
+          <SkeletonCard key={i} />
+        ))}
+      </div>
+
+      {/* Charts Section Skeleton */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <Skeleton className="h-6 w-48" />
+          </div>
+          <div className="flex space-x-2 mb-6">
+            <Skeleton className="h-8 w-24 rounded-lg" />
+            <Skeleton className="h-8 w-24 rounded-lg" />
+            <Skeleton className="h-8 w-24 rounded-lg" />
+          </div>
+          <div className="bg-blue-50 rounded-lg p-8 text-center mb-6">
+            <Skeleton className="w-12 h-12 mx-auto mb-4 rounded" />
+            <Skeleton className="h-4 w-64 mx-auto" />
+          </div>
+          <SkeletonProgressBar />
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <Skeleton className="h-6 w-48" />
+          </div>
+          <SkeletonProgressBar />
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Activities Section Skeleton */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-6">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <SkeletonActivityCard key={i} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Show skeleton dashboard if any critical data is still loading
+  // Note: Dashboard now renders immediately, sidebar loads independently
+  if (loadingStates.profile || loadingStates.stats) {
+    return (
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+        {renderSkeletonDashboard()}
       </DashboardLayout>
     );
   }
@@ -957,16 +1299,36 @@ const StudentDashboard: React.FC = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        {loadingStates.stats ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-gray-500 text-sm font-medium">Enrolled Courses</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.enrolledCourses}</h3>
-              <div className="flex items-center mt-2">
-                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                <span className="text-green-600 text-sm font-medium">+{Math.floor(Math.random() * 5) + 1}%</span>
-                <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
-              </div>
+              {loadingStates.userCourses ? (
+                <div className="mt-1">
+                  <Skeleton className="h-8 w-16" />
+                  <div className="flex items-center mt-2">
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.enrolledCourses}</h3>
+                  <div className="flex items-center mt-2">
+                    <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                    <span className="text-green-600 text-sm font-medium">+{Math.floor(Math.random() * 5) + 1}%</span>
+                    <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="p-3 bg-blue-100 rounded-lg">
               <BookOpen className="w-6 h-6 text-blue-600" />
@@ -974,54 +1336,56 @@ const StudentDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-gray-500 text-sm font-medium">Completed Assignments</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.completedAssignments}</h3>
-              <div className="flex items-center mt-2">
-                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                <span className="text-green-600 text-sm font-medium">+{Math.floor(Math.random() * 15) + 5}%</span>
-                <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium">Completed Assignments</p>
+                  <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.completedAssignments}</h3>
+                  <div className="flex items-center mt-2">
+                    <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                    <span className="text-green-600 text-sm font-medium">+{Math.floor(Math.random() * 15) + 5}%</span>
+                    <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
               </div>
             </div>
-            <div className="p-3 bg-green-100 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-gray-500 text-sm font-medium">Pending Assignments</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.pendingAssignments}</h3>
-              <div className="flex items-center mt-2">
-                <span className="text-red-600 text-sm font-medium">Due soon</span>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium">Pending Assignments</p>
+                  <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.pendingAssignments}</h3>
+                  <div className="flex items-center mt-2">
+                    <span className="text-red-600 text-sm font-medium">Due soon</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-yellow-100 rounded-lg">
+                  <Clock className="w-6 h-6 text-yellow-600" />
+                </div>
               </div>
             </div>
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-gray-500 text-sm font-medium">Average Grade</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.averageGrade}%</h3>
-              <div className="flex items-center mt-2">
-                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                <span className="text-green-600 text-sm font-medium">+{Math.floor(Math.random() * 5) + 1}%</span>
-                <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium">Average Grade</p>
+                  <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.averageGrade}%</h3>
+                  <div className="flex items-center mt-2">
+                    <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                    <span className="text-green-600 text-sm font-medium">+{Math.floor(Math.random() * 5) + 1}%</span>
+                    <span className="text-gray-500 text-sm ml-1">vs last quarter</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <Award className="w-6 h-6 text-purple-600" />
+                </div>
               </div>
             </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Award className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Charts Section */}
@@ -1055,12 +1419,21 @@ const StudentDashboard: React.FC = () => {
 
           {/* Subject Breakdown */}
           <div className="space-y-3">
-            {courseProgress.map((item, index) => (
-              <div key={index} className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">{item.subject}</span>
-                <span className="text-sm font-semibold text-green-600">{item.progress}%</span>
+            {loadingStates.userCourses || loadingStates.courseProgress ? (
+              <SkeletonProgressBar />
+            ) : courseProgress.length > 0 ? (
+              courseProgress.map((item, index) => (
+                <div key={index} className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">{item.subject}</span>
+                  <span className="text-sm font-semibold text-green-600">{item.progress}%</span>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4 text-gray-500">
+                <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">No courses available</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -1071,24 +1444,28 @@ const StudentDashboard: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            {gradeBreakdown.map((item, index) => (
-              <div key={index}>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-700">{item.grade}</span>
-                  <span className="text-sm font-semibold text-gray-900">{item.count} assignments</span>
+            {loadingStates.gradeBreakdown ? (
+              <SkeletonProgressBar />
+            ) : (
+              gradeBreakdown.map((item, index) => (
+                <div key={index}>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-gray-700">{item.grade}</span>
+                    <span className="text-sm font-semibold text-gray-900">{item.count} assignments</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full ${
+                        item.grade.includes('A') ? 'bg-green-600' :
+                        item.grade.includes('B') ? 'bg-blue-600' :
+                        item.grade.includes('C') ? 'bg-yellow-600' : 'bg-red-600'
+                      }`}
+                      style={{ width: `${item.percentage}%` }}
+                    ></div>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full ${
-                      item.grade.includes('A') ? 'bg-green-600' :
-                      item.grade.includes('B') ? 'bg-blue-600' :
-                      item.grade.includes('C') ? 'bg-yellow-600' : 'bg-red-600'
-                    }`}
-                    style={{ width: `${item.percentage}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {/* Totals */}
@@ -1115,31 +1492,41 @@ const StudentDashboard: React.FC = () => {
         </div>
         
         <div className="space-y-4">
-          {recentActivities.slice(0, 5).map((activity) => (
-            <div key={activity.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                {activity.type === 'course_access' && <BookOpen className="w-4 h-4 text-blue-600" />}
-                {activity.type === 'assignment_submit' && <FileText className="w-4 h-4 text-green-600" />}
-                {activity.type === 'quiz_complete' && <BarChart3 className="w-4 h-4 text-purple-600" />}
-                {activity.type === 'resource_view' && <Play className="w-4 h-4 text-orange-600" />}
+          {loadingStates.recentActivities ? (
+            <>
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+            </>
+          ) : (
+            recentActivities.slice(0, 5).map((activity) => (
+              <div key={activity.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  {activity.type === 'course_access' && <BookOpen className="w-4 h-4 text-blue-600" />}
+                  {activity.type === 'assignment_submit' && <FileText className="w-4 h-4 text-green-600" />}
+                  {activity.type === 'quiz_complete' && <BarChart3 className="w-4 h-4 text-purple-600" />}
+                  {activity.type === 'resource_view' && <Play className="w-4 h-4 text-orange-600" />}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-gray-900">{activity.title}</h3>
+                  <p className="text-sm text-gray-600">{activity.description}</p>
+                  {activity.courseName && (
+                    <p className="text-xs text-gray-500 mt-1">Course: {activity.courseName}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-500">
+                    {new Date(activity.timestamp).toLocaleDateString()}
+                  </p>
+                  {activity.grade && (
+                    <p className="text-xs text-green-600 font-medium">Grade: {activity.grade}%</p>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-medium text-gray-900">{activity.title}</h3>
-                <p className="text-sm text-gray-600">{activity.description}</p>
-                {activity.courseName && (
-                  <p className="text-xs text-gray-500 mt-1">Course: {activity.courseName}</p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500">
-                  {new Date(activity.timestamp).toLocaleDateString()}
-                </p>
-                {activity.grade && (
-                  <p className="text-xs text-green-600 font-medium">Grade: {activity.grade}%</p>
-                )}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
@@ -1153,30 +1540,40 @@ const StudentDashboard: React.FC = () => {
         </div>
         
         <div className="space-y-4">
-          {studentActivities.slice(0, 5).map((activity) => (
-            <div key={activity.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                {getActivityIcon(activity.type)}
+          {loadingStates.studentActivities ? (
+            <>
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+              <SkeletonActivityCard />
+            </>
+          ) : (
+            studentActivities.slice(0, 5).map((activity) => (
+              <div key={activity.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  {getActivityIcon(activity.type)}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-gray-900">{activity.title}</h3>
+                  <p className="text-sm text-gray-600">{activity.courseName}</p>
+                  {activity.dueDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Due: {new Date(activity.dueDate).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(activity.status)}`}>
+                    {activity.status.replace('_', ' ')}
+                  </span>
+                  {activity.grade && (
+                    <p className="text-xs text-green-600 font-medium mt-1">{activity.grade}%</p>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-medium text-gray-900">{activity.title}</h3>
-                <p className="text-sm text-gray-600">{activity.courseName}</p>
-                {activity.dueDate && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Due: {new Date(activity.dueDate).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(activity.status)}`}>
-                  {activity.status.replace('_', ' ')}
-                </span>
-                {activity.grade && (
-                  <p className="text-xs text-green-600 font-medium mt-1">{activity.grade}%</p>
-                )}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
       
