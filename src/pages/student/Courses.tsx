@@ -67,6 +67,7 @@ interface Course {
   completionDate?: number;
   status: 'in_progress' | 'completed' | 'not_started';
   categoryname?: string;
+  categoryid?: number;
   startdate?: number;
   enddate?: number;
   visible?: number;
@@ -251,6 +252,46 @@ const getCertificationProvider = (course: Course): string => {
   }
 };
 
+// Category helper functions
+const getCategoryIcon = (categoryName: string): string => {
+  const name = categoryName.toLowerCase();
+  if (name.includes('english') || name.includes('language')) return 'Lang';
+  if (name.includes('digital') || name.includes('foundation')) return 'Tech';
+  if (name.includes('discipline') || name.includes('positive')) return 'Edu';
+  if (name.includes('math') || name.includes('science')) return 'Math';
+  if (name.includes('art') || name.includes('creative')) return 'Art';
+  if (name.includes('business') || name.includes('management')) return 'Bus';
+  if (name.includes('safety') || name.includes('health')) return 'Safe';
+  if (name.includes('programming') || name.includes('coding')) return 'Code';
+  return 'Course';
+};
+
+const getCategoryColor = (categoryName: string): string => {
+  const name = categoryName.toLowerCase();
+  if (name.includes('english') || name.includes('language')) return 'from-purple-500 to-blue-600';
+  if (name.includes('digital') || name.includes('foundation')) return 'from-blue-500 to-cyan-600';
+  if (name.includes('discipline') || name.includes('positive')) return 'from-green-500 to-emerald-600';
+  if (name.includes('math') || name.includes('science')) return 'from-orange-500 to-red-600';
+  if (name.includes('art') || name.includes('creative')) return 'from-pink-500 to-rose-600';
+  if (name.includes('business') || name.includes('management')) return 'from-indigo-500 to-purple-600';
+  if (name.includes('safety') || name.includes('health')) return 'from-red-500 to-pink-600';
+  if (name.includes('programming') || name.includes('coding')) return 'from-yellow-500 to-orange-600';
+  return 'from-gray-500 to-slate-600';
+};
+
+const getCategoryDescription = (categoryName: string): string => {
+  const name = categoryName.toLowerCase();
+  if (name.includes('english') || name.includes('language')) return 'Language learning and communication skills';
+  if (name.includes('digital') || name.includes('foundation')) return 'Digital literacy and computer fundamentals';
+  if (name.includes('discipline') || name.includes('positive')) return 'Positive discipline and classroom management';
+  if (name.includes('math') || name.includes('science')) return 'Mathematics and scientific concepts';
+  if (name.includes('art') || name.includes('creative')) return 'Creative arts and design principles';
+  if (name.includes('business') || name.includes('management')) return 'Business and management skills';
+  if (name.includes('safety') || name.includes('health')) return 'Health and safety protocols';
+  if (name.includes('programming') || name.includes('coding')) return 'Programming and coding fundamentals';
+  return 'General course content and skills';
+};
+
 const Courses: React.FC = () => {
   const { currentUser } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -288,6 +329,37 @@ const Courses: React.FC = () => {
   // Course detail view state
   const [showCourseDetail, setShowCourseDetail] = useState(false);
   const [selectedCourseForDetail, setSelectedCourseForDetail] = useState<Course | null>(null);
+  
+  // Category view states
+  const [viewMode, setViewMode] = useState<'categories' | 'subcategories' | 'courses'>('categories');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
+  const [categories, setCategories] = useState<Array<{
+    id: string;
+    name: string;
+    courseCount: number;
+    icon: string;
+    color: string;
+    description: string;
+    categoryId?: number;
+    parent?: number;
+    sortorder?: number;
+    visible?: number;
+    timemodified?: number;
+    subcategories?: Array<{
+      id: string;
+      name: string;
+      courseCount: number;
+      icon: string;
+      color: string;
+      description: string;
+      categoryId?: number;
+      parent?: number;
+      sortorder?: number;
+      visible?: number;
+      timemodified?: number;
+    }>;
+  }>>([]);
 
   useEffect(() => {
     fetchCourses();
@@ -341,6 +413,7 @@ const Courses: React.FC = () => {
             status: progress === 100 ? 'completed' :
               progress > 0 ? 'in_progress' : 'not_started',
             categoryname: course.categoryname || 'General',
+            categoryid: course.categoryid,
             startdate: course.startdate,
             enddate: course.enddate,
             visible: course.visible,
@@ -358,6 +431,9 @@ const Courses: React.FC = () => {
 
         setCourses(processedCourses);
         console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
+        
+        // Fetch real categories from IOMAD Moodle API
+        await fetchRealCategories(processedCourses);
       } else {
         console.log('⚠️ No enrolled courses found');
         setCourses([]);
@@ -376,6 +452,154 @@ const Courses: React.FC = () => {
     // Open the new detailed course view
     setSelectedCourseForDetail(course);
     setShowCourseDetail(true);
+  };
+
+  const handleCategoryClick = (categoryId: string) => {
+    console.log('🎯 Category clicked:', categoryId);
+    const selectedCat = categories.find(cat => cat.id === categoryId);
+    console.log('📋 Selected category:', selectedCat);
+    console.log('📚 Available courses:', courses.length);
+    
+    setSelectedCategory(categoryId);
+    
+    // Check if category has subcategories
+    if (selectedCat?.subcategories && selectedCat.subcategories.length > 0) {
+      console.log('📂 Category has subcategories, navigating to subcategories view');
+      setViewMode('subcategories');
+    } else {
+      console.log('📚 Category has no subcategories, navigating directly to courses');
+      setViewMode('courses');
+    }
+  };
+
+  const handleBackToCategories = () => {
+    setViewMode('categories');
+    setSelectedCategory('');
+    setSelectedSubcategory('');
+  };
+
+  const handleSubcategoryClick = (subcategoryId: string) => {
+    console.log('🎯 Subcategory clicked:', subcategoryId);
+    const selectedCat = categories.find(cat => cat.id === selectedCategory);
+    const selectedSubcat = selectedCat?.subcategories?.find(sub => sub.id === subcategoryId);
+    console.log('📋 Selected subcategory:', selectedSubcat);
+    
+    setSelectedSubcategory(subcategoryId);
+    setViewMode('courses');
+  };
+
+  const fetchRealCategories = async (enrolledCourses: Course[]) => {
+    try {
+      console.log('🔄 Fetching real categories from IOMAD Moodle API...');
+      
+      // Fetch real categories from IOMAD Moodle API
+      const realCategories = await moodleService.getCourseCategories();
+      
+      if (realCategories && Array.isArray(realCategories)) {
+        console.log('✅ Real categories fetched:', realCategories.length);
+        
+        // Build hierarchical structure: Categories → Subcategories → Courses
+        const allCategories = realCategories.map((category: any) => {
+          // Count how many enrolled courses are in this category
+          const categoryCourses = enrolledCourses.filter(course => 
+            course.categoryid === category.id || 
+            course.categoryname === category.name
+          );
+          
+          return {
+            id: category.id.toString(),
+            name: category.name || category.fullname || 'Unnamed Category',
+            courseCount: categoryCourses.length,
+            icon: getCategoryIcon(category.name || category.fullname || ''),
+            color: getCategoryColor(category.name || category.fullname || ''),
+            description: category.description || getCategoryDescription(category.name || category.fullname || ''),
+            // Additional real category data
+            categoryId: category.id,
+            parent: category.parent,
+            sortorder: category.sortorder,
+            visible: category.visible,
+            timemodified: category.timemodified
+          };
+        });
+        
+        // Separate main categories (parent = 0) and subcategories (parent > 0)
+        const mainCategories = allCategories.filter(cat => !cat.parent || cat.parent === 0);
+        const subcategories = allCategories.filter(cat => cat.parent && cat.parent > 0);
+        
+        // Attach subcategories to their parent categories
+        const hierarchicalCategories = mainCategories.map(mainCat => {
+          const categorySubcategories = subcategories.filter(sub => sub.parent === mainCat.categoryId);
+          
+          // Calculate total course count including subcategories
+          const totalCourseCount = categorySubcategories.reduce((sum, sub) => sum + sub.courseCount, 0) + mainCat.courseCount;
+          
+          return {
+            ...mainCat,
+            courseCount: totalCourseCount,
+            subcategories: categorySubcategories
+          };
+        }).filter(category => category.courseCount > 0); // Only show categories with enrolled courses
+        
+        setCategories(hierarchicalCategories);
+        console.log('✅ Hierarchical categories processed:', hierarchicalCategories.length);
+        console.log('📊 Structure:', hierarchicalCategories.map(cat => ({
+          name: cat.name,
+          courseCount: cat.courseCount,
+          subcategories: cat.subcategories?.length || 0
+        })));
+      } else {
+        console.log('⚠️ No real categories found, using fallback');
+        // Fallback to course-based categories if API fails
+        const categoryMap = new Map<string, { count: number; courses: Course[] }>();
+        
+        enrolledCourses.forEach(course => {
+          const categoryName = course.categoryname || 'General';
+          if (!categoryMap.has(categoryName)) {
+            categoryMap.set(categoryName, { count: 0, courses: [] });
+          }
+          categoryMap.get(categoryName)!.count++;
+          categoryMap.get(categoryName)!.courses.push(course);
+        });
+        
+        const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => ({
+          id: name.toLowerCase().replace(/\s+/g, '-'),
+          name,
+          courseCount: data.count,
+          icon: getCategoryIcon(name),
+          color: getCategoryColor(name),
+          description: getCategoryDescription(name)
+        }));
+        
+        setCategories(fallbackCategories);
+        console.log('✅ Fallback categories processed:', fallbackCategories.length);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching real categories:', error);
+      
+      // Fallback to course-based categories
+      const categoryMap = new Map<string, { count: number; courses: Course[] }>();
+      
+      enrolledCourses.forEach(course => {
+        const categoryName = course.categoryname || 'General';
+        if (!categoryMap.has(categoryName)) {
+          categoryMap.set(categoryName, { count: 0, courses: [] });
+        }
+        categoryMap.get(categoryName)!.count++;
+        categoryMap.get(categoryName)!.courses.push(course);
+      });
+      
+      const fallbackCategories = Array.from(categoryMap.entries()).map(([name, data]) => ({
+        id: name.toLowerCase().replace(/\s+/g, '-'),
+        name,
+        courseCount: data.count,
+        icon: getCategoryIcon(name),
+        color: getCategoryColor(name),
+        description: getCategoryDescription(name)
+      }));
+      
+      setCategories(fallbackCategories);
+      console.log('✅ Fallback categories processed:', fallbackCategories.length);
+    }
   };
 
   const handleCourseDetailsClick = async (course: Course) => {
@@ -1052,7 +1276,45 @@ const Courses: React.FC = () => {
       course.shortname.toLowerCase().includes(searchTerm.toLowerCase()) ||
       course.categoryname?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || course.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    
+    // Add category filtering when in courses view
+    let matchesCategory = true;
+    if (viewMode === 'courses' && selectedCategory) {
+      const selectedCat = categories.find(cat => cat.id === selectedCategory);
+      if (selectedCat) {
+        if (selectedSubcategory) {
+          // Filter by subcategory
+          const selectedSubcat = selectedCat.subcategories?.find(sub => sub.id === selectedSubcategory);
+          if (selectedSubcat) {
+            const matchesById = course.categoryid === selectedSubcat.categoryId;
+            const matchesByName = course.categoryname === selectedSubcat.name;
+            matchesCategory = matchesById || matchesByName;
+          }
+        } else {
+          // Filter by main category (including all subcategories)
+          const matchesById = course.categoryid === selectedCat.categoryId;
+          const matchesByName = course.categoryname === selectedCat.name;
+          const matchesSubcategory = selectedCat.subcategories?.some(sub => 
+            course.categoryid === sub.categoryId || course.categoryname === sub.name
+          );
+          matchesCategory = matchesById || matchesByName || matchesSubcategory;
+        }
+        
+        // Debug logging for first few courses
+        if (courses.indexOf(course) < 3) {
+          console.log(`🔍 Course "${course.fullname}":`, {
+            courseCategoryId: course.categoryid,
+            courseCategoryName: course.categoryname,
+            selectedCategoryId: selectedCat.categoryId,
+            selectedCategoryName: selectedCat.name,
+            selectedSubcategory,
+            matchesCategory
+          });
+        }
+      }
+    }
+    
+    return matchesSearch && matchesStatus && matchesCategory;
   });
 
   const exportCoursesData = () => {
@@ -1084,7 +1346,7 @@ const Courses: React.FC = () => {
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
-            <span className="text-gray-600">Loading real courses from IOMAD Moodle API...</span>
+            <span className="text-gray-600">Loading...</span>
           </div>
         </div>
       </DashboardLayout>
@@ -2057,8 +2319,213 @@ const Courses: React.FC = () => {
             </Select>
           </div>
 
+          {/* Category View */}
+          {viewMode === 'categories' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Course Categories</h2>
+                <p className="text-sm text-gray-600">Select a category to view subcategories or courses</p>
+              </div>
+              
+              {/* Category Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categories.map((category) => (
+                  <Card 
+                    key={category.id} 
+                    className="overflow-hidden hover:shadow-xl transition-all duration-300 border-0 shadow-lg group cursor-pointer bg-gradient-to-br from-gray-900 to-gray-800 text-white"
+                    onClick={() => handleCategoryClick(category.id)}
+                  >
+                    {/* Category Header */}
+                    <div className="relative h-48 bg-gradient-to-br from-gray-800 to-gray-900">
+                      {/* Abstract Background Pattern */}
+                      <div className="absolute inset-0 opacity-20">
+                        <div className={`absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-tl ${category.color} rounded-full blur-xl`}></div>
+                        <div className={`absolute bottom-4 right-4 w-24 h-24 bg-gradient-to-tl ${category.color} rounded-full blur-lg`}></div>
+                      </div>
+
+                      {/* Category Icon */}
+                      <div className="absolute top-4 left-4">
+                        <div className={`w-12 h-12 bg-gradient-to-br ${category.color} rounded-lg shadow-lg flex items-center justify-center`}>
+                          <span className="text-white font-bold text-lg">{category.icon}</span>
+                        </div>
+                      </div>
+
+                      {/* Course Count Badge */}
+                      <div className="absolute top-4 right-4">
+                        <Badge className="bg-white/20 text-white border-0 text-xs px-2 py-1">
+                          {category.courseCount} Courses
+                        </Badge>
+                      </div>
+
+                      {/* Subcategory Indicator */}
+                      {category.subcategories && category.subcategories.length > 0 && (
+                        <div className="absolute top-12 right-4">
+                          <Badge className="bg-blue-500/20 text-blue-300 border-0 text-xs px-2 py-1">
+                            {category.subcategories.length} Subcategories
+                          </Badge>
+                        </div>
+                      )}
+
+                      {/* Category Name */}
+                      <div className="absolute bottom-4 left-4 right-4">
+                        <h3 className="text-xl font-bold text-white mb-2">{category.name}</h3>
+                        <p className="text-sm text-gray-300 line-clamp-2">{category.description}</p>
+                      </div>
+                    </div>
+
+                    {/* Category Footer */}
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-400">
+                          {category.subcategories && category.subcategories.length > 0 
+                            ? 'View subcategories' 
+                            : 'View courses'
+                          }
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Subcategories View */}
+          {viewMode === 'subcategories' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleBackToCategories}
+                    className="flex items-center space-x-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back to Categories</span>
+                  </Button>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {categories.find(cat => cat.id === selectedCategory)?.name} - Subcategories
+                    </h2>
+                    <p className="text-sm text-gray-600">Select a subcategory to view courses</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Subcategory Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categories.find(cat => cat.id === selectedCategory)?.subcategories?.map((subcategory) => (
+                  <Card 
+                    key={subcategory.id} 
+                    className="overflow-hidden hover:shadow-xl transition-all duration-300 border-0 shadow-lg group cursor-pointer bg-gradient-to-br from-gray-800 to-gray-700 text-white"
+                    onClick={() => handleSubcategoryClick(subcategory.id)}
+                  >
+                    {/* Subcategory Header */}
+                    <div className="relative h-40 bg-gradient-to-br from-gray-700 to-gray-800">
+                      {/* Abstract Background Pattern */}
+                      <div className="absolute inset-0 opacity-20">
+                        <div className={`absolute bottom-0 right-0 w-24 h-24 bg-gradient-to-tl ${subcategory.color} rounded-full blur-lg`}></div>
+                        <div className={`absolute bottom-3 right-3 w-16 h-16 bg-gradient-to-tl ${subcategory.color} rounded-full blur-md`}></div>
+                      </div>
+
+                      {/* Subcategory Icon */}
+                      <div className="absolute top-3 left-3">
+                        <div className={`w-10 h-10 bg-gradient-to-br ${subcategory.color} rounded-lg shadow-lg flex items-center justify-center`}>
+                          <span className="text-white font-bold text-sm">{subcategory.icon}</span>
+                        </div>
+                      </div>
+
+                      {/* Course Count Badge */}
+                      <div className="absolute top-3 right-3">
+                        <Badge className="bg-white/20 text-white border-0 text-xs px-2 py-1">
+                          {subcategory.courseCount} Courses
+                        </Badge>
+                      </div>
+
+                      {/* Subcategory Name */}
+                      <div className="absolute bottom-3 left-3 right-3">
+                        <h3 className="text-lg font-bold text-white mb-1">{subcategory.name}</h3>
+                        <p className="text-xs text-gray-300 line-clamp-2">{subcategory.description}</p>
+                      </div>
+                    </div>
+
+                    {/* Subcategory Footer */}
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">View courses</span>
+                        <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-white transition-colors" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Courses View Header */}
+          {viewMode === 'courses' && (
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    if (selectedSubcategory) {
+                      // Go back to subcategories
+                      setSelectedSubcategory('');
+                      setViewMode('subcategories');
+                    } else {
+                      // Go back to categories
+                      handleBackToCategories();
+                    }
+                  }}
+                  className="flex items-center space-x-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>{selectedSubcategory ? 'Back to Subcategories' : 'Back to Categories'}</span>
+                </Button>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {selectedSubcategory 
+                      ? `${categories.find(cat => cat.id === selectedCategory)?.name} - ${categories.find(cat => cat.id === selectedCategory)?.subcategories?.find(sub => sub.id === selectedSubcategory)?.name}`
+                      : categories.find(cat => cat.id === selectedCategory)?.name
+                    } Courses
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    {filteredCourses.length} courses available
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  console.log('🔍 Debug Info:', {
+                    selectedCategory,
+                    selectedSubcategory,
+                    categories: categories.map(cat => ({ id: cat.id, name: cat.name, categoryId: cat.categoryId })),
+                    courses: courses.map(course => ({ 
+                      id: course.id, 
+                      name: course.fullname, 
+                      categoryid: course.categoryid, 
+                      categoryname: course.categoryname 
+                    })),
+                    filteredCourses: filteredCourses.length
+                  });
+                }}
+                className="flex items-center space-x-2"
+              >
+                <Info className="w-4 h-4" />
+                <span>Debug</span>
+              </Button>
+            </div>
+          )}
+
           {/* Enhanced Courses Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {viewMode === 'courses' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredCourses.map((course) => {
               // Get course image with real data
               const courseImage = course.courseimage ||
@@ -2203,9 +2670,10 @@ const Courses: React.FC = () => {
                 </Card>
               );
             })}
-          </div>
+            </div>
+          )}
 
-          {filteredCourses.length === 0 && (
+          {viewMode === 'courses' && filteredCourses.length === 0 && (
             <div className="text-center py-12">
               <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
