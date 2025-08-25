@@ -1075,135 +1075,83 @@ export const moodleService = {
     try {
       console.log('🔄 Fetching courses with enhanced image support...');
       
-      // First, get the list of all courses
+      // Get courses with detailed information including images
       const response = await moodleApi.get('', {
         params: {
-          wsfunction: 'core_course_get_courses',
+          wsfunction: 'core_course_get_courses_by_field',
+          field: 'id',
+          value: '0' // Get all courses
         },
       });
 
-      if (response.data && Array.isArray(response.data)) {
-        const courses = response.data.filter((course: MoodleCourse) => course.visible !== 0);
+      if (response.data && response.data.courses && Array.isArray(response.data.courses)) {
+        const courses = response.data.courses.filter((course: MoodleCourse) => course.visible !== 0);
         
-        console.log(`📚 Found ${courses.length} courses, fetching detailed information for each...`);
+        console.log(`📚 Found ${courses.length} courses with detailed information...`);
         
-        // Fetch detailed information for each course to get real images
-        const detailedCourses = await Promise.all(
-          courses.map(async (course: MoodleCourse) => {
-            try {
-              const detailedResponse = await moodleApi.get('', {
-                params: {
-                  wsfunction: 'core_course_get_courses_by_field',
-                  field: 'id',
-                  value: course.id.toString()
-                },
-              });
-
-              if (detailedResponse.data && detailedResponse.data.courses && detailedResponse.data.courses.length > 0) {
-                const detailedCourse = detailedResponse.data.courses[0];
-                
-                                          // Extract the best available image - prioritize courseimage as it's more reliable
-                          let courseImage = detailedCourse.courseimage;
-                          
-                          // Only use overviewfiles if courseimage is not available (overviewfiles require authentication)
-                          if (!courseImage && detailedCourse.overviewfiles && Array.isArray(detailedCourse.overviewfiles) && detailedCourse.overviewfiles.length > 0) {
-                            courseImage = detailedCourse.overviewfiles[0].fileurl;
-                          }
-                          
-                          // Only use summaryfiles if courseimage is not available
-                          if (!courseImage && detailedCourse.summaryfiles && Array.isArray(detailedCourse.summaryfiles) && detailedCourse.summaryfiles.length > 0) {
-                            courseImage = detailedCourse.summaryfiles[0].fileurl;
-                          }
-
-                console.log(`✅ Course "${detailedCourse.fullname}" - Image: ${courseImage || 'No image found'}`);
-
-                return {
-                  id: detailedCourse.id.toString(),
-                  fullname: detailedCourse.fullname,
-                  shortname: detailedCourse.shortname,
-                  summary: detailedCourse.summary || '',
-                  categoryid: detailedCourse.categoryid,
-                  courseimage: courseImage,
-                  categoryname: detailedCourse.categoryname || 'General',
-                  format: detailedCourse.format || 'topics',
-                  startdate: detailedCourse.startdate,
-                  enddate: detailedCourse.enddate,
-                  visible: detailedCourse.visible,
-                  type: ['ILT', 'VILT', 'Self-paced'][Math.floor(Math.random() * 3)],
-                  tags: ['Professional Development', 'Teaching Skills', 'Assessment'],
-                  enrollmentCount: Math.floor(Math.random() * 100) + 10,
-                  rating: Number((Math.random() * 1 + 4).toFixed(1)),
-                  level: ['Beginner', 'Intermediate', 'Advanced'][Math.floor(Math.random() * 3)],
-                  duration: this.calculateDuration(detailedCourse.startdate, detailedCourse.enddate),
-                  // Additional detailed information
-                  displayname: detailedCourse.displayname,
-                  summaryformat: detailedCourse.summaryformat,
-                  showactivitydates: detailedCourse.showactivitydates,
-                  showcompletionconditions: detailedCourse.showcompletionconditions,
-                  enablecompletion: detailedCourse.enablecompletion,
-                  timecreated: detailedCourse.timecreated,
-                  timemodified: detailedCourse.timemodified,
-                  overviewfiles: detailedCourse.overviewfiles || [],
-                  summaryfiles: detailedCourse.summaryfiles || []
-                };
-              } else {
-                // Fallback to basic course data if detailed fetch fails
-                console.log(`⚠️ Could not fetch detailed info for course ${course.id}, using basic data`);
-                return {
-                  id: course.id.toString(),
-                  fullname: course.fullname,
-                  shortname: course.shortname,
-                  summary: course.summary || '',
-                  categoryid: course.categoryid || course.category,
-                  courseimage: course.overviewfiles?.[0]?.fileurl || course.courseimage,
-                  categoryname: course.categoryname || 'General',
-                  format: course.format || 'topics',
-                  startdate: course.startdate,
-                  enddate: course.enddate,
-                  visible: course.visible,
-                  type: ['ILT', 'VILT', 'Self-paced'][Math.floor(Math.random() * 3)],
-                  tags: ['Professional Development', 'Teaching Skills', 'Assessment'],
-                  enrollmentCount: Math.floor(Math.random() * 100) + 10,
-                  rating: Number((Math.random() * 1 + 4).toFixed(1)),
-                  level: ['Beginner', 'Intermediate', 'Advanced'][Math.floor(Math.random() * 3)],
-                  duration: this.calculateDuration(course.startdate, course.enddate)
-                };
-              }
-            } catch (error) {
-              console.error(`❌ Error fetching detailed info for course ${course.id}:`, error);
-              // Return basic course data as fallback
-              return {
-                id: course.id.toString(),
-                fullname: course.fullname,
-                shortname: course.shortname,
-                summary: course.summary || '',
-                categoryid: course.categoryid || course.category,
-                courseimage: course.overviewfiles?.[0]?.fileurl || course.courseimage,
-                categoryname: course.categoryname || 'General',
-                format: course.format || 'topics',
-                startdate: course.startdate,
-                enddate: course.enddate,
-                visible: course.visible,
-                type: ['ILT', 'VILT', 'Self-paced'][Math.floor(Math.random() * 3)],
-                tags: ['Professional Development', 'Teaching Skills', 'Assessment'],
-                enrollmentCount: Math.floor(Math.random() * 100) + 10,
-                rating: Number((Math.random() * 1 + 4).toFixed(1)),
-                level: ['Beginner', 'Intermediate', 'Advanced'][Math.floor(Math.random() * 3)],
-                duration: this.calculateDuration(course.startdate, course.enddate)
-              };
+        const processedCourses = courses.map((course: MoodleCourse) => {
+          // Extract the best available image from the course data
+          let courseImage = course.courseimage;
+          
+          // If courseimage is not available, try to construct the image URL
+          if (!courseImage) {
+            // Try to get image from overviewfiles if available
+            if (course.overviewfiles && Array.isArray(course.overviewfiles) && course.overviewfiles.length > 0) {
+              courseImage = course.overviewfiles[0].fileurl;
             }
-          })
-        );
+            // Try to get image from summaryfiles if available
+            else if (course.summaryfiles && Array.isArray(course.summaryfiles) && course.summaryfiles.length > 0) {
+              courseImage = course.summaryfiles[0].fileurl;
+            }
+            // If still no image, try to construct a default course image URL
+            else {
+              // Construct course image URL using Moodle's standard format
+              courseImage = `${API_BASE_URL.replace('/webservice/rest/server.php', '')}/pluginfile.php/${course.id}/course/overviewfiles/0/course_image.jpg`;
+            }
+          }
 
-        console.log(`✅ Successfully fetched detailed information for ${detailedCourses.length} courses`);
-        return detailedCourses;
-      }
-      return [];
-    } catch (error) {
-      console.error('Error fetching all courses:', error);
-      throw new Error('Failed to fetch courses');
-    }
-  },
+          console.log(`✅ Course "${course.fullname}" - Image: ${courseImage || 'No image found'}`);
+
+          return {
+            id: course.id.toString(),
+            fullname: course.fullname,
+            shortname: course.shortname,
+            summary: course.summary || '',
+            categoryid: course.categoryid,
+            courseimage: courseImage,
+            categoryname: course.categoryname || 'General',
+            format: course.format || 'topics',
+            startdate: course.startdate,
+            enddate: course.enddate,
+            visible: course.visible,
+            type: ['ILT', 'VILT', 'Self-paced'][Math.floor(Math.random() * 3)],
+            tags: ['Professional Development', 'Teaching Skills', 'Assessment'],
+            enrollmentCount: Math.floor(Math.random() * 100) + 10,
+            rating: Number((Math.random() * 1 + 4).toFixed(1)),
+            level: ['Beginner', 'Intermediate', 'Advanced'][Math.floor(Math.random() * 3)],
+            duration: this.calculateDuration(course.startdate, course.enddate),
+            // Additional detailed information
+            displayname: course.displayname,
+            summaryformat: course.summaryformat,
+            showactivitydates: course.showactivitydates,
+            showcompletionconditions: course.showcompletionconditions,
+            enablecompletion: course.enablecompletion,
+            timecreated: course.timecreated,
+            timemodified: course.timemodified,
+            overviewfiles: course.overviewfiles || [],
+            summaryfiles: course.summaryfiles || []
+          };
+        });
+
+                 return processedCourses;
+       }
+
+       return [];
+     } catch (error) {
+       console.error('❌ Error fetching courses:', error);
+       return [];
+     }
+   },
 
   calculateDuration(startdate?: number, enddate?: number): string {
     if (!startdate || !enddate || startdate === 0 || enddate === 0) {
@@ -1821,80 +1769,7 @@ export const moodleService = {
     return 'Submitted';
   },
 
-  // Enhanced method to get course details with real enrollment data and activities
-  async getCourseDetails(courseId: string) {
-    try {
-      console.log('🔍 Fetching course details from IOMAD API...');
-      
-      // Get course information
-      const courseResponse = await moodleApi.get('', {
-        params: {
-          wsfunction: 'core_course_get_courses',
-          options: JSON.stringify({
-            ids: [courseId]
-          })
-        }
-      });
 
-      if (courseResponse.data && Array.isArray(courseResponse.data) && courseResponse.data.length > 0) {
-        const course = courseResponse.data[0];
-        
-        // Get enrollment data for this course
-        const enrollmentResponse = await moodleApi.get('', {
-          params: {
-            wsfunction: 'core_enrol_get_users_courses',
-            userid: '0' // Get all users to find enrollments for this course
-          }
-        });
-
-        let enrolledStudents = 0;
-        let completionRate = 0;
-        
-        if (enrollmentResponse.data && Array.isArray(enrollmentResponse.data)) {
-          const courseEnrollments = enrollmentResponse.data.filter((enrollment: any) => 
-            enrollment.courseid === parseInt(courseId)
-          );
-          enrolledStudents = courseEnrollments.length;
-          completionRate = Math.floor(Math.random() * 30) + 70; // Mock completion rate
-        }
-
-        // Get course activities and contents for real data
-        const courseContents = await this.getCourseContents(courseId);
-        const courseActivities = await this.getCourseActivities(courseId);
-        const courseCompletion = await this.getCourseCompletion(courseId);
-
-        return {
-          courseInfo: {
-            id: course.id,
-            fullname: course.fullname,
-            shortname: course.shortname,
-            summary: course.summary || '',
-            categoryid: course.categoryid,
-            categoryname: course.categoryname || 'General',
-            startdate: course.startdate,
-            enddate: course.enddate,
-            visible: course.visible,
-            enrolledStudents,
-            completionRate,
-            averageGrade: Math.floor(Math.random() * 20) + 75,
-            totalAssignments: Math.floor(Math.random() * 10) + 3
-          },
-          contents: courseContents,
-          activities: courseActivities,
-          completion: courseCompletion,
-          totalModules: courseActivities?.length || 0,
-          completedModules: courseActivities?.filter((activity: any) => 
-            activity.completion && activity.completion.state === 1
-          )?.length || 0
-        };
-      }
-
-      return null;
-    } catch (error) {
-      console.error('❌ Error fetching course details:', error);
-      return null;
-    }
-  },
 
   // New method to get students enrolled in teacher's courses
   async getTeacherStudents(teacherId?: string) {
@@ -7584,7 +7459,77 @@ export const moodleService = {
     }
   },
 
+  // Get detailed course information
+  async getCourseDetails(courseId: string) {
+    try {
+      console.log(`🔍 Fetching detailed course information for course ID: ${courseId}`);
+      
+      // Get basic course info with image data
+      const courseResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_course_get_courses_by_field',
+          field: 'id',
+          value: courseId,
+        },
+      });
 
+      let courseInfo = null;
+      if (courseResponse.data && courseResponse.data.courses && courseResponse.data.courses.length > 0) {
+        courseInfo = courseResponse.data.courses[0];
+        
+        // Extract the best available image from the course data
+        let courseImage = courseInfo.courseimage;
+        
+        // If courseimage is not available, try to construct the image URL
+        if (!courseImage) {
+          // Try to get image from overviewfiles if available
+          if (courseInfo.overviewfiles && Array.isArray(courseInfo.overviewfiles) && courseInfo.overviewfiles.length > 0) {
+            courseImage = courseInfo.overviewfiles[0].fileurl;
+          }
+          // Try to get image from summaryfiles if available
+          else if (courseInfo.summaryfiles && Array.isArray(courseInfo.summaryfiles) && courseInfo.summaryfiles.length > 0) {
+            courseImage = courseInfo.summaryfiles[0].fileurl;
+          }
+          // If still no image, try to construct a default course image URL
+          else {
+            // Construct course image URL using Moodle's standard format
+            courseImage = `${API_BASE_URL.replace('/webservice/rest/server.php', '')}/pluginfile.php/${courseInfo.id}/course/overviewfiles/0/course_image.jpg`;
+          }
+        }
+        
+        // Add the processed image to courseInfo
+        courseInfo.courseimage = courseImage;
+        console.log(`✅ Course "${courseInfo.fullname}" - Image: ${courseImage || 'No image found'}`);
+      }
+
+      // Get course contents (modules and activities)
+      const contents = await this.getCourseContents(courseId);
+      
+      // Get course completion status
+      const completion = await this.getCourseCompletion(courseId);
+      
+      // Get course grades
+      const grades = await this.getCourseGrades(courseId);
+
+      // Get course activities with completion
+      const activities = await this.getCourseActivities(courseId);
+
+      return {
+        ...courseInfo, // Spread all course info including the processed image
+        contents,
+        completion,
+        grades,
+        activities,
+        totalModules: activities.length,
+        completedModules: activities.filter(activity => 
+          activity.completion && activity.completion.state === 1
+        ).length,
+      };
+    } catch (error: any) {
+      console.error('❌ Error fetching course details:', error.response?.data || error.message);
+      return null;
+    }
+  },
 
   // Helper function to get current user ID
   async getCurrentUserId() {
