@@ -22,7 +22,7 @@ export default function OutputPane({
 }: Props) {
   const [localInputValue, setLocalInputValue] = useState("");
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const value = e.target.value;
     setLocalInputValue(value);
     onInputChange?.(value);
@@ -37,8 +37,9 @@ export default function OutputPane({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleInputSubmit(e);
     }
   };
@@ -51,12 +52,11 @@ export default function OutputPane({
         <div className="input-prompt">
           <form onSubmit={handleInputSubmit} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
             <span style={{ color: '#4ade80' }}>▶</span>
-            <input
-              type="text"
+            <textarea
               value={inputValue || localInputValue}
-              onChange={handleInputChange}
+              onChange={(e) => handleInputChange(e as any)}
               onKeyPress={handleKeyPress}
-              placeholder="Enter input..."
+              placeholder="Enter input (use Enter for multiple inputs, separate with newlines)"
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -64,9 +64,13 @@ export default function OutputPane({
                 fontSize: '14px',
                 outline: 'none',
                 flex: 1,
-                fontFamily: 'monospace'
+                fontFamily: 'monospace',
+                resize: 'none',
+                minHeight: '20px',
+                maxHeight: '80px'
               }}
               autoFocus
+              rows={1}
             />
           </form>
         </div>

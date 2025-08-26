@@ -26,7 +26,7 @@ import { templates } from "./templates";
 import "./styles.css";
 import ResizablePanel from "../../components/ResizablePanel";
 
-type Language = "python" | "javascript" | "c" | "cpp" | "java" | "html-css";
+type Language = "python" | "javascript" | "html-css";
 type Tab = "output" | "errors" | "terminal";
 
 interface RunResult {
@@ -40,9 +40,6 @@ const getFileExtension = (lang: Language): string => {
   switch (lang) {
     case "javascript": return "js";
     case "python": return "py";
-    case "c": return "c";
-    case "cpp": return "cpp";
-    case "java": return "java";
     case "html-css": return "html";
     default: return "txt";
   }
@@ -52,9 +49,6 @@ const getLanguageLabel = (lang: Language): string => {
   switch (lang) {
     case "javascript": return "JavaScript";
     case "python": return "Python";
-    case "c": return "C";
-    case "cpp": return "C++";
-    case "java": return "Java";
     case "html-css": return "HTML & CSS";
     default: return lang;
   }
@@ -80,30 +74,7 @@ const getLanguageIcon = (lang: Language): React.ReactElement => {
           style={iconStyle}
         />
       );
-    case "c":
-      return (
-        <img
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/c/c-original.svg"
-          alt="C"
-          style={iconStyle}
-        />
-      );
-    case "cpp":
-      return (
-        <img
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/cplusplus/cplusplus-original.svg"
-          alt="C++"
-          style={iconStyle}
-        />
-      );
-    case "java":
-      return (
-        <img
-          src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg"
-          alt="Java"
-          style={iconStyle}
-        />
-      );
+
     case "html-css":
       return (
         <div style={{ display: 'flex', gap: '2px' }}>
@@ -128,9 +99,6 @@ const getLanguageSymbol = (lang: Language): string => {
   switch (lang) {
     case "javascript": return "JS";
     case "python": return "PY";
-    case "c": return "C";
-    case "cpp": return "C++";
-    case "java": return "JAVA";
     case "html-css": return "HTML+CSS";
     default: return (lang as string).toUpperCase();
   }
@@ -141,9 +109,6 @@ const getLanguageColor = (lang: Language): string => {
   switch (lang) {
     case "javascript": return "#f7df1e";
     case "python": return "#3776ab";
-    case "c": return "#00599c";
-    case "cpp": return "#00599c";
-    case "java": return "#ed8b00";
     case "html-css": return "#e34f26";
     default: return "#007acc";
   }
@@ -200,7 +165,7 @@ const CodeEditorPage: React.FC = () => {
       }
       
       const extension = getFileExtension(language);
-      const newFileName = language === "java" ? "Main.java" : `main.${extension}`;
+      const newFileName = `main.${extension}`;
       setFileName(newFileName);
     }
 
@@ -304,7 +269,7 @@ const CodeEditorPage: React.FC = () => {
           setActiveTab("errors");
           
           // Parse errors for diagnostics (for supported languages)
-          if (language === "python" || language === "java" || language === "c" || language === "cpp") {
+          if (language === "python") {
             const errorDiagnostics = parseErrors(result.stderr, language);
             setDiagnostics(errorDiagnostics);
           }
@@ -497,42 +462,89 @@ const CodeEditorPage: React.FC = () => {
     
     try {
       console.log('📝 Sending input:', input);
-      const response = await fetch(`https://kodeit-lms-backend.bylinelms.com/api/input`, {
-        // const response = await fetch(`http://localhost:5000/api/input`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          executionId,
-          input: input
-        })
-      });
       
-      const result = await response.json();
+      // Check if the input contains multiple values (separated by newlines)
+      const inputs = input.split('\n').filter(i => i.trim() !== '');
       
-      if (result.error) {
-        setErrors(`Error: ${result.error}`);
-        setActiveTab("errors");
-        setIsWaitingForInput(false);
-        setIsRunning(false);
-      } else if (result.waitingForInput) {
-        // Still waiting for more input
-        setOutput(prev => prev + result.stdout || "");
-        setInputValue("");
-      } else {
-        // Execution completed
-        setIsWaitingForInput(false);
-        setExecutionId(null);
-        setInputValue("");
-        setIsRunning(false);
+      if (inputs.length > 1) {
+        // Multiple inputs provided, use the multiple input endpoint
+        console.log('📝 Sending multiple inputs:', inputs);
+        const response = await fetch(`https://kodeit-lms-backend.bylinelms.com/api/input-multiple`, {
+          // const response = await fetch(`http://localhost:5000/api/input-multiple`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            executionId,
+            inputs: inputs
+          })
+        });
         
-        if (result.stderr && result.stderr.trim()) {
-          setErrors(result.stderr.trim());
+        const result = await response.json();
+        
+        if (result.error) {
+          setErrors(`Error: ${result.error}`);
           setActiveTab("errors");
+          setIsWaitingForInput(false);
+          setIsRunning(false);
         } else {
-          const finalOut = result.stdout?.trim() || "No output";
-          setOutput(prev => prev + finalOut);
-          setActiveTab("output");
-          setExecutionStatus("Completed");
+          // Execution completed
+          setIsWaitingForInput(false);
+          setExecutionId(null);
+          setInputValue("");
+          setIsRunning(false);
+          
+          if (result.stderr && result.stderr.trim()) {
+            setErrors(result.stderr.trim());
+            setActiveTab("errors");
+          } else {
+            const finalOut = result.stdout?.trim() || "No output";
+            setOutput(prev => prev + finalOut);
+            setActiveTab("output");
+            setExecutionStatus("Completed");
+          }
+        }
+      } else {
+        // Single input, use the regular input endpoint
+        // We'll start with isLastInput = false and let the backend determine if more inputs are needed
+        const response = await fetch(`https://kodeit-lms-backend.bylinelms.com/api/input`, {
+          // const response = await fetch(`http://localhost:5000/api/input`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            executionId,
+            input: input,
+            isLastInput: false // Let the backend determine if this is the last input
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+          setErrors(`Error: ${result.error}`);
+          setActiveTab("errors");
+          setIsWaitingForInput(false);
+          setIsRunning(false);
+        } else if (result.waitingForInput) {
+          // Still waiting for more input
+          setOutput(prev => prev + (result.stdout || ""));
+          setInputValue("");
+          console.log('📝 Still waiting for more input...');
+        } else {
+          // Execution completed
+          setIsWaitingForInput(false);
+          setExecutionId(null);
+          setInputValue("");
+          setIsRunning(false);
+          
+          if (result.stderr && result.stderr.trim()) {
+            setErrors(result.stderr.trim());
+            setActiveTab("errors");
+          } else {
+            const finalOut = result.stdout?.trim() || "No output";
+            setOutput(prev => prev + finalOut);
+            setActiveTab("output");
+            setExecutionStatus("Completed");
+          }
         }
       }
     } catch (error: any) {
@@ -555,17 +567,11 @@ const CodeEditorPage: React.FC = () => {
       if (lang === "python") {
         // Python error format: File "main.py", line X, in <module>
         match = line.match(/File ".*", line (\d+)/);
-      } else if (lang === "java") {
-        // Java error format: Main.java:X: error: ...
-        match = line.match(/Main\.java:(\d+):/);
-      } else if (lang === "c" || lang === "cpp") {
-        // C/C++ error format: main.c:X:Y: error: ...
-        match = line.match(/main\.(c|cpp):(\d+):(\d+):/);
       }
       
       if (match) {
         const lineNumber = parseInt(match[1]);
-        const column = lang === "c" || lang === "cpp" ? parseInt(match[2]) : 1;
+        const column = 1;
         
         diagnostics.push({
           message: line.trim(),
@@ -713,7 +719,7 @@ const CodeEditorPage: React.FC = () => {
 
                     {isDropdownOpen && (
                       <div className="language-dropdown-menu">
-                        {(["javascript", "python", "c", "cpp", "java", "html-css"] as Language[]).map((lang) => (
+                        {(["javascript", "python", "html-css"] as Language[]).map((lang) => (
                           <button
                             key={lang}
                             className={clsx("language-option", { active: lang === language })}

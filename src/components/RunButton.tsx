@@ -3,7 +3,7 @@ import { runCode } from "../services/runClient";
 
 type Props = {
   getSource: () => string;               // pass editor.getValue
-  getLanguage: () => "javascript" | "python" | "c" | "cpp" | "java";
+  getLanguage: () => "javascript" | "python";
   getStdin?: () => string;
   onOutput: (text: string) => void;       // write to output panel
 };

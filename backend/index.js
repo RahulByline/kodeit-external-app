@@ -1091,6 +1091,8 @@ async function runCodeInteractive(language, code, executionId) {
       let stdout = '';
       let stderr = '';
       let isWaitingForInput = false;
+      let inputCount = 0;
+      let lastOutputTime = Date.now();
 
       // Set up timeout
       const timeout = 30000; // 30 seconds for interactive execution
@@ -1100,14 +1102,52 @@ async function runCodeInteractive(language, code, executionId) {
         reject(new Error(`Execution timed out after ${timeout}ms`));
       }, timeout);
 
-      child.stdout.on('data', (data) => {
-        const output = data.toString();
-        stdout += output;
-        console.log(`📤 stdout: ${output}`);
+                child.stdout.on('data', (data) => {
+            const output = data.toString();
+            stdout += output;
+            console.log(`📤 stdout: ${output}`);
+            lastOutputTime = Date.now();
+            
+            // Check if the process is waiting for input
+            // Look for common input prompts
+            if (output.includes('Enter') || 
+                output.includes('input') || 
+                output.includes(':') ||
+                output.includes('?') ||
+                output.trim().endsWith(':') ||
+                output.includes('What') ||
+                output.includes('Please') ||
+                output.includes('Type') ||
+                output.includes('name') ||
+                output.includes('age') ||
+                output.includes('surname')) {
+              isWaitingForInput = true;
+              inputCount++;
+              console.log(`📤 Process is waiting for input (input #${inputCount})`);
+            }
+          });
+
+      // Also monitor stderr for input prompts
+      child.stderr.on('data', (data) => {
+        const error = data.toString();
+        stderr += error;
+        console.log(`📤 stderr: ${error}`);
         
-        // Check if the process is waiting for input
-        if (output.includes('Enter') || output.includes('input') || output.includes(':')) {
+        // Sometimes input prompts appear in stderr
+        if (error.includes('Enter') || 
+            error.includes('input') || 
+            error.includes(':') ||
+            error.includes('?') ||
+            error.trim().endsWith(':') ||
+            error.includes('What') ||
+            error.includes('Please') ||
+            error.includes('Type') ||
+            error.includes('name') ||
+            error.includes('age') ||
+            error.includes('surname')) {
           isWaitingForInput = true;
+          inputCount++;
+          console.log(`📤 Process is waiting for input (from stderr, input #${inputCount})`);
         }
       });
 
@@ -1131,10 +1171,26 @@ async function runCodeInteractive(language, code, executionId) {
           activeExecutions.set(executionId, {
             child,
             promise: new Promise((res, rej) => {
+              let finalStdout = stdout;
+              let finalStderr = stderr;
+              
+              // Continue monitoring output after storing the execution
+              child.stdout.on('data', (data) => {
+                const output = data.toString();
+                finalStdout += output;
+                console.log(`📤 Continued stdout: ${output}`);
+              });
+              
+              child.stderr.on('data', (data) => {
+                const error = data.toString();
+                finalStderr += error;
+                console.log(`📤 Continued stderr: ${error}`);
+              });
+              
               child.on('close', (finalCode) => {
                 res({
-                  stdout: stdout,
-                  stderr: stderr,
+                  stdout: finalStdout,
+                  stderr: finalStderr,
                   exitCode: finalCode,
                   diagnostics: []
                 });
@@ -1147,7 +1203,8 @@ async function runCodeInteractive(language, code, executionId) {
             waitingForInput: true,
             executionId: executionId,
             stdout: stdout,
-            stderr: stderr
+            stderr: stderr,
+            inputCount: inputCount
           });
         } else {
           resolve({
@@ -1663,9 +1720,9 @@ app.post('/api/run-interactive', async (req, res) => {
 // Interactive input endpoint
 app.post('/api/input', async (req, res) => {
   try {
-    const { executionId, input } = req.body;
+    const { executionId, input, isLastInput = false } = req.body;
     
-    if (!executionId || !input) {
+    if (!executionId || input === undefined) {
       return res.status(400).json({ error: 'Missing executionId or input' });
     }
 
@@ -1675,23 +1732,111 @@ app.post('/api/input', async (req, res) => {
     }
  
     console.log(`📝 Sending input to execution ${executionId}:`, input);
+    console.log(`📝 Is last input:`, isLastInput);
    
-    // Send input to the process with newline and end stdin
+    // Send input to the process with newline
     execution.child.stdin.write(input + '\n');
-    execution.child.stdin.end();
+    
+    // Only end stdin if this is the last input
+    if (isLastInput) {
+      execution.child.stdin.end();
+      console.log(`📝 Closing stdin for execution ${executionId}`);
+    }
    
-    // Wait for response with timeout
+    // For non-last inputs, we need to check if the process is still waiting for input
+    if (!isLastInput) {
+      // Wait a bit for the process to process the input
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Check if the process has completed
+      if (execution.child.exitCode !== null) {
+        // Process has completed, get the final result
+        const result = await execution.promise;
+        activeExecutions.delete(executionId);
+        return res.json(result);
+      } else {
+        // Process is still running, assume it's waiting for more input
+        return res.json({
+          waitingForInput: true,
+          executionId: executionId,
+          message: 'Input sent, waiting for more input...'
+        });
+      }
+    }
+   
+    // Wait for final response with timeout
     const timeout = 10000; // 10 seconds timeout
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Input response timed out')), timeout);
     });
     
     const result = await Promise.race([execution.promise, timeoutPromise]);
-    activeExecutions.delete(executionId);
+    
+    // Only delete execution if this was the last input
+    if (isLastInput) {
+      activeExecutions.delete(executionId);
+      console.log(`📝 Removed execution ${executionId} from active executions`);
+    }
    
     res.json(result);
   } catch (error) {
     console.error('💥 Error sending input:', error);
+    res.status(500).json({
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Multiple inputs endpoint for handling multiple input fields
+app.post('/api/input-multiple', async (req, res) => {
+  try {
+    const { executionId, inputs } = req.body;
+    
+    if (!executionId || !Array.isArray(inputs)) {
+      return res.status(400).json({ error: 'Missing executionId or inputs array' });
+    }
+
+    const execution = activeExecutions.get(executionId);
+    if (!execution) {
+      return res.status(404).json({ error: 'Execution not found' });
+    }
+ 
+    console.log(`📝 Sending ${inputs.length} inputs to execution ${executionId}:`, inputs);
+   
+    // Send all inputs to the process with proper delays
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i];
+      const isLast = i === inputs.length - 1;
+      
+      console.log(`📝 Sending input ${i + 1}/${inputs.length}:`, input);
+      execution.child.stdin.write(input + '\n');
+      
+      // Add a longer delay between inputs to ensure proper processing
+      if (!isLast) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Only end stdin after the last input
+      if (isLast) {
+        execution.child.stdin.end();
+        console.log(`📝 Closing stdin for execution ${executionId}`);
+      }
+    }
+   
+    // Wait for response with timeout
+    const timeout = 15000; // 15 seconds timeout for multiple inputs
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Input response timed out')), timeout);
+    });
+    
+    const result = await Promise.race([execution.promise, timeoutPromise]);
+    activeExecutions.delete(executionId);
+    console.log(`📝 Removed execution ${executionId} from active executions`);
+   
+    res.json(result);
+  } catch (error) {
+    console.error('💥 Error sending multiple inputs:', error);
     res.status(500).json({
       error: error.message,
       details: error.stack

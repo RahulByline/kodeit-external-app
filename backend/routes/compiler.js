@@ -12,18 +12,6 @@ const LANGUAGE_CONFIG = {
   javascript: {
     version: '18.15.0',
     extension: 'js'
-  },
-  c: {
-    version: '11.2.0',
-    extension: 'c'
-  },
-  cpp: {
-    version: '11.2.0',
-    extension: 'cpp'
-  },
-  java: {
-    version: '19.0.2',
-    extension: 'java'
   }
 };
 
