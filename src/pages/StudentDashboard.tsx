@@ -157,33 +157,37 @@ interface LearningModule {
 }
 
 // Cache utilities
+// CACHE DISABLED - Fresh data every time to prevent memory issues
 const CACHE_PREFIX = 'student_dashboard_';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 0; // Disabled caching
 
 const getCachedData = (key: string) => {
-  try {
-    const cached = localStorage.getItem(`${CACHE_PREFIX}${key}`);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_DURATION) {
-        return data;
-      }
-    }
-  } catch (error) {
-    console.warn('Cache read error:', error);
-  }
+  // CACHE DISABLED - Always return null for fresh data
+  console.log('🚫 Cache disabled - returning fresh data for:', key);
   return null;
 };
 
 const setCachedData = (key: string, data: any) => {
-  try {
-    localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify({
-      data,
-      timestamp: Date.now()
-    }));
-  } catch (error) {
-    console.warn('Cache write error:', error);
+  // CACHE DISABLED - Don't store anything
+  console.log('🚫 Cache disabled - not storing data for:', key);
+  return;
+};
+
+// Clear all cached data immediately
+const clearAllCachedData = () => {
+  console.log('🧹 Clearing all cached data...');
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(CACHE_PREFIX)) {
+      keysToRemove.push(key);
+    }
   }
+  keysToRemove.forEach(key => {
+    localStorage.removeItem(key);
+    console.log('🗑️ Removed cached key:', key);
+  });
+  console.log('✅ All cached data cleared');
 };
 
 const StudentDashboard: React.FC = () => {
@@ -191,8 +195,8 @@ const StudentDashboard: React.FC = () => {
   
   // Enhanced state management with loading states for different sections
   const [stats, setStats] = useState<Stats>(() => {
-    const cached = getCachedData('stats');
-    return cached || {
+    // FRESH DATA - No cached data used
+    return {
       enrolledCourses: 0,
       completedAssignments: 0,
       pendingAssignments: 0,
@@ -226,31 +230,13 @@ const StudentDashboard: React.FC = () => {
   // G1-G3 Dashboard state
   const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule'>('dashboard');
   
-  // Real data states with individual loading states
-  const [courseProgress, setCourseProgress] = useState<CourseProgress[]>(() => {
-    const cached = getCachedData('courseProgress');
-    return cached || [];
-  });
-  const [gradeBreakdown, setGradeBreakdown] = useState<GradeBreakdown[]>(() => {
-    const cached = getCachedData('gradeBreakdown');
-    return cached || [];
-  });
-  const [studentActivities, setStudentActivities] = useState<StudentActivity[]>(() => {
-    const cached = getCachedData('studentActivities');
-    return cached || [];
-  });
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>(() => {
-    const cached = getCachedData('recentActivities');
-    return cached || [];
-  });
-  const [userCourses, setUserCourses] = useState<any[]>(() => {
-    const cached = getCachedData('userCourses');
-    return cached || [];
-  });
-  const [userAssignments, setUserAssignments] = useState<any[]>(() => {
-    const cached = getCachedData('userAssignments');
-    return cached || [];
-  });
+  // Real data states with individual loading states - FRESH DATA ONLY
+  const [courseProgress, setCourseProgress] = useState<CourseProgress[]>([]);
+  const [gradeBreakdown, setGradeBreakdown] = useState<GradeBreakdown[]>([]);
+  const [studentActivities, setStudentActivities] = useState<StudentActivity[]>([]);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [userCourses, setUserCourses] = useState<any[]>([]);
+  const [userAssignments, setUserAssignments] = useState<any[]>([]);
 
   // Individual loading states for progressive loading
   const [loadingStates, setLoadingStates] = useState({
@@ -659,48 +645,27 @@ const StudentDashboard: React.FC = () => {
     }
   }, [dashboardType, gradeDetectionComplete]);
 
-  // Enhanced data fetching with progressive loading
+  // Enhanced data fetching with FRESH DATA ONLY - No caching
   const fetchStudentData = useCallback(async () => {
     if (!currentUser?.id) return;
 
     try {
       setError('');
       
-      // Start with cached data for instant display
-      const cachedStats = getCachedData('stats');
-      const cachedCourses = getCachedData('userCourses');
-      const cachedProgress = getCachedData('courseProgress');
+      // CLEAR ALL CACHED DATA FIRST
+      clearAllCachedData();
       
-      if (cachedStats) setStats(cachedStats);
-      if (cachedCourses) setUserCourses(cachedCourses);
-      if (cachedProgress) setCourseProgress(cachedProgress);
-      
-      console.log('🔄 Fetching real student data from IOMAD API...');
+      console.log('🔄 Fetching FRESH student data from IOMAD API (no cache)...');
       
       // Determine student's grade and dashboard type first (non-blocking)
       determineStudentGradeAndDashboard();
 
-  // For G1-G3 students, ensure they get the proper navigation
-  console.log('🎓 Current dashboard type:', dashboardType);
-  console.log('🎓 Student grade:', studentGrade);
+      // For G1-G3 students, ensure they get the proper navigation
+      console.log('🎓 Current dashboard type:', dashboardType);
+      console.log('🎓 Student grade:', studentGrade);
 
-      // ULTRA-FAST COURSE LOADING: Show courses immediately
+      // FRESH COURSE LOADING: No cached data used
       setLoadingStates(prev => ({ ...prev, userCourses: true }));
-      
-      // Show cached courses instantly if available
-      if (cachedCourses && cachedCourses.length > 0) {
-        const filteredCachedCourses = filterContentByGrade(cachedCourses, 'courses');
-        setUserCourses(filteredCachedCourses);
-        setLoadingStates(prev => ({ ...prev, userCourses: false }));
-        console.log('✅ Cached courses displayed instantly:', filteredCachedCourses.length, 'Filtered from:', cachedCourses.length);
-      }
-      
-      // Show cached course progress instantly if available
-      if (cachedProgress && cachedProgress.length > 0) {
-        const filteredCachedProgress = filterContentByGrade(cachedProgress, 'courses');
-        setCourseProgress(filteredCachedProgress);
-        console.log('✅ Cached course progress displayed instantly');
-      }
       
       // Load real course data in background (non-blocking)
       const loadRealCourseData = async () => {
@@ -719,12 +684,11 @@ const StudentDashboard: React.FC = () => {
           const filteredCourses = filterContentByGrade(enrolledCourses, 'courses');
           
           setUserCourses(filteredCourses);
-          setCachedData('userCourses', filteredCourses);
           setLoadingStates(prev => ({ ...prev, userCourses: false }));
           
-          console.log('✅ Real courses loaded:', filteredCourses.length, 'Filtered from:', enrolledCourses.length);
+          console.log('✅ Fresh courses loaded:', filteredCourses.length, 'Filtered from:', enrolledCourses.length);
           
-          // Show real course progress
+          // Show fresh course progress
           const realCourseProgress: CourseProgress[] = filteredCourses.map((course: Course) => ({
             subject: course.shortname,
             progress: course.progress || Math.floor(Math.random() * 100),
@@ -735,14 +699,13 @@ const StudentDashboard: React.FC = () => {
           }));
           
           setCourseProgress(realCourseProgress);
-          setCachedData('courseProgress', realCourseProgress);
           
         } catch (error) {
           console.error('❌ Error loading real course data:', error);
           setLoadingStates(prev => ({ ...prev, userCourses: false }));
           
-          // If no cached data and API fails, show mock courses for better UX
-          if (!cachedCourses || cachedCourses.length === 0) {
+          // If API fails, show mock courses for better UX
+          if (true) {
             const mockCourses = [
               {
                 id: '1',
@@ -849,9 +812,9 @@ const StudentDashboard: React.FC = () => {
           // Process stats
           setLoadingStates(prev => ({ ...prev, stats: true }));
           
-          const enrolledCourses = getCachedData('userCourses') || [];
-          const courseEnrollments = getCachedData('courseEnrollments') || [];
-          const teacherAssignments = getCachedData('teacherAssignments') || [];
+          const enrolledCourses = userCourses || [];
+          const courseEnrollments = [];
+          const teacherAssignments = [];
           
           const totalAssignments = teacherAssignments.length > 0 ? 
             teacherAssignments.length : 
@@ -877,7 +840,6 @@ const StudentDashboard: React.FC = () => {
           };
 
           setStats(newStats);
-          setCachedData('stats', newStats);
           setLoadingStates(prev => ({ ...prev, stats: false }));
 
           // Process activities
@@ -914,7 +876,6 @@ const StudentDashboard: React.FC = () => {
           const filteredStudentActivities = filterContentByGrade(realStudentActivities, 'activities');
           
           setStudentActivities(filteredStudentActivities);
-          setCachedData('studentActivities', filteredStudentActivities);
           
           const realRecentActivities: RecentActivity[] = [];
           
@@ -952,9 +913,6 @@ const StudentDashboard: React.FC = () => {
 
           setRecentActivities(realRecentActivities.slice(0, 10));
           setUserAssignments(userAssignments);
-          
-          setCachedData('recentActivities', realRecentActivities.slice(0, 10));
-          setCachedData('userAssignments', userAssignments);
           
           setLoadingStates(prev => ({ 
             ...prev, 
@@ -1092,11 +1050,18 @@ const StudentDashboard: React.FC = () => {
     }
   }, [currentUser, determineStudentGradeAndDashboard]);
 
+  // Clear all cached data on component mount
+  useEffect(() => {
+    console.log('🧹 Clearing all cached data on component mount...');
+    clearAllCachedData();
+  }, []);
+
   useEffect(() => {
     fetchStudentData();
     
-    // Refresh data every 5 minutes
+    // Refresh data every 5 minutes with fresh data
     const interval = setInterval(() => {
+      console.log('🔄 Auto-refresh: Fetching fresh data...');
       fetchStudentData();
     }, 5 * 60 * 1000);
     
