@@ -39,16 +39,16 @@ import {
   Trophy,
   Home,
   Monitor,
-  Zap
+  Zap,
+  LogOut
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { moodleService } from '../services/moodleApi';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import ScratchEditor from './ScratchEditor';
-import { getDashboardTypeByGrade, extractGradeFromCohortName, getGradeCohortInfo, detectGradeFromMultipleSources, clearGradeCache, debugGradeDetection } from '../utils/gradeCohortMapping';
+import { getDashboardTypeByGrade, extractGradeFromCohortName, getGradeCohortInfo } from '../utils/gradeCohortMapping';
 import { Skeleton } from '../components/ui/skeleton';
-import DashboardComparison from '../components/DashboardComparison';
 
 interface Stats {
   enrolledCourses: number;
@@ -187,7 +187,7 @@ const setCachedData = (key: string, data: any) => {
 };
 
 const StudentDashboard: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   
   // Enhanced state management with loading states for different sections
   const [stats, setStats] = useState<Stats>(() => {
@@ -201,7 +201,7 @@ const StudentDashboard: React.FC = () => {
       activeStudents: 0
     };
   });
-  
+
   // Real lesson and activity data from Moodle
   const [realLessons, setRealLessons] = useState<any[]>([]);
   const [realActivities, setRealActivities] = useState<any[]>([]);
@@ -211,6 +211,242 @@ const StudentDashboard: React.FC = () => {
   // Course detail view state
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
   const [showCourseDetail, setShowCourseDetail] = useState(false);
+  const [lessonActivities, setLessonActivities] = useState<any[]>([]);
+  const [lessonActivitiesLoading, setLessonActivitiesLoading] = useState(false);
+  const [courseLessons, setCourseLessons] = useState<any[]>([]);
+  const [courseLessonsLoading, setCourseLessonsLoading] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  // Logout handler for G1-G3 dashboard
+  // Function to fetch lesson activities for a specific course
+  const fetchLessonActivities = async (courseId: string) => {
+    try {
+      setLessonActivitiesLoading(true);
+      setCourseLessonsLoading(true);
+      const courseContents = await moodleService.getCourseContents(courseId);
+      
+      const activities: any[] = [];
+      const lessons: any[] = [];
+      
+      for (const section of courseContents) {
+        if (section.modules && Array.isArray(section.modules)) {
+          const lessonActivities: any[] = [];
+          
+          for (const module of section.modules) {
+            if (module.name && module.modname) {
+              const getActivityIcon = (modname: string) => {
+                switch (modname) {
+                  case 'assign': return '📝';
+                  case 'quiz': return '❓';
+                  case 'resource': return '📚';
+                  case 'url': return '🔗';
+                  case 'forum': return '💬';
+                  case 'workshop': return '🛠️';
+                  case 'scorm': return '🎮';
+                  case 'lti': return '🔧';
+                  case 'choice': return '📊';
+                  case 'survey': return '📋';
+                  case 'wiki': return '📖';
+                  case 'glossary': return '📚';
+                  case 'database': return '🗄️';
+                  case 'book': return '📗';
+                  case 'page': return '📄';
+                  case 'file': return '📁';
+                  case 'folder': return '📂';
+                  default: return '📖';
+                }
+              };
+              
+              const getActivityType = (modname: string) => {
+                switch (modname) {
+                  case 'assign': return 'Assignment';
+                  case 'quiz': return 'Quiz';
+                  case 'resource': return 'Resource';
+                  case 'url': return 'Link';
+                  case 'forum': return 'Discussion';
+                  case 'workshop': return 'Workshop';
+                  case 'scorm': return 'Interactive';
+                  case 'lti': return 'External Tool';
+                  case 'choice': return 'Poll';
+                  case 'survey': return 'Survey';
+                  case 'wiki': return 'Wiki';
+                  case 'glossary': return 'Glossary';
+                  case 'database': return 'Database';
+                  case 'book': return 'Book';
+                  case 'page': return 'Page';
+                  case 'file': return 'File';
+                  case 'folder': return 'Folder';
+                  default: return 'Activity';
+                }
+              };
+              
+              const getActivityStatus = (completionstate?: number) => {
+                if (completionstate === 1) return 'completed';
+                if (completionstate === 2) return 'in_progress';
+                return 'not_started';
+              };
+              
+              const getActivityDifficulty = () => {
+                const difficulties = ['Easy', 'Medium', 'Hard'];
+                return difficulties[Math.floor(Math.random() * difficulties.length)];
+              };
+              
+              const getActivityPoints = () => {
+                return Math.floor(Math.random() * 100) + 25;
+              };
+              
+              const getActivityDuration = () => {
+                const durations = ['15 min', '20 min', '30 min', '45 min', '60 min'];
+                return durations[Math.floor(Math.random() * durations.length)];
+              };
+              
+              const activity = {
+                id: module.id,
+                title: module.name,
+                description: module.description || `Complete ${module.name} activity`,
+                type: getActivityType(module.modname),
+                icon: getActivityIcon(module.modname),
+                duration: getActivityDuration(),
+                difficulty: getActivityDifficulty(),
+                points: getActivityPoints(),
+                status: getActivityStatus(module.completionstate),
+                progress: module.completionstate === 1 ? 100 : module.completionstate === 2 ? Math.floor(Math.random() * 60) + 20 : 0,
+                dueDate: module.completionstate === 0 ? new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000).toLocaleDateString() : null,
+                sectionName: section.name || 'General',
+                modname: module.modname,
+                url: module.url || null,
+                contents: module.contents || []
+              };
+              
+              activities.push(activity);
+              lessonActivities.push(activity);
+            }
+          }
+          
+          // Create lesson object for this section
+          if (lessonActivities.length > 0) {
+            const completedActivities = lessonActivities.filter(a => a.status === 'completed').length;
+            const totalActivities = lessonActivities.length;
+            const lessonProgress = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
+            
+            lessons.push({
+              id: section.id || Math.random(),
+              title: section.name || 'General',
+              description: section.summary || `Complete ${section.name} lesson`,
+              activities: lessonActivities,
+              totalActivities: totalActivities,
+              completedActivities: completedActivities,
+              progress: lessonProgress,
+              status: lessonProgress === 100 ? 'completed' : lessonProgress > 0 ? 'in_progress' : 'not_started',
+              duration: `${Math.floor(Math.random() * 60) + 45} min`,
+              icon: '📖'
+            });
+          }
+        }
+      }
+      
+      setLessonActivities(activities);
+      setCourseLessons(lessons);
+    } catch (error) {
+      console.error('Error fetching lesson activities:', error);
+      // Fallback lessons and activities if API fails
+      const fallbackActivities = [
+        {
+          id: 1,
+          title: 'Digital Footprint Quiz',
+          description: 'Test your knowledge about digital footprints and online presence.',
+          type: 'Quiz',
+          icon: '❓',
+          duration: '15 min',
+          difficulty: 'Easy',
+          points: 50,
+          status: 'not_started',
+          progress: 0,
+          dueDate: '1/20/2025',
+          sectionName: 'Digital Citizenship'
+        },
+        {
+          id: 2,
+          title: 'Online Safety Video',
+          description: 'Watch an interactive video about staying safe online.',
+          type: 'Resource',
+          icon: '📚',
+          duration: '20 min',
+          difficulty: 'Easy',
+          points: 25,
+          status: 'completed',
+          progress: 100,
+          dueDate: null,
+          sectionName: 'Digital Citizenship'
+        },
+        {
+          id: 3,
+          title: 'Create a Digital Citizenship Poster',
+          description: 'Design a poster promoting good digital citizenship practices.',
+          type: 'Assignment',
+          icon: '📝',
+          duration: '45 min',
+          difficulty: 'Medium',
+          points: 75,
+          status: 'in_progress',
+          progress: 45,
+          dueDate: '1/22/2025',
+          sectionName: 'Digital Citizenship'
+        }
+      ];
+      
+      setLessonActivities(fallbackActivities);
+      setCourseLessons([
+        {
+          id: 1,
+          title: 'Digital Citizenship',
+          description: 'Learn about digital citizenship and online safety',
+          activities: fallbackActivities,
+          totalActivities: 3,
+          completedActivities: 1,
+          progress: 33,
+          status: 'in_progress',
+          duration: '80 min',
+          icon: '📖'
+        }
+      ]);
+    } finally {
+      setLessonActivitiesLoading(false);
+      setCourseLessonsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      console.log('🔄 Starting logout process...');
+      // Use AuthContext logout to properly clear user state
+      logout();
+      console.log('✅ AuthContext logout completed');
+      setShowLogoutDialog(false);
+      setShowProfileDropdown(false);
+      console.log('🔄 Navigating to home page...');
+      window.location.href = '/';
+      console.log('✅ Logout process completed successfully');
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.profile-dropdown-container')) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
   
   const [loading, setLoading] = useState(false); // Changed to false for instant render
   const [error, setError] = useState('');
@@ -221,7 +457,6 @@ const StudentDashboard: React.FC = () => {
   const [studentGrade, setStudentGrade] = useState<number>(8);
   const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G8_PLUS');
   const [studentCohort, setStudentCohort] = useState<any>(null);
-  const [gradeDetectionComplete, setGradeDetectionComplete] = useState(false);
   
   // G1-G3 Dashboard state
   const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule'>('dashboard');
@@ -461,203 +696,62 @@ const StudentDashboard: React.FC = () => {
     localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
   };
 
-  // Manual grade override for testing (remove in production)
-  const forceGrade1ForTesting = useCallback(() => {
-    console.log('🧪 FORCING GRADE 1 FOR TESTING');
-    setStudentGrade(1);
-    setDashboardType('G1_G3');
-    setGradeDetectionComplete(true);
-  }, []);
-
-  // Debug function to test grade detection
-  const debugGradeDetectionTest = useCallback(() => {
-    console.log('🔍 DEBUG: Testing Grade Detection');
-    console.log('================================');
-    
-    debugGradeDetection();
-    
-    // Test with current user data
-    if (currentUser) {
-      console.log('🧪 Testing with current user data:');
-      console.log('- Username:', currentUser.username);
-      console.log('- User ID:', currentUser.id);
-      console.log('- Full name:', currentUser.fullname);
-      
-      const detectedGrade = detectGradeFromMultipleSources(
-        studentCohort?.name,
-        currentUser.username,
-        currentUser.id?.toString()
-      );
-      
-      console.log('🎓 Detected grade:', detectedGrade);
-      console.log('📱 Current dashboard type:', dashboardType);
-      console.log('📊 Student grade state:', studentGrade);
-    }
-    
-    console.log('================================');
-  }, [currentUser, studentCohort, dashboardType, studentGrade]);
-
-  // Clear all cached data and force fresh detection
-  const clearAllCachedData = useCallback(() => {
-    console.log('🧹 Clearing all cached data...');
-    
-    // Use the enhanced cache clearing function
-    clearGradeCache();
-    
-    // Reset all state to force fresh data
-    setStudentCohort(null);
-    setStudentGrade(8);
-    setDashboardType('G8_PLUS');
-    setGradeDetectionComplete(false);
-    
-    console.log('✅ All cached data cleared, forcing fresh detection');
-  }, []);
-
   const determineStudentGradeAndDashboard = useCallback(async () => {
     try {
       console.log('🎓 Determining student grade and dashboard type...');
-      console.log('🎓 Current user:', currentUser?.username, 'ID:', currentUser?.id);
       
-      // Debug current state
-      debugGradeDetection();
-      
-      // Check if we have cached cohort data first
-      const cachedCohort = localStorage.getItem('student_dashboard_studentCohort');
+      // Check cache first
+      const cachedCohort = getCachedData('studentCohort');
       if (cachedCohort) {
-        console.log('🎓 Found cached cohort data:', cachedCohort);
-        const cohort = JSON.parse(cachedCohort);
-        setStudentCohort(cohort);
-        
-        // Use enhanced grade detection
-        const detectedGrade = detectGradeFromMultipleSources(
-          cohort?.name,
-          currentUser?.username,
-          currentUser?.id?.toString()
-        );
-        
-        if (detectedGrade) {
-          console.log('🎓 Grade detected from cached data:', detectedGrade);
-          setStudentGrade(detectedGrade);
-          const dashboardType = getDashboardTypeByGrade(detectedGrade);
-          setDashboardType(dashboardType);
-          setGradeDetectionComplete(true);
-          
-          if (dashboardType === 'G1_G3') {
-            console.log('🎯 G1-G3 STUDENT DETECTED! Rendering simplified dashboard for early elementary students.');
-            console.log('🎯 Student Grade:', detectedGrade, 'Cohort:', cohort?.name, 'Username:', currentUser?.username);
-          }
-          return;
-        }
+        setStudentCohort(cachedCohort);
+        const grade = extractGradeFromCohortName(cachedCohort.name) || 8;
+        setStudentGrade(grade);
+        setDashboardType(getDashboardTypeByGrade(grade));
+        return;
       }
       
-      // If no cached data or no grade found, fetch from API
-      console.log('🎓 Fetching student cohort from IOMAD API...');
+      // Get student's cohort
       const cohort = await moodleService.getStudentCohort(currentUser?.id.toString());
       setStudentCohort(cohort);
+      setCachedData('studentCohort', cohort);
       
-      // Use enhanced grade detection with fresh data
-      const detectedGrade = detectGradeFromMultipleSources(
-        cohort?.name,
-        currentUser?.username,
-        currentUser?.id?.toString()
-      );
-      
-      const grade = detectedGrade || 8; // Default to grade 8+ if no grade detected
+      let grade = 8; // Default to grade 8+
       
       if (cohort && cohort.name) {
-        console.log('🎓 Student cohort found:', cohort.name);
-        console.log('🎓 Cohort details:', {
-          id: cohort.id,
-          name: cohort.name,
-          idnumber: cohort.idnumber,
-          description: cohort.description
-        });
+        console.log('🎓 Student cohort:', cohort.name);
+        
+        // Try to extract grade from cohort name
+        const extractedGrade = extractGradeFromCohortName(cohort.name);
+        if (extractedGrade) {
+          grade = extractedGrade;
+          console.log('🎓 Grade extracted from cohort name:', grade);
+        } else {
+          console.log('🎓 No grade found in cohort name, using default grade 8+');
+        }
+      } else {
+        console.log('🎓 No cohort found, using default grade 8+');
       }
       
       setStudentGrade(grade);
+      
+      // Determine dashboard type based on grade
       const dashboardType = getDashboardTypeByGrade(grade);
       setDashboardType(dashboardType);
-      setGradeDetectionComplete(true); // Mark detection as complete
       
+      const gradeInfo = getGradeCohortInfo(grade);
       console.log('🎓 Dashboard type determined:', {
         grade,
         dashboardType,
-        cohortName: cohort?.name,
-        username: currentUser?.username,
-        detectedGrade
+        gradeInfo: gradeInfo?.description
       });
-      
-      if (dashboardType === 'G1_G3') {
-        console.log('🎯 G1-G3 STUDENT DETECTED! Rendering simplified dashboard for early elementary students.');
-        console.log('🎯 Student Grade:', grade, 'Cohort:', cohort?.name, 'Username:', currentUser?.username);
-      } else if (dashboardType === 'G4_G7') {
-        console.log('🎯 G4-G7 STUDENT DETECTED! Rendering intermediate dashboard for middle school students.');
-        console.log('🎯 Student Grade:', grade, 'Cohort:', cohort?.name, 'Username:', currentUser?.username);
-      } else {
-        console.log('🎯 G8+ STUDENT DETECTED! Rendering advanced dashboard for high school students.');
-        console.log('🎯 Student Grade:', grade, 'Cohort:', cohort?.name, 'Username:', currentUser?.username);
-      }
       
     } catch (error) {
       console.error('❌ Error determining student grade:', error);
+      // Use default values
       setStudentGrade(8);
       setDashboardType('G8_PLUS');
-      setGradeDetectionComplete(true);
     }
-  }, [currentUser?.id, currentUser?.username]);
-
-  // Filter content based on dashboard type
-  const filterContentByGrade = useCallback((content: any[], contentType: 'courses' | 'activities' | 'assignments') => {
-    if (!gradeDetectionComplete) return content;
-    
-    switch (dashboardType) {
-      case 'G1_G3':
-        // G1-G3 students see simplified, age-appropriate content
-        return content.filter(item => {
-          // Filter out complex or advanced content
-          const title = item.title || item.name || item.fullname || '';
-          const description = item.description || item.summary || '';
-          
-          // Exclude content with advanced keywords
-          const advancedKeywords = [
-            'advanced', 'complex', 'programming', 'coding', 'algorithm', 
-            'database', 'api', 'framework', 'debugging', 'optimization'
-          ];
-          
-          const hasAdvancedContent = advancedKeywords.some(keyword => 
-            title.toLowerCase().includes(keyword) || 
-            description.toLowerCase().includes(keyword)
-          );
-          
-          return !hasAdvancedContent;
-        });
-        
-      case 'G4_G7':
-        // G4-G7 students see intermediate content
-        return content.filter(item => {
-          const title = item.title || item.name || item.fullname || '';
-          const description = item.description || item.summary || '';
-          
-          // Exclude very advanced content but allow intermediate
-          const veryAdvancedKeywords = [
-            'advanced programming', 'complex algorithms', 'database design',
-            'api development', 'framework development'
-          ];
-          
-          const hasVeryAdvancedContent = veryAdvancedKeywords.some(keyword => 
-            title.toLowerCase().includes(keyword) || 
-            description.toLowerCase().includes(keyword)
-          );
-          
-          return !hasVeryAdvancedContent;
-        });
-        
-      case 'G8_PLUS':
-      default:
-        // G8+ students see all content
-        return content;
-    }
-  }, [dashboardType, gradeDetectionComplete]);
+  }, [currentUser?.id]);
 
   // Enhanced data fetching with progressive loading
   const fetchStudentData = useCallback(async () => {
@@ -680,25 +774,19 @@ const StudentDashboard: React.FC = () => {
       // Determine student's grade and dashboard type first (non-blocking)
       determineStudentGradeAndDashboard();
 
-  // For G1-G3 students, ensure they get the proper navigation
-  console.log('🎓 Current dashboard type:', dashboardType);
-  console.log('🎓 Student grade:', studentGrade);
-
       // ULTRA-FAST COURSE LOADING: Show courses immediately
       setLoadingStates(prev => ({ ...prev, userCourses: true }));
       
       // Show cached courses instantly if available
       if (cachedCourses && cachedCourses.length > 0) {
-        const filteredCachedCourses = filterContentByGrade(cachedCourses, 'courses');
-        setUserCourses(filteredCachedCourses);
+        setUserCourses(cachedCourses);
         setLoadingStates(prev => ({ ...prev, userCourses: false }));
-        console.log('✅ Cached courses displayed instantly:', filteredCachedCourses.length, 'Filtered from:', cachedCourses.length);
+        console.log('✅ Cached courses displayed instantly:', cachedCourses.length);
       }
       
       // Show cached course progress instantly if available
       if (cachedProgress && cachedProgress.length > 0) {
-        const filteredCachedProgress = filterContentByGrade(cachedProgress, 'courses');
-        setCourseProgress(filteredCachedProgress);
+        setCourseProgress(cachedProgress);
         console.log('✅ Cached course progress displayed instantly');
       }
       
@@ -708,24 +796,25 @@ const StudentDashboard: React.FC = () => {
           console.log('🔄 Loading real course data in background...');
           
           // Fetch real course data
+          console.log('🔄 Fetching user courses for user ID:', currentUser.id);
           const userCourses = await moodleService.getUserCourses(currentUser.id);
+          console.log('✅ Raw user courses fetched:', userCourses);
           
           // Process and display real courses
           const enrolledCourses = userCourses.filter(course => 
             course.visible !== 0 && course.categoryid && course.categoryid > 0
           );
+          console.log('✅ Filtered enrolled courses:', enrolledCourses);
+          console.log('🔍 Course images check:', enrolledCourses.map(c => ({ id: c.id, name: c.fullname, image: c.courseimage })));
           
-          // Apply grade-based filtering
-          const filteredCourses = filterContentByGrade(enrolledCourses, 'courses');
-          
-          setUserCourses(filteredCourses);
-          setCachedData('userCourses', filteredCourses);
+          setUserCourses(enrolledCourses);
+          setCachedData('userCourses', enrolledCourses);
           setLoadingStates(prev => ({ ...prev, userCourses: false }));
           
-          console.log('✅ Real courses loaded:', filteredCourses.length, 'Filtered from:', enrolledCourses.length);
+          console.log('✅ Real courses loaded:', enrolledCourses.length);
           
           // Show real course progress
-          const realCourseProgress: CourseProgress[] = filteredCourses.map((course: Course) => ({
+          const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => ({
             subject: course.shortname,
             progress: course.progress || Math.floor(Math.random() * 100),
             courseId: course.id,
@@ -910,12 +999,6 @@ const StudentDashboard: React.FC = () => {
             };
           });
 
-          // Apply grade-based filtering to activities
-          const filteredStudentActivities = filterContentByGrade(realStudentActivities, 'activities');
-          
-          setStudentActivities(filteredStudentActivities);
-          setCachedData('studentActivities', filteredStudentActivities);
-          
           const realRecentActivities: RecentActivity[] = [];
           
           // Add course access activities
@@ -950,9 +1033,11 @@ const StudentDashboard: React.FC = () => {
 
           realRecentActivities.sort((a, b) => b.timestamp - a.timestamp);
 
+          setStudentActivities(realStudentActivities);
           setRecentActivities(realRecentActivities.slice(0, 10));
           setUserAssignments(userAssignments);
           
+          setCachedData('studentActivities', realStudentActivities);
           setCachedData('recentActivities', realRecentActivities.slice(0, 10));
           setCachedData('userAssignments', userAssignments);
           
@@ -1207,12 +1292,7 @@ const StudentDashboard: React.FC = () => {
   // Note: Dashboard now renders immediately, sidebar loads independently
   if (loadingStates.profile || loadingStates.stats) {
     return (
-      <DashboardLayout 
-        userRole="student" 
-        userName={currentUser?.fullname || "Student"}
-        studentGrade={studentGrade}
-        dashboardType={dashboardType}
-      >
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         {renderSkeletonDashboard()}
       </DashboardLayout>
     );
@@ -1220,12 +1300,7 @@ const StudentDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <DashboardLayout 
-        userRole="student" 
-        userName={currentUser?.fullname || "Student"}
-        studentGrade={studentGrade}
-        dashboardType={dashboardType}
-      >
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 text-red-800 mb-2">
             <AlertCircle className="w-5 h-5" />
@@ -1245,14 +1320,11 @@ const StudentDashboard: React.FC = () => {
 
   // Dashboard render functions
   const renderG1G3Dashboard = () => {
-    // For G1-G3 students only - ensure proper navigation and layout
-    console.log('🎓 Rendering G1-G3 Dashboard for grade:', studentGrade);
-    
     // Calculate real statistics from actual data
     const totalCourses = userCourses.length;
     const completedLessons = studentActivities.filter(activity => activity.status === 'completed').length;
     const totalPoints = userAssignments.reduce((sum, assignment) => sum + (assignment.grade || 0), 0);
-    const weeklyGoal = Math.min(5, Math.floor(completedLessons / 2) + 1);
+    const weeklyGoal = Math.min(5, Math.floor(completedLessons / 2) + 1); // Dynamic weekly goal
 
     // Get real course data from Moodle API
     const displayCourses = userCourses.slice(0, 3).map((course, index) => {
@@ -1261,6 +1333,7 @@ const StudentDashboard: React.FC = () => {
       const completedAssignments = courseAssignments.filter(activity => activity.status === 'completed').length;
       const totalAssignments = courseAssignments.length;
       
+      // Determine difficulty based on course category or name
       const getDifficulty = (courseName: string, categoryName?: string) => {
         const lowerName = courseName.toLowerCase();
         const lowerCategory = categoryName?.toLowerCase() || '';
@@ -1274,13 +1347,14 @@ const StudentDashboard: React.FC = () => {
         }
       };
       
+      // Calculate weeks based on course duration or use default
       const getWeeks = (startDate?: number, endDate?: number) => {
         if (startDate && endDate) {
           const diffTime = Math.abs(endDate - startDate);
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           return Math.max(1, Math.ceil(diffDays / 7));
         }
-        return Math.floor(Math.random() * 4) + 4;
+        return Math.floor(Math.random() * 4) + 4; // Default 4-8 weeks
       };
       
       return {
@@ -1297,8 +1371,9 @@ const StudentDashboard: React.FC = () => {
       };
     });
 
-    // Use real lessons data from state
+        // Use real lessons data from state (fetched from Moodle API)
     const displayLessons = realLessons.length > 0 ? realLessons : [
+      // Fallback template lessons if no real data
       {
         title: "Internet Safety & Digital Citizenship",
         description: "Learn how to stay safe online and be a good digital citizen",
@@ -1352,8 +1427,9 @@ const StudentDashboard: React.FC = () => {
       }
     ];
 
-    // Use real activities data from state
+    // Use real activities data from state (fetched from Moodle API)
     const displayActivities = realActivities.length > 0 ? realActivities : [
+      // Fallback template activities if no real data
       {
         title: "Digital Footprint Quiz",
         difficulty: "Easy",
@@ -1424,168 +1500,148 @@ const StudentDashboard: React.FC = () => {
     };
 
     return (
-      <div className="w-full p-8">
-        {/* G1-G3 Dashboard Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">G1-G3 Student Dashboard</h1>
-              <p className="text-gray-600 mt-1">Welcome back, {currentUser?.firstname || "Student"}! (Grade {studentGrade})</p>
-                </div>
-              <div className="flex items-center space-x-2">
-              <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full">
-                G1-G3 Dashboard
-              </span>
+      <div className="min-h-screen bg-gray-50">
+        {/* Main Content Area - Full Width */}
+        <div className="p-8">
+          {/* Navigation Tabs */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+              <button 
+                onClick={() => setActiveTab('dashboard')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Dashboard
+              </button>
+              <button 
+                onClick={() => setActiveTab('courses')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'courses' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                My Courses
+              </button>
+              <button 
+                onClick={() => setActiveTab('lessons')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'lessons' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Current Lessons
+              </button>
+              <button 
+                onClick={() => setActiveTab('activities')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'activities' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Activities
+              </button>
+            </div>
+            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+              <button className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium">Card View</button>
+              <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Tree View</button>
+              <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Journey View</button>
             </div>
           </div>
-        </div>
 
-        {/* Navigation Tabs - G1-G3 Specific Navigation */}
-             <div className="flex items-center justify-between mb-8">
-               <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                 <button 
-                   onClick={() => setActiveTab('dashboard')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   Dashboard
-                 </button>
-                 <button 
-                   onClick={() => setActiveTab('courses')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'courses' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   My Courses
-                 </button>
-                 <button 
-                   onClick={() => setActiveTab('lessons')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'lessons' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   Current Lessons
-                 </button>
-                 <button 
-                   onClick={() => setActiveTab('activities')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'activities' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   Activities
-                 </button>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-600">
-              <span className="font-medium">Navigation:</span> Use sidebar for main navigation, tabs for content switching
-               </div>
-               <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                 <button className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium">Card View</button>
-                 <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Tree View</button>
-                 <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Journey View</button>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Help for G1-G3 Students */}
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Info className="w-3 h-3 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-blue-900 mb-1">How to Navigate (G1-G3 Students)</h3>
-              <div className="text-sm text-blue-800 space-y-1">
-                <p><span className="font-medium">Left Sidebar:</span> Main navigation - Dashboard, My Courses, Assignments, etc.</p>
-                <p><span className="font-medium">Top Tabs:</span> Switch between Dashboard overview, My Courses, Current Lessons, and Activities</p>
-                <p><span className="font-medium">Top Right:</span> Profile, notifications, and logout</p>
-              </div>
-            </div>
-               </div>
-             </div>
-
-             {/* Content based on active tab */}
+             {/* Content based on active tab or course detail */}
+             {showCourseDetail ? (
+               renderCourseDetail()
+             ) : (
+               <>
              {activeTab === 'dashboard' && (
                <>
-            {/* Summary Cards */}
+                 {/* Summary Cards with Real Data - Matching Image Design */}
                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                      <div className="flex items-center justify-between">
                        <div>
-                    <p className="text-sm font-medium text-gray-600">Courses</p>
-                    <p className="text-2xl font-bold text-gray-900">{totalCourses}</p>
+                         <p className="text-sm font-medium text-gray-600">Courses</p>
+                         <p className="text-2xl font-bold text-gray-900">{totalCourses}</p>
                        </div>
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Target className="w-5 h-5 text-blue-600" />
+                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                         <Target className="w-5 h-5 text-blue-600" />
+                       </div>
                      </div>
                    </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                      <div className="flex items-center justify-between">
                        <div>
-                    <p className="text-sm font-medium text-gray-600">Lessons Done</p>
-                    <p className="text-2xl font-bold text-gray-900">{completedLessons}</p>
+                         <p className="text-sm font-medium text-gray-600">Lessons Done</p>
+                         <p className="text-2xl font-bold text-gray-900">{completedLessons}</p>
                        </div>
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
+                       <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                         <TrendingUp className="w-5 h-5 text-green-600" />
+                       </div>
                      </div>
                    </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                      <div className="flex items-center justify-between">
                        <div>
-                    <p className="text-sm font-medium text-gray-600">Total Points</p>
-                    <p className="text-2xl font-bold text-gray-900">{totalPoints}</p>
+                         <p className="text-sm font-medium text-gray-600">Total Points</p>
+                         <p className="text-2xl font-bold text-gray-900">{totalPoints}</p>
                        </div>
-                  <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                    <Award className="w-5 h-5 text-yellow-600" />
+                       <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                         <Award className="w-5 h-5 text-yellow-600" />
+                       </div>
                      </div>
                    </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                      <div className="flex items-center justify-between">
                        <div>
-                    <p className="text-sm font-medium text-gray-600">Weekly Goal</p>
-                    <p className="text-2xl font-bold text-gray-900">{weeklyGoal}/5</p>
+                         <p className="text-sm font-medium text-gray-600">Weekly Goal</p>
+                         <p className="text-2xl font-bold text-gray-900">{weeklyGoal}/5</p>
                        </div>
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-purple-600" />
-                  </div>
+                       <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                         <Clock className="w-5 h-5 text-purple-600" />
+                       </div>
                      </div>
                    </div>
                  </div>
 
-            {/* My Courses Section */}
+                 {/* My Courses Section with Real Data - Matching Image Design */}
                  <div className="mb-8">
                    <h2 className="text-2xl font-bold text-gray-900 mb-6">My Courses</h2>
                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                      {displayCourses.map((course, index) => (
                        <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="h-40 relative overflow-hidden">
-                      {course.courseimage ? (
-                        <img 
-                          src={course.courseimage} 
-                          alt={course.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const parent = target.parentElement;
-                            if (parent) {
-                              parent.classList.add('bg-gradient-to-br', 'from-blue-400', 'to-blue-600');
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                          <BookOpen className="w-12 h-12 text-white opacity-80" />
-                        </div>
-                      )}
+                         {/* Course Image with Difficulty Tag */}
+                         <div className="h-40 relative overflow-hidden">
+                           {course.courseimage ? (
+                             <img 
+                               src={course.courseimage} 
+                               alt={course.name}
+                               className="w-full h-full object-cover"
+                               onLoad={() => console.log('✅ Course image loaded successfully:', course.courseimage)}
+                               onError={(e) => {
+                                 console.log('❌ Course image failed to load:', course.courseimage);
+                                 // Fallback to gradient background if image fails to load
+                                 const target = e.target as HTMLImageElement;
+                                 target.style.display = 'none';
+                                 const parent = target.parentElement;
+                                 if (parent) {
+                                   parent.classList.add('bg-gradient-to-br', 'from-blue-400', 'to-blue-600');
+                                   parent.innerHTML += `
+                                     <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                                       <svg class="w-12 h-12 text-white opacity-80" fill="currentColor" viewBox="0 0 20 20">
+                                         <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                       </svg>
+                                     </div>
+                                   `;
+                                 }
+                               }}
+                             />
+                           ) : (
+                             <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                               <BookOpen className="w-12 h-12 text-white opacity-80" />
+                             </div>
+                           )}
                            <div className="absolute top-3 right-3">
                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          course.difficulty === 'Beginner' ? 'bg-green-100 text-green-800' : 
-                          course.difficulty === 'Advanced' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
+                               course.difficulty === 'Beginner' ? 'bg-green-100 text-green-800' : 
+                               course.difficulty === 'Advanced' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
                              }`}>
                                {course.difficulty}
                              </span>
@@ -1600,21 +1656,38 @@ const StudentDashboard: React.FC = () => {
                                <span className="text-gray-900 font-medium">{course.progress}%</span>
                              </div>
                              <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${course.progress}%` }}></div>
+                               <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${course.progress}%` }}></div>
                              </div>
-                        <p className="text-xs text-gray-500 mt-1">{course.completedAssignments}/{course.totalAssignments} lessons</p>
+                             <p className="text-xs text-gray-500 mt-1">{course.completedAssignments}/{course.totalAssignments} lessons</p>
                            </div>
                            <div className="flex items-center justify-between">
                              <span className="text-sm text-gray-600">{course.weeks} weeks</span>
-                        <button 
-                          onClick={() => {
-                            setSelectedCourse(course);
-                            setShowCourseDetail(true);
-                          }}
-                          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
-                        >
-                          <Play className="w-4 h-4" />
-                          <span>Continue Learning</span>
+                             <button 
+                               onClick={async () => {
+                                 console.log('🔄 Continue Learning clicked for course:', course.id);
+                                 // Fetch detailed course information including real image
+                                 if (course.id) {
+                                   try {
+                                     const detailedCourse = await moodleService.getCourseDetails(course.id.toString());
+                                     console.log('✅ Detailed course fetched:', detailedCourse);
+                                     setSelectedCourse(detailedCourse || course);
+                                   } catch (error) {
+                                     console.error('❌ Error fetching detailed course:', error);
+                                     setSelectedCourse(course);
+                                   }
+                                 } else {
+                                   setSelectedCourse(course);
+                                 }
+                                 setShowCourseDetail(true);
+                                 // Fetch lesson activities for this course
+                                 if (course.id) {
+                                   await fetchLessonActivities(course.id.toString());
+                                 }
+                               }}
+                               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                             >
+                               <Play className="w-4 h-4" />
+                               <span>Continue Learning</span>
                              </button>
                            </div>
                          </div>
@@ -1623,42 +1696,43 @@ const StudentDashboard: React.FC = () => {
                    </div>
                  </div>
 
-            {/* Current Lessons Section */}
+                 {/* Current Lessons Section with Real Data */}
                  <div className="mb-8">
                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Current Lessons</h2>
-              {lessonsLoading ? (
+                   {lessonsLoading ? (
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                      <Skeleton className="h-32 w-full" />
-                      <div className="p-6">
-                        <Skeleton className="h-6 w-3/4 mb-2" />
-                        <Skeleton className="h-4 w-full mb-4" />
-                        <Skeleton className="h-4 w-1/2 mb-4" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {displayLessons.map((lesson, index) => (
+                       {[1, 2, 3, 4, 5, 6].map((i) => (
+                         <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                           <Skeleton className="h-32 w-full" />
+                           <div className="p-6">
+                             <Skeleton className="h-6 w-3/4 mb-2" />
+                             <Skeleton className="h-4 w-full mb-4" />
+                             <Skeleton className="h-4 w-1/2 mb-4" />
+                             <Skeleton className="h-10 w-full" />
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   ) : (
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {displayLessons.map((lesson, index) => (
                        <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                          <div className="h-32 bg-gradient-to-br from-blue-400 to-blue-600 relative">
-                        <div className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center">
-                          {lesson.status === 'completed' ? (
-                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                              <CheckCircle className="w-3 h-3 text-green-600" />
-                            </div>
-                          ) : lesson.status === 'locked' ? (
-                            <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
-                              <Circle className="w-3 h-3 text-gray-600" />
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                           {/* Status Icon */}
+                           <div className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center">
+                             {lesson.status === 'completed' ? (
+                               <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                                 <CheckCircle className="w-3 h-3 text-green-600" />
+                               </div>
+                             ) : lesson.status === 'locked' ? (
+                               <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                                 <Circle className="w-3 h-3 text-gray-600" />
+                               </div>
+                             ) : (
+                               <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
                              <Info className="w-3 h-3 text-blue-600" />
-                            </div>
-                          )}
+                               </div>
+                             )}
                            </div>
                          </div>
                          <div className="p-6">
@@ -1668,10 +1742,10 @@ const StudentDashboard: React.FC = () => {
                                <span className="text-gray-900 font-medium">{lesson.progress}%</span>
                              </div>
                              <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className={`h-2 rounded-full ${
-                              lesson.status === 'completed' ? 'bg-green-600' : 
-                              lesson.status === 'locked' ? 'bg-gray-400' : 'bg-blue-600'
-                            }`} style={{ width: `${lesson.progress}%` }}></div>
+                               <div className={`h-2 rounded-full ${
+                                 lesson.status === 'completed' ? 'bg-green-600' : 
+                                 lesson.status === 'locked' ? 'bg-gray-400' : 'bg-blue-600'
+                               }`} style={{ width: `${lesson.progress}%` }}></div>
                              </div>
                            </div>
                            <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
@@ -1686,42 +1760,42 @@ const StudentDashboard: React.FC = () => {
                            <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                              lesson.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
                              lesson.status === 'continue' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
-                          lesson.status === 'locked' ? 'bg-gray-100 text-gray-700 cursor-not-allowed' :
-                          'bg-blue-600 text-white hover:bg-blue-700'
+                             lesson.status === 'locked' ? 'bg-gray-100 text-gray-700 cursor-not-allowed' :
+                             'bg-blue-600 text-white hover:bg-blue-700'
                            }`}>
-                          {lesson.status === 'completed' ? 'Review Lesson' : 
-                           lesson.status === 'continue' ? 'Continue Lesson' : 
-                           lesson.status === 'locked' ? 'Locked' : 'Start Lesson'}
+                             {lesson.status === 'completed' ? 'Review Lesson' : 
+                              lesson.status === 'continue' ? 'Continue Lesson' : 
+                              lesson.status === 'locked' ? 'Locked' : 'Start Lesson'}
                            </button>
                          </div>
                        </div>
                      ))}
                    </div>
-              )}
+                   )}
                  </div>
 
-            {/* Upcoming Activities Section */}
+                 {/* Upcoming Activities Section with Real Data - Matching Image Design */}
                  <div>
                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Upcoming Activities</h2>
-              {activitiesLoading ? (
+                   {activitiesLoading ? (
                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                      <div className="flex items-start space-x-4 mb-4">
-                        <Skeleton className="w-10 h-10 rounded-lg" />
-                        <div className="flex-1">
-                          <Skeleton className="h-6 w-3/4 mb-2" />
-                          <Skeleton className="h-4 w-1/2 mb-4" />
-                          <Skeleton className="h-4 w-1/3 mb-4" />
-                        </div>
-                      </div>
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {displayActivities.map((activity, index) => (
+                       {[1, 2, 3, 4, 5, 6].map((i) => (
+                         <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                           <div className="flex items-start space-x-4 mb-4">
+                             <Skeleton className="w-10 h-10 rounded-lg" />
+                             <div className="flex-1">
+                               <Skeleton className="h-6 w-3/4 mb-2" />
+                               <Skeleton className="h-4 w-1/2 mb-4" />
+                               <Skeleton className="h-4 w-1/3 mb-4" />
+                             </div>
+                           </div>
+                           <Skeleton className="h-10 w-full" />
+                         </div>
+                       ))}
+                     </div>
+                   ) : (
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     {displayActivities.map((activity, index) => (
                        <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                          <div className="flex items-start space-x-4 mb-4">
                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -1742,13 +1816,13 @@ const StudentDashboard: React.FC = () => {
                                <span className="text-sm text-gray-600">{activity.duration}</span>
                              </div>
                              <div className="flex items-center space-x-2 mb-4">
-                            {activity.status === 'completed' ? (
-                              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
-                                <CheckCircle className="w-3 h-3 text-green-600" />
-                              </div>
-                            ) : (
+                               {activity.status === 'completed' ? (
+                                 <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                                   <CheckCircle className="w-3 h-3 text-green-600" />
+                                 </div>
+                               ) : (
                                <Calendar className="w-4 h-4 text-red-400" />
-                            )}
+                               )}
                                <span className={`text-sm font-medium ${
                                  activity.status === 'overdue' ? 'text-red-600' : 
                                  activity.status === 'completed' ? 'text-green-600' : 'text-gray-600'
@@ -1765,12 +1839,12 @@ const StudentDashboard: React.FC = () => {
                            'bg-blue-600 text-white hover:bg-blue-700'
                          }`}>
                            {activity.status === 'overdue' ? 'Continue' : 
-                         activity.status === 'completed' ? 'Review' : 'Start'}
+                            activity.status === 'completed' ? 'Review' : 'Start'}
                          </button>
                        </div>
                      ))}
                    </div>
-              )}
+                   )}
                  </div>
                </>
              )}
@@ -1781,7 +1855,7 @@ const StudentDashboard: React.FC = () => {
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                    {userCourses.map((course, index) => (
                      <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <div className={`h-32 ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'gradient')} relative`}>
+                       <div className={`h-32 ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'gradient')} relative`}>
                          <div className="absolute top-3 right-3">
                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-800">
                              Active
@@ -1797,12 +1871,12 @@ const StudentDashboard: React.FC = () => {
                              <span className="text-gray-900 font-medium">{course.progress || 0}%</span>
                            </div>
                            <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} h-2 rounded-full`} style={{ width: `${course.progress || 0}%` }}></div>
+                               <div className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} h-2 rounded-full`} style={{ width: `${course.progress || 0}%` }}></div>
                            </div>
                          </div>
                          <div className="flex items-center justify-between">
                            <span className="text-sm text-gray-600">Course ID: {course.id}</span>
-                      <button className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'hover')} text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors`}>
+                             <button className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'hover')} text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors`}>
                              View Course
                            </button>
                          </div>
@@ -1904,58 +1978,713 @@ const StudentDashboard: React.FC = () => {
                  </div>
                </div>
              )}
-      </div>
-    );
-  };
+
+             {activeTab === 'achievements' && (
+               <div>
+                 <h2 className="text-2xl font-bold text-gray-900 mb-6">My Achievements</h2>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                     <div className="flex items-center space-x-4 mb-4">
+                       <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                         <Trophy className="w-6 h-6 text-yellow-600" />
+                       </div>
+                       <div>
+                         <h3 className="text-lg font-semibold text-gray-900">First Course Completed</h3>
+                         <p className="text-gray-600 text-sm">Completed your first course</p>
+                       </div>
+                     </div>
+                     <div className="flex items-center justify-between">
+                       <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
+                       <span className="text-sm font-medium text-green-600">+50 points</span>
+                     </div>
+                   </div>
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                     <div className="flex items-center space-x-4 mb-4">
+                       <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                         <Star className="w-6 h-6 text-blue-600" />
+                       </div>
+                       <div>
+                         <h3 className="text-lg font-semibold text-gray-900">Perfect Score</h3>
+                         <p className="text-gray-600 text-sm">Got 100% on an assignment</p>
+                       </div>
+                     </div>
+                     <div className="flex items-center justify-between">
+                       <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
+                       <span className="text-sm font-medium text-green-600">+100 points</span>
+                     </div>
+                   </div>
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                     <div className="flex items-center space-x-4 mb-4">
+                       <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                         <Flame className="w-6 h-6 text-green-600" />
+                       </div>
+                       <div>
+                         <h3 className="text-lg font-semibold text-gray-900">Learning Streak</h3>
+                         <p className="text-gray-600 text-sm">7 days of continuous learning</p>
+                       </div>
+                     </div>
+                     <div className="flex items-center justify-between">
+                       <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
+                       <span className="text-sm font-medium text-green-600">+75 points</span>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             )}
+
+             {activeTab === 'schedule' && (
+               <div>
+                 <h2 className="text-2xl font-bold text-gray-900 mb-6">My Schedule</h2>
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                   <div className="grid grid-cols-7 gap-2 mb-6">
+                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                       <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
+                         {day}
+                       </div>
+                     ))}
+                     {Array.from({ length: 35 }, (_, i) => {
+                       const date = new Date();
+                       date.setDate(date.getDate() - 15 + i);
+                       const isToday = date.toDateString() === new Date().toDateString();
+                       const hasActivity = Math.random() > 0.7;
+                       
+                       return (
+                         <div
+                           key={i}
+                           className={`text-center py-2 rounded-lg cursor-pointer transition-colors ${
+                             isToday 
+                               ? 'bg-blue-600 text-white' 
+                               : hasActivity 
+                                 ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                                 : 'text-gray-600 hover:bg-gray-100'
+                           }`}
+                         >
+                           {date.getDate()}
+                         </div>
+                       );
+                     })}
+                   </div>
+                   <div className="space-y-3">
+                     <h3 className="font-semibold text-gray-900">Today's Schedule</h3>
+                     <div className="space-y-2">
+                       <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
+                         <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                         <div>
+                           <p className="text-sm font-medium text-gray-900">HTML Basics Lesson</p>
+                           <p className="text-xs text-gray-600">9:00 AM - 10:30 AM</p>
+                         </div>
+                       </div>
+                       <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
+                         <div className="w-3 h-3 bg-green-600 rounded-full"></div>
+                         <div>
+                           <p className="text-sm font-medium text-gray-900">Assignment Due</p>
+                           <p className="text-xs text-gray-600">2:00 PM - 3:00 PM</p>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             )}
+               </>
+             )}
+           </div>
+
+           {/* Content based on active tab or course detail */}
+           {showCourseDetail ? (
+             renderCourseDetail()
+           ) : (
+             <>
+               {activeTab === 'dashboard' && (
+                 <>
+                   {/* Summary Cards with Real Data - Matching Image Design */}
+                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                       <div className="flex items-center justify-between">
+                         <div>
+                           <p className="text-sm font-medium text-gray-600">Courses</p>
+                           <p className="text-2xl font-bold text-gray-900">{totalCourses}</p>
+                         </div>
+                         <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                           <Target className="w-5 h-5 text-blue-600" />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                       <div className="flex items-center justify-between">
+                         <div>
+                           <p className="text-sm font-medium text-gray-600">Lessons Done</p>
+                           <p className="text-2xl font-bold text-gray-900">{completedLessons}</p>
+                         </div>
+                         <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                           <TrendingUp className="w-5 h-5 text-green-600" />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                       <div className="flex items-center justify-between">
+                         <div>
+                           <p className="text-sm font-medium text-gray-600">Total Points</p>
+                           <p className="text-2xl font-bold text-gray-900">{totalPoints}</p>
+                         </div>
+                         <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                           <Award className="w-5 h-5 text-yellow-600" />
+                         </div>
+                       </div>
+                     </div>
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                       <div className="flex items-center justify-between">
+                         <div>
+                           <p className="text-sm font-medium text-gray-600">Weekly Goal</p>
+                           <p className="text-2xl font-bold text-gray-900">{weeklyGoal}/5</p>
+                         </div>
+                         <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                           <Clock className="w-5 h-5 text-purple-600" />
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+
+                   {/* My Courses Section with Real Data - Matching Image Design */}
+                   <div className="mb-8">
+                     <h2 className="text-2xl font-bold text-gray-900 mb-6">My Courses</h2>
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                       {displayCourses.map((course, index) => (
+                         <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                           {/* Course Image with Difficulty Tag */}
+                           <div className="h-40 relative overflow-hidden">
+                             {course.courseimage ? (
+                               <img 
+                                 src={course.courseimage} 
+                                 alt={course.name}
+                                 className="w-full h-full object-cover"
+                                 onLoad={() => console.log('✅ Course image loaded successfully:', course.courseimage)}
+                                 onError={(e) => {
+                                   console.log('❌ Course image failed to load:', course.courseimage);
+                                   // Fallback to gradient background if image fails to load
+                                   const target = e.target as HTMLImageElement;
+                                   target.style.display = 'none';
+                                   const parent = target.parentElement;
+                                   if (parent) {
+                                     parent.classList.add('bg-gradient-to-br', 'from-blue-400', 'to-blue-600');
+                                     parent.innerHTML += `
+                                       <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                                         <svg class="w-12 h-12 text-white opacity-80" fill="currentColor" viewBox="0 0 20 20">
+                                           <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                         </svg>
+                                       </div>
+                                     `;
+                                   }
+                                 }}
+                               />
+                             ) : (
+                               <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                                 <svg className="w-12 h-12 text-white opacity-80" fill="currentColor" viewBox="0 0 20 20">
+                                   <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                 </svg>
+                               </div>
+                             )}
+                             <div className="absolute top-3 right-3">
+                               <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                 course.difficulty === 'Beginner' ? 'bg-green-100 text-green-800' : 
+                                 course.difficulty === 'Advanced' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'
+                               }`}>
+                                 {course.difficulty}
+                               </span>
+                             </div>
+                           </div>
+                           <div className="p-6">
+                             <h3 className="text-lg font-semibold text-gray-900 mb-2">{course.name}</h3>
+                             <p className="text-gray-600 text-sm mb-4">{course.shortname}</p>
+                             <div className="mb-4">
+                               <div className="flex justify-between text-sm mb-1">
+                                 <span className="text-gray-600">Progress</span>
+                                 <span className="text-gray-900 font-medium">{course.progress}%</span>
+                               </div>
+                               <div className="w-full bg-gray-200 rounded-full h-2">
+                                 <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${course.progress}%` }}></div>
+                               </div>
+                               <p className="text-xs text-gray-500 mt-1">{course.completedAssignments}/{course.totalAssignments} lessons</p>
+                             </div>
+                             <div className="flex items-center justify-between">
+                               <span className="text-sm text-gray-600">{course.weeks} weeks</span>
+                               <button 
+                                 onClick={async () => {
+                                   console.log('🔄 Continue Learning clicked for course:', course.id);
+                                   // Fetch detailed course information including real image
+                                   if (course.id) {
+                                     try {
+                                       const detailedCourse = await moodleService.getCourseDetails(course.id.toString());
+                                       console.log('✅ Detailed course fetched:', detailedCourse);
+                                       setSelectedCourse(detailedCourse || course);
+                                     } catch (error) {
+                                       console.error('❌ Error fetching detailed course:', error);
+                                       setSelectedCourse(course);
+                                     }
+                                   } else {
+                                     setSelectedCourse(course);
+                                   }
+                                   setShowCourseDetail(true);
+                                   // Fetch lesson activities for this course
+                                   if (course.id) {
+                                     await fetchLessonActivities(course.id.toString());
+                                   }
+                                 }}
+                                 className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                               >
+                                 <Play className="w-4 h-4" />
+                                 <span>Continue Learning</span>
+                               </button>
+                             </div>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+
+                   {/* Current Lessons Section with Real Data */}
+                   <div className="mb-8">
+                     <h2 className="text-2xl font-bold text-gray-900 mb-6">Current Lessons</h2>
+                     {lessonsLoading ? (
+                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                         {[1, 2, 3, 4, 5, 6].map((i) => (
+                           <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                             <Skeleton className="h-32 w-full" />
+                             <div className="p-6">
+                               <Skeleton className="h-6 w-3/4 mb-2" />
+                               <Skeleton className="h-4 w-full mb-4" />
+                               <Skeleton className="h-4 w-1/2 mb-4" />
+                               <Skeleton className="h-10 w-full" />
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                         {displayLessons.map((lesson, index) => (
+                           <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                             <div className="h-32 bg-gradient-to-br from-blue-400 to-blue-600 relative">
+                               {/* Status Icon */}
+                               <div className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center">
+                                 {lesson.status === 'completed' ? (
+                                   <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                                     <CheckCircle className="w-3 h-3 text-green-600" />
+                                   </div>
+                                 ) : lesson.status === 'locked' ? (
+                                   <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                                     <Circle className="w-3 h-3 text-gray-600" />
+                                   </div>
+                                 ) : (
+                                   <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                                     <Info className="w-3 h-3 text-blue-600" />
+                                   </div>
+                                 )}
+                               </div>
+                             </div>
+                             <div className="p-6">
+                               <div className="mb-4">
+                                 <div className="flex justify-between text-sm mb-1">
+                                   <span className="text-gray-600">Progress</span>
+                                   <span className="text-gray-900 font-medium">{lesson.progress}%</span>
+                                 </div>
+                                 <div className="w-full bg-gray-200 rounded-full h-2">
+                                   <div className={`h-2 rounded-full ${
+                                     lesson.status === 'completed' ? 'bg-green-600' : 
+                                     lesson.status === 'locked' ? 'bg-gray-400' : 'bg-blue-600'
+                                   }`} style={{ width: `${lesson.progress}%` }}></div>
+                                 </div>
+                               </div>
+                               <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
+                               <p className="text-gray-600 text-sm mb-3">{lesson.description}</p>
+                               <div className="flex items-center space-x-2 mb-3">
+                                 <Clock className="w-4 h-4 text-gray-400" />
+                                 <span className="text-sm text-gray-600">{lesson.duration}</span>
+                               </div>
+                               {lesson.prerequisites && (
+                                 <p className="text-xs text-gray-500 mb-4">Prerequisites: {lesson.prerequisites}</p>
+                               )}
+                               <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                 lesson.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
+                                 lesson.status === 'continue' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
+                                 lesson.status === 'locked' ? 'bg-gray-100 text-gray-700 cursor-not-allowed' :
+                                 'bg-blue-600 text-white hover:bg-blue-700'
+                               }`}>
+                                 {lesson.status === 'completed' ? 'Review Lesson' : 
+                                  lesson.status === 'continue' ? 'Continue Lesson' : 
+                                  lesson.status === 'locked' ? 'Locked' : 'Start Lesson'}
+                               </button>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+
+                   {/* Upcoming Activities Section with Real Data - Matching Image Design */}
+                   <div>
+                     <h2 className="text-2xl font-bold text-gray-900 mb-6">Upcoming Activities</h2>
+                     {activitiesLoading ? (
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                         {[1, 2, 3, 4, 5, 6].map((i) => (
+                           <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                             <div className="flex items-start space-x-4 mb-4">
+                               <Skeleton className="w-10 h-10 rounded-lg" />
+                               <div className="flex-1">
+                                 <Skeleton className="h-6 w-3/4 mb-2" />
+                                 <Skeleton className="h-4 w-1/2 mb-4" />
+                                 <Skeleton className="h-4 w-1/3 mb-4" />
+                               </div>
+                             </div>
+                             <Skeleton className="h-10 w-full" />
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                         {displayActivities.map((activity, index) => (
+                           <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                             <div className="flex items-start space-x-4 mb-4">
+                               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                 <activity.icon className="w-5 h-5 text-blue-600" />
+                               </div>
+                               <div className="flex-1">
+                                 <h3 className="text-lg font-semibold text-gray-900 mb-1">{activity.title}</h3>
+                                 <div className="flex items-center space-x-2 mb-2">
+                                   <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                     activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                   }`}>
+                                     {activity.difficulty}
+                                   </span>
+                                   <span className="text-sm font-medium text-blue-600">{activity.points}</span>
+                                 </div>
+                                 <div className="flex items-center space-x-2 mb-3">
+                                   <Clock className="w-4 h-4 text-gray-400" />
+                                   <span className="text-sm text-gray-600">{activity.duration}</span>
+                                 </div>
+                                 <div className="flex items-center space-x-2 mb-4">
+                                   {activity.status === 'completed' ? (
+                                     <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                                       <CheckCircle className="w-3 h-3 text-green-600" />
+                                     </div>
+                                   ) : (
+                                     <Calendar className="w-4 h-4 text-red-400" />
+                                   )}
+                                   <span className={`text-sm font-medium ${
+                                     activity.status === 'overdue' ? 'text-red-600' : 
+                                     activity.status === 'completed' ? 'text-green-600' : 'text-gray-600'
+                                   }`}>
+                                     {activity.status === 'overdue' ? 'Overdue' : 
+                                      activity.status === 'completed' ? 'Completed' : 'Pending'}
+                                   </span>
+                                 </div>
+                               </div>
+                             </div>
+                             <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                               activity.status === 'overdue' ? 'bg-orange-500 text-white hover:bg-orange-600' : 
+                               activity.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
+                               'bg-blue-600 text-white hover:bg-blue-700'
+                             }`}>
+                               {activity.status === 'overdue' ? 'Continue' : 
+                                activity.status === 'completed' ? 'Review' : 'Start'}
+                             </button>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 </>
+               )}
+
+               {activeTab === 'courses' && (
+                 <div>
+                   <h2 className="text-2xl font-bold text-gray-900 mb-6">All My Courses</h2>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {userCourses.map((course, index) => (
+                       <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                         <div className={`h-32 ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'gradient')} relative`}>
+                           <div className="absolute top-3 right-3">
+                             <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-800">
+                               Active
+                             </span>
+                           </div>
+                         </div>
+                         <div className="p-6">
+                           <h3 className="text-lg font-semibold text-gray-900 mb-2">{course.fullname}</h3>
+                           <p className="text-gray-600 text-sm mb-4">{course.shortname}</p>
+                           <div className="mb-4">
+                             <div className="flex justify-between text-sm mb-1">
+                               <span className="text-gray-600">Progress</span>
+                               <span className="text-gray-900 font-medium">{course.progress || 0}%</span>
+                             </div>
+                             <div className="w-full bg-gray-200 rounded-full h-2">
+                               <div className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} h-2 rounded-full`} style={{ width: `${course.progress || 0}%` }}></div>
+                             </div>
+                           </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-sm text-gray-600">Course ID: {course.id}</span>
+                             <button className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'hover')} text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors`}>
+                               View Course
+                             </button>
+                           </div>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
+
+               {activeTab === 'lessons' && (
+                 <div>
+                   <h2 className="text-2xl font-bold text-gray-900 mb-6">Current Lessons</h2>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {realLessons.map((lesson, index) => (
+                       <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                         <div className="h-32 bg-gradient-to-br from-green-400 to-green-600 relative">
+                           <div className="absolute top-3 right-3 w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                             <Play className="w-3 h-3 text-green-600" />
+                           </div>
+                         </div>
+                         <div className="p-6">
+                           <div className="mb-4">
+                             <div className="flex justify-between text-sm mb-1">
+                               <span className="text-gray-600">Progress</span>
+                               <span className="text-gray-900 font-medium">{lesson.progress}%</span>
+                             </div>
+                             <div className="w-full bg-gray-200 rounded-full h-2">
+                               <div className="bg-green-600 h-2 rounded-full" style={{ width: `${lesson.progress}%` }}></div>
+                             </div>
+                           </div>
+                           <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
+                           <p className="text-gray-600 text-sm mb-3">{lesson.description}</p>
+                           <div className="flex items-center space-x-2 mb-3">
+                             <Clock className="w-4 h-4 text-gray-400" />
+                             <span className="text-sm text-gray-600">{lesson.duration}</span>
+                           </div>
+                           <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                             lesson.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
+                             lesson.status === 'continue' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
+                             'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                           }`}>
+                             {lesson.status === 'completed' ? 'Completed' : 
+                              lesson.status === 'continue' ? 'Continue Lesson' : 'Start Lesson'}
+                           </button>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
+
+               {activeTab === 'activities' && (
+                 <div>
+                   <h2 className="text-2xl font-bold text-gray-900 mb-6">All Activities</h2>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {realActivities.map((activity, index) => (
+                       <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                         <div className="flex items-start space-x-4 mb-4">
+                           <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                             <activity.icon className="w-5 h-5 text-purple-600" />
+                           </div>
+                           <div className="flex-1">
+                             <h3 className="text-lg font-semibold text-gray-900 mb-1">{activity.title}</h3>
+                             <div className="flex items-center space-x-2 mb-2">
+                               <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                 activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                               }`}>
+                                 {activity.difficulty}
+                               </span>
+                               <span className="text-sm font-medium text-purple-600">{activity.points}</span>
+                             </div>
+                             <div className="flex items-center space-x-2 mb-3">
+                               <Clock className="w-4 h-4 text-gray-400" />
+                               <span className="text-sm text-gray-600">{activity.duration}</span>
+                             </div>
+                             <div className="flex items-center space-x-2 mb-4">
+                               <Calendar className="w-4 h-4 text-red-400" />
+                               <span className={`text-sm font-medium ${
+                                 activity.status === 'overdue' ? 'text-red-600' : 
+                                 activity.status === 'completed' ? 'text-green-600' : 'text-gray-600'
+                               }`}>
+                                 {activity.status === 'overdue' ? 'Overdue' : 
+                                  activity.status === 'completed' ? 'Completed' : 'Pending'}
+                               </span>
+                             </div>
+                           </div>
+                         </div>
+                         <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                           activity.status === 'overdue' ? 'bg-orange-500 text-white hover:bg-orange-600' : 
+                           activity.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
+                           'bg-purple-600 text-white hover:bg-purple-700'
+                         }`}>
+                           {activity.status === 'overdue' ? 'Continue' : 
+                            activity.status === 'completed' ? 'View' : 'Start'}
+                         </button>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
+
+               {activeTab === 'achievements' && (
+                 <div>
+                   <h2 className="text-2xl font-bold text-gray-900 mb-6">My Achievements</h2>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                       <div className="flex items-center space-x-4 mb-4">
+                         <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                           <Trophy className="w-6 h-6 text-yellow-600" />
+                         </div>
+                         <div>
+                           <h3 className="text-lg font-semibold text-gray-900">First Course Completed</h3>
+                           <p className="text-gray-600 text-sm">Completed your first course</p>
+                         </div>
+                       </div>
+                       <div className="flex items-center justify-between">
+                         <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
+                         <span className="text-sm font-medium text-green-600">+50 points</span>
+                       </div>
+                     </div>
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                       <div className="flex items-center space-x-4 mb-4">
+                         <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                           <Star className="w-6 h-6 text-blue-600" />
+                         </div>
+                         <div>
+                           <h3 className="text-lg font-semibold text-gray-900">Perfect Score</h3>
+                           <p className="text-gray-600 text-sm">Got 100% on an assignment</p>
+                         </div>
+                       </div>
+                       <div className="flex items-center justify-between">
+                         <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
+                         <span className="text-sm font-medium text-green-600">+100 points</span>
+                       </div>
+                     </div>
+                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                       <div className="flex items-center space-x-4 mb-4">
+                         <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                           <Flame className="w-6 h-6 text-green-600" />
+                         </div>
+                         <div>
+                           <h3 className="text-lg font-semibold text-gray-900">Learning Streak</h3>
+                           <p className="text-gray-600 text-sm">7 days of continuous learning</p>
+                         </div>
+                       </div>
+                       <div className="flex items-center justify-between">
+                         <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
+                         <span className="text-sm font-medium text-green-600">+75 points</span>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               )}
+
+               {activeTab === 'schedule' && (
+                 <div>
+                   <h2 className="text-2xl font-bold text-gray-900 mb-6">My Schedule</h2>
+                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                     <div className="grid grid-cols-7 gap-2 mb-6">
+                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                         <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
+                           {day}
+                         </div>
+                       ))}
+                       {Array.from({ length: 35 }, (_, i) => {
+                         const date = new Date();
+                         date.setDate(date.getDate() - 15 + i);
+                         const isToday = date.toDateString() === new Date().toDateString();
+                         const hasActivity = Math.random() > 0.7;
+                         
+                         return (
+                           <div
+                             key={i}
+                             className={`text-center py-2 rounded-lg cursor-pointer transition-colors ${
+                               isToday 
+                                 ? 'bg-blue-600 text-white' 
+                                 : hasActivity 
+                                   ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                                   : 'text-gray-600 hover:bg-gray-100'
+                             }`}
+                           >
+                             {date.getDate()}
+                           </div>
+                         );
+                       })}
+                     </div>
+                     <div className="space-y-3">
+                       <h3 className="font-semibold text-gray-900">Today's Schedule</h3>
+                       <div className="space-y-2">
+                         <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
+                           <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                           <div>
+                             <p className="text-sm font-medium text-gray-900">HTML Basics Lesson</p>
+                             <p className="text-xs text-gray-600">9:00 AM - 10:30 AM</p>
+                           </div>
+                         </div>
+                         <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
+                           <div className="w-3 h-3 bg-green-600 rounded-full"></div>
+                           <div>
+                             <p className="text-sm font-medium text-gray-900">Assignment Due</p>
+                             <p className="text-xs text-gray-600">2:00 PM - 3:00 PM</p>
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               )}
+             </>
+           )}
+
+           {/* Floating Action Button for AI Buddy */}
+           <div className="fixed bottom-6 right-6 z-50">
+             <button 
+               onClick={() => window.open('/dashboard/student/ai-buddy', '_blank')}
+               className="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
+               title="KODEIT AI Buddy"
+             >
+               <Zap className="w-6 h-6" />
+             </button>
+           </div>
+
+           {/* Logout Dialog */}
+           {showLogoutDialog && (
+             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+               <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+                 <div className="flex items-center space-x-3 mb-4">
+                   <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                     <LogOut className="w-5 h-5 text-red-500" />
+                   </div>
+                   <div>
+                     <h3 className="text-lg font-semibold text-gray-900">Confirm Logout</h3>
+                     <p className="text-sm text-gray-600">Are you sure you want to logout?</p>
+                   </div>
+                 </div>
+                 <div className="flex space-x-3">
+                   <button
+                     onClick={() => setShowLogoutDialog(false)}
+                     className="flex-1 px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                   >
+                     Cancel
+                   </button>
+                   <button
+                     onClick={handleLogout}
+                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                   >
+                     Logout
+                   </button>
+                 </div>
+               </div>
+             </div>
+           )}
+         </div>
+       </div>
+     );
+   };
 
   // Course Detail View Component
   const renderCourseDetail = () => {
     if (!selectedCourse) return null;
-
-    // Get lessons for this specific course
-    const courseLessons = realLessons.filter(lesson => 
-      lesson.courseName === selectedCourse.name || 
-      lesson.courseName === selectedCourse.fullname
-    );
-
-    // Fallback lessons if no real data
-    const displayLessons = courseLessons.length > 0 ? courseLessons : [
-      {
-        title: "Internet Safety & Digital Citizenship",
-        description: "Learn how to stay safe online and be a good digital citizen",
-        duration: "45 min",
-        progress: 75,
-        status: "continue",
-        icon: "📖"
-      },
-      {
-        title: "Computer Hardware Basics",
-        description: "Understanding computer components and how they work together",
-        duration: "60 min", 
-        progress: 100,
-        status: "completed",
-        icon: "📖"
-      },
-      {
-        title: "File Management & Organization",
-        description: "Learn to organize and manage digital files effectively",
-        duration: "50 min",
-        progress: 45,
-        status: "continue",
-        prerequisites: "Computer Hardware Basics",
-        icon: "📖"
-      },
-      {
-        title: "Digital Communication Tools",
-        description: "Explore email, messaging, and collaboration platforms",
-        duration: "55 min",
-        progress: 0,
-        status: "locked",
-        prerequisites: "File Management & Organization",
-        icon: "📖"
-      }
-    ];
-
+    
     return (
       <div className="w-full">
         {/* Header with Back Button */}
@@ -1969,7 +2698,7 @@ const StudentDashboard: React.FC = () => {
                 <ChevronLeft className="w-5 h-5" />
                 <span>Back to Courses</span>
               </button>
-                       </div>
+            </div>
             <div className="flex items-center space-x-2">
               <img 
                 src="/logo.png" 
@@ -1983,11 +2712,11 @@ const StudentDashboard: React.FC = () => {
               />
               <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-blue-600 rounded-lg flex items-center justify-center hidden">
                 <span className="text-white font-bold text-xs">K</span>
-                       </div>
+              </div>
               <span className="text-lg font-bold text-gray-900">KODEIT</span>
-                     </div>
-                     </div>
-                   </div>
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-6">
           {/* Course Overview Card */}
@@ -1999,135 +2728,101 @@ const StudentDashboard: React.FC = () => {
                   src={selectedCourse.courseimage} 
                   alt={selectedCourse.name}
                   className="w-full h-full object-cover opacity-20"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
                 />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600"></div>
-              )}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <BookOpen className="w-16 h-16 text-white opacity-80" />
-                       </div>
-              
-              {/* Course Info Overlay */}
-              <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
-                <div className="text-center text-white">
-                  <div className="mb-4">
-                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
-                      {selectedCourse.difficulty}
-                    </span>
-                       </div>
-                  <h1 className="text-3xl font-bold mb-2">{selectedCourse.name}</h1>
-                  <p className="text-lg opacity-90">{selectedCourse.shortname}</p>
-                     </div>
-                     </div>
-                   </div>
-
-            {/* Course Metrics */}
+              ) : null}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600"></div>
+              <div className="absolute bottom-6 left-6 text-white">
+                <h1 className="text-3xl font-bold mb-2">{selectedCourse.name || selectedCourse.fullname}</h1>
+                <p className="text-blue-100">{selectedCourse.shortname}</p>
+              </div>
+            </div>
+            
+            {/* Course Content */}
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <BookOpen className="w-5 h-5 text-blue-600" />
-                       </div>
-                       <div>
-                    <p className="text-sm text-gray-600">Lessons</p>
-                    <p className="text-lg font-semibold text-gray-900">{selectedCourse.completedAssignments}/{selectedCourse.totalAssignments}</p>
-                       </div>
-                     </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-green-600" />
-                     </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Duration</p>
-                    <p className="text-lg font-semibold text-gray-900">{selectedCourse.weeks} weeks</p>
-                   </div>
-                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <User className="w-5 h-5 text-purple-600" />
-               </div>
-               <div>
-                    <p className="text-sm text-gray-600">Progress</p>
-                    <p className="text-lg font-semibold text-gray-900">{selectedCourse.progress}%</p>
-                       </div>
-                         </div>
-                   </div>
-
-              {/* Course Progress Bar */}
-                         <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Course Progress</span>
-                  <span className="text-gray-900 font-medium">{selectedCourse.progress}%</span>
-                         </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-blue-600 h-3 rounded-full transition-all duration-300" style={{ width: `${selectedCourse.progress}%` }}></div>
-                       </div>
-                         </div>
-                       </div>
-                     </div>
-
-          {/* Course Lessons Section */}
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Course Lessons</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {displayLessons.map((lesson, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  {/* Lesson Image */}
-                  <div className="h-32 bg-gradient-to-br from-blue-400 to-blue-600 relative">
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                      <BookOpen className="w-8 h-8 text-white opacity-80" />
-                   </div>
-                    
-                    {/* Status Icon */}
-                    <div className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center">
-                      {lesson.status === 'completed' ? (
-                        <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                          <CheckCircle className="w-3 h-3 text-green-600" />
-                 </div>
-                      ) : lesson.status === 'locked' ? (
-                        <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
-                          <Circle className="w-3 h-3 text-gray-600" />
-                        </div>
-                      ) : (
-                        <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                          <Info className="w-3 h-3 text-blue-600" />
-               </div>
-             )}
-                    </div>
-           </div>
-
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
-                    <p className="text-gray-600 text-sm mb-3">{lesson.description}</p>
-                    
-                    <div className="flex items-center space-x-2 mb-3">
-                      <Clock className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">{lesson.duration}</span>
-                    </div>
-
-                    {lesson.prerequisites && (
-                      <p className="text-xs text-gray-500 mb-4">Prerequisites: {lesson.prerequisites}</p>
-                    )}
-
-                    <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      lesson.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
-                      lesson.status === 'continue' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
-                      lesson.status === 'locked' ? 'bg-gray-100 text-gray-700 cursor-not-allowed' :
-                      'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}>
-                      {lesson.status === 'completed' ? 'Review Lesson' : 
-                       lesson.status === 'continue' ? 'Continue Lesson' : 
-                       lesson.status === 'locked' ? 'Locked' : 'Start Lesson'}
-                    </button>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {courseLessons && courseLessons.length > 0 ? courseLessons.length : 4}
                   </div>
+                  <div className="text-sm text-gray-600">Total Activities</div>
                 </div>
-              ))}
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {courseLessons && courseLessons.length > 0 ? 
+                      Math.round((courseLessons.filter(l => l.status === 'completed').length / courseLessons.length) * 100) : 25}%
+                  </div>
+                  <div className="text-sm text-gray-600">Progress</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {selectedCourse.weeks || 8}
+                  </div>
+                  <div className="text-sm text-gray-600">Weeks</div>
+                </div>
+              </div>
+              
+              {/* Course Description */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Course Description</h3>
+                <p className="text-gray-600">
+                  {selectedCourse.description || "This course provides comprehensive learning materials and activities designed to enhance your skills and knowledge."}
+                </p>
+              </div>
             </div>
           </div>
+
+          {/* Course Lessons */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Course Lessons</h3>
+            {courseLessonsLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                ))}
+              </div>
+            ) : courseLessons && courseLessons.length > 0 ? (
+              <div className="space-y-4">
+                {courseLessons.map((lesson, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-900">{lesson.title}</h4>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        lesson.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        lesson.status === 'continue' ? 'bg-blue-100 text-blue-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {lesson.status === 'completed' ? 'Completed' :
+                         lesson.status === 'continue' ? 'In Progress' : 'Not Started'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">{lesson.duration}</span>
+                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${lesson.progress}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 py-8">
+                <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No lessons available for this course yet.</p>
+              </div>
+            )}
+          </div>
         </div>
-         </div>
-       );
-     };
+      </div>
+    );
+  };
 
   const renderG4G7Dashboard = () => (
     <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
@@ -2696,101 +3391,89 @@ const StudentDashboard: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* Logout Dialog */}
+      {showLogoutDialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <LogOut className="w-5 h-5 text-red-500" />
+              <h2 style={{ fontSize: '18px', fontWeight: 'bold' }}>Confirm Logout</h2>
+            </div>
+            <p style={{ marginBottom: '20px', color: '#666' }}>
+              Are you sure you want to logout, <strong>{currentUser?.fullname || 'Student'}</strong>? 
+              You will be redirected to the login page.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setShowLogoutDialog(false)}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleLogout}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
   // Render appropriate dashboard based on grade
   const renderGradeBasedDashboard = () => {
-    console.log('🎓 Rendering dashboard - Type:', dashboardType, 'Grade:', studentGrade);
-    
-    // Show loading state while grade detection is in progress
-    if (!gradeDetectionComplete) {
-      return (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center space-x-3">
-              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Loading Your Dashboard</h2>
-                <p className="text-gray-600">Detecting your grade level and preparing your personalized dashboard...</p>
-              </div>
-            </div>
-          </div>
-          
-          {/* Debug button for development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="space-y-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-medium text-yellow-800">Debug Mode</h3>
-                    <p className="text-sm text-yellow-700">Current Grade: {studentGrade}, Dashboard Type: {dashboardType}</p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={clearAllCachedData}
-                      className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
-                    >
-                      Clear Cache
-                    </button>
-                    <button
-                      onClick={forceGrade1ForTesting}
-                      className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                    >
-                      Force Grade 1
-                    </button>
-                    <button
-                      onClick={debugGradeDetectionTest}
-                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                    >
-                      Debug Grade
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Dashboard Comparison */}
-              <DashboardComparison 
-                currentGrade={studentGrade}
-                currentDashboardType={dashboardType}
-                detectedCohort={studentCohort?.name}
-              />
-            </div>
-          )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </div>
-        </div>
-      );
-    }
-    
     switch (dashboardType) {
       case 'G1_G3':
-        console.log('🎓 Rendering G1-G3 Dashboard');
         return renderG1G3Dashboard();
       case 'G4_G7':
-        console.log('🎓 Rendering G4-G7 Dashboard');
         return renderG4G7Dashboard();
       case 'G8_PLUS':
       default:
-        console.log('🎓 Rendering G8+ Dashboard');
         return renderG8PlusDashboard();
     }
   };
 
-  // All dashboards should use DashboardLayout for consistent functionality
-  console.log('🎓 Final render - Dashboard Type:', dashboardType, 'Grade:', studentGrade, 'User:', currentUser?.fullname);
+  // For G1-G3 dashboard, render without main dashboard layout
+  if (dashboardType === 'G1_G3') {
+    return renderG1G3Dashboard();
+  }
 
   return (
-    <DashboardLayout 
-      userRole="student" 
-      userName={currentUser?.fullname || "Student"}
-      studentGrade={studentGrade}
-      dashboardType={dashboardType}
-    >
+    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       {showCourseDetail ? renderCourseDetail() : renderGradeBasedDashboard()}
     </DashboardLayout>
   );

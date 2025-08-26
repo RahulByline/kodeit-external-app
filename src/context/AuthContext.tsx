@@ -137,11 +137,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    console.log('🔄 AuthContext logout called');
+    console.log('🔄 Clearing user state...');
     setCurrentUser(null);
     setUserRole(null);
+    console.log('🔄 Clearing localStorage...');
     localStorage.removeItem('moodle_token');
     localStorage.removeItem('token');
     localStorage.removeItem('currentUser'); // Clear current user data
+    console.log('✅ AuthContext logout completed');
   };
 
   const updateProfile = async (profileData: Partial<UserData>): Promise<UserData | null> => {

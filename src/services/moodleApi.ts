@@ -4163,6 +4163,14 @@ export const moodleService = {
     try {
       console.log('🎓 Fetching student cohort for user:', userId);
       
+      // Check cache first
+      const cacheKey = `student_dashboard_studentCohort_${userId}`;
+      const cachedCohort = localStorage.getItem(cacheKey);
+      if (cachedCohort) {
+        console.log('🎓 Found cached cohort data for user:', userId);
+        return JSON.parse(cachedCohort);
+      }
+      
       // First, get all cohorts
       const cohortsResponse = await moodleApi.get('', {
         params: {
@@ -4176,11 +4184,13 @@ export const moodleService = {
       }
       
       console.log('📚 Found', cohortsResponse.data.length, 'cohorts, checking for user...');
-      
+      console.log('📚 Available cohorts:', cohortsResponse.data.map(c => ({ id: c.id, name: c.name, idnumber: c.idnumber })));
       
       // Check each cohort to see if the student is a member
       for (const cohort of cohortsResponse.data) {
         try {
+          console.log('🔍 Checking cohort:', cohort.name, '(ID:', cohort.id, ')');
+          
           const membersResponse = await moodleApi.get('', {
             params: {
               wsfunction: 'core_cohort_get_cohort_members',
@@ -4190,8 +4200,15 @@ export const moodleService = {
           
           if (membersResponse.data && membersResponse.data.length > 0) {
             const cohortMembers = membersResponse.data[0];
+            console.log('👥 Cohort members:', cohortMembers.userids);
+            
             if (cohortMembers.userids && cohortMembers.userids.includes(parseInt(userId))) {
               console.log('✅ Student found in cohort:', cohort.name);
+              
+              // Cache the cohort data
+              localStorage.setItem(cacheKey, JSON.stringify(cohort));
+              localStorage.setItem('student_dashboard_studentCohort', JSON.stringify(cohort));
+              
               return cohort;
             }
           }
