@@ -96,14 +96,13 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('curriculum');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['1'])); // Default expand first section
+  const [selectedActivity, setSelectedActivity] = useState<CourseActivity | null>(null);
+  const [activityDetails, setActivityDetails] = useState<any>(null);
+  const [loadingActivity, setLoadingActivity] = useState(false);
   
   // Course sections and activities
   const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [popularCourses, setPopularCourses] = useState<PopularCourse[]>([]);
-  
-  // Activity states
-  const [selectedActivity, setSelectedActivity] = useState<CourseActivity | null>(null);
-  const [isActivityLoading, setIsActivityLoading] = useState(false);
 
   useEffect(() => {
     fetchCourseDetails();
@@ -296,7 +295,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
   const handleActivityClick = async (activity: CourseActivity) => {
     console.log('🎯 Activity clicked:', activity.name);
     setSelectedActivity(activity);
-    setIsActivityLoading(true);
+    setLoadingActivity(true);
     
     try {
       // Fetch detailed activity information
@@ -321,7 +320,40 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
     } catch (error) {
       console.error('❌ Error fetching activity details:', error);
     } finally {
-      setIsActivityLoading(false);
+      setLoadingActivity(false);
+    }
+  };
+
+  const handleDownloadMaterials = (activity: CourseActivity) => {
+    if (activity.details?.contents && activity.details.contents.length > 0) {
+      activity.details.contents.forEach((content: any) => {
+        if (content.fileurl) {
+          const link = document.createElement('a');
+          link.href = content.fileurl;
+          link.download = content.filename || 'material';
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      });
+    }
+  };
+
+  const handleLaunchActivity = (activity: CourseActivity) => {
+    if (activity.details?.url) {
+      // Open activity in new tab
+      window.open(activity.details.url, '_blank');
+    } else if (activity.details?.contents && activity.details.contents.length > 0) {
+      // For file-based activities, open the first file
+      const firstContent = activity.details.contents[0];
+      if (firstContent.fileurl) {
+        window.open(firstContent.fileurl, '_blank');
+      }
+    } else {
+      // Fallback: show activity content in modal
+      console.log('Launching activity:', activity.name);
+      // You can add more specific handling here based on activity type
     }
   };
 
@@ -345,46 +377,52 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
 
      if (loading) {
      return (
-       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-         <div className="flex items-center space-x-2">
-           <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
-           <span className="text-gray-600">Loading course details...</span>
+       <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+         <div className="flex items-center justify-center min-h-[400px]">
+           <div className="flex items-center space-x-2">
+             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
+             <span className="text-gray-600">Loading course details...</span>
+           </div>
          </div>
-       </div>
+       </DashboardLayout>
      );
    }
 
      if (error) {
      return (
-       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-         <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-           <div className="flex items-center space-x-2 text-red-800 mb-2">
-             <Info className="w-5 h-5" />
-             <span className="font-medium">Error Loading Course</span>
+       <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+         <div className="flex items-center justify-center min-h-[400px] p-6">
+           <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
+             <div className="flex items-center space-x-2 text-red-800 mb-2">
+               <Info className="w-5 h-5" />
+               <span className="font-medium">Error Loading Course</span>
+             </div>
+             <p className="text-red-700 mb-3">{error}</p>
+             <Button onClick={fetchCourseDetails} variant="outline" size="sm">
+               <RefreshCw className="w-4 h-4 mr-2" />
+               Try Again
+             </Button>
            </div>
-           <p className="text-red-700 mb-3">{error}</p>
-           <Button onClick={fetchCourseDetails} variant="outline" size="sm">
-             <RefreshCw className="w-4 h-4 mr-2" />
-             Try Again
-           </Button>
          </div>
-       </div>
+       </DashboardLayout>
      );
    }
 
      if (!course) {
      return (
-       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-         <div className="text-center py-12">
-           <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-           <h3 className="text-lg font-medium text-gray-900 mb-2">Course Not Found</h3>
-           <p className="text-gray-500">The requested course could not be found.</p>
-           <Button onClick={onBack} className="mt-4">
-             <ArrowLeft className="w-4 h-4 mr-2" />
-             Back to Courses
-           </Button>
+       <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+         <div className="flex items-center justify-center min-h-[400px]">
+           <div className="text-center py-12">
+             <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+             <h3 className="text-lg font-medium text-gray-900 mb-2">Course Not Found</h3>
+             <p className="text-gray-500">The requested course could not be found.</p>
+             <Button onClick={onBack} className="mt-4">
+               <ArrowLeft className="w-4 h-4 mr-2" />
+               Back to Courses
+             </Button>
+           </div>
          </div>
-       </div>
+       </DashboardLayout>
      );
    }
 
@@ -399,35 +437,32 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                      '/card1.webp';
 
     return (
-     <div className="min-h-screen bg-gray-50">
-       {/* Full Screen Header */}
-       <div className="bg-white border-b border-gray-200 px-6 py-4">
-         <div className="flex items-center justify-between">
-           <div className="flex items-center space-x-4">
-             <Button 
-               variant="outline" 
-               size="sm" 
-               onClick={onBack}
-               className="flex items-center space-x-2"
-             >
-               <ArrowLeft className="w-4 h-4" />
-               <span>Back to Courses</span>
-             </Button>
-             <div className="h-6 w-px bg-gray-300"></div>
-             <h1 className="text-xl font-semibold text-gray-900">{course.fullname}</h1>
-           </div>
-           <div className="flex items-center space-x-4">
-             <div className="text-sm text-gray-600">
-               Progress: {course.progress || 0}%
-             </div>
-             <div className="w-32">
-               <Progress value={course.progress || 0} className="h-2" />
-             </div>
-           </div>
-         </div>
-       </div>
-
-       <div className="p-6 space-y-6">
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onBack}
+                className="flex items-center space-x-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to Courses</span>
+              </Button>
+              <div className="h-6 w-px bg-gray-300"></div>
+              <h1 className="text-xl font-semibold text-gray-900">{course.fullname}</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-600">
+                Progress: {course.progress || 0}%
+              </div>
+              <div className="w-32">
+                <Progress value={course.progress || 0} className="h-2" />
+              </div>
+            </div>
+          </div>
         {/* Course Banner */}
         <div className="relative h-64 bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 rounded-lg overflow-hidden">
           {/* Background Image */}
@@ -758,7 +793,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                   </Button>
                 </div>
                 
-                {isActivityLoading ? (
+                {loadingActivity ? (
                   <div className="flex items-center justify-center py-8">
                     <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
                   </div>
@@ -794,11 +829,13 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                     </div>
                     
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Materials
-                      </Button>
-                      <Button size="sm">
+                      {selectedActivity.details?.contents && selectedActivity.details.contents.length > 0 && (
+                        <Button variant="outline" size="sm" onClick={() => handleDownloadMaterials(selectedActivity)}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Materials
+                        </Button>
+                      )}
+                      <Button size="sm" onClick={() => handleLaunchActivity(selectedActivity)}>
                         <Play className="w-4 h-4 mr-2" />
                         {getActivityButtonText(selectedActivity)}
                       </Button>
@@ -810,7 +847,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
           </div>
                  )}
        </div>
-     </div>
+     </DashboardLayout>
    );
  };
 
