@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Shield, School, Users, GraduationCap } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Shield, School, Users, GraduationCap, Sparkles, CheckCircle } from "lucide-react";
 import { dashboardRoles as sharedDashboardRoles } from "@/data/dashboardRoles";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -101,45 +101,119 @@ const DashboardCardsSection = () => {
       </div>
       
       {/* Cards styled like the provided design */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto"> {/* smaller gap */}
-        {enhancedRoles.map((role, index) => (
-          <Card
-            key={role.id}
-            className={`relative overflow-hidden rounded-2xl shadow-xl border-0 bg-gradient-to-b ${role.gradient} h-[100px] w-full flex flex-col items-center text-white`} // decreased height
-            data-aos="fade-up"
-            data-aos-delay={index * 150}
-          >
- <CardContent className="flex flex-col items-center text-center w-full px-4 pt-3 pb-2 gap-y-2">              {/* Top white icon circle, reduced size */}
-              <div className="w-16 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center mx-auto mb-3">
-                {/* Correctly rendering the icon component, reduced size */}
-                <role.icon className={`${role.iconColor} w-6 h-6`} />
-              </div>
-              {/* Title */}
-              <h3 className="text-base font-semibold tracking-wide mb-1"> {/* smaller font size */}
-                {role.title}
-              </h3>
-              {/* Description */}
-              <p className="text-white/90 text-xs leading-relaxed px-1 mb-0"> {/* slightly smaller and less padding */}
-                {role.description}
-              </p>
-              {/* Spacer to push CTA to bottom */}
-              {/* <div className="flex-1" /> */}
-              {/* White pill CTA button */}
-              <Button
-   variant="default"
-  className="mt-2 bg-white text-gray-800 hover:bg-gray-100 rounded-full px-4 py-1 shadow-md hover:shadow-lg transition-all text-xs" 
-                onClick={() => handleAccessDashboard(role.id)}
-              >
-                Access Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  </section>
-  
-  );
-};
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Enhanced Grades 3-7 Dashboard */}
+                  <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-blue-200">
+                    <CardHeader className="text-center">
+                      <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                        <Sparkles className="w-8 h-8 text-white" />
+                      </div>
+                      <CardTitle className="text-xl font-bold text-gray-900">Enhanced Grades 3-7</CardTitle>
+                      <CardDescription className="text-gray-600">
+                        Modern, interactive dashboard designed specifically for elementary to middle school students
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-center">
+                      <div className="space-y-3 text-sm text-gray-600">
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Interactive course cards</span>
+                        </div>
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Quick tools sidebar</span>
+                        </div>
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Progress tracking</span>
+                        </div>
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Study streak tracking</span>
+                        </div>
+                      </div>
+                      <Button 
+                        className="w-full mt-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                        onClick={() => navigate('/dashboard/student/enhanced')}
+                      >
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Launch Enhanced Dashboard
+                      </Button>
+                    </CardContent>
+                  </Card>
 
-export default DashboardCardsSection;
+                  {/* Existing dashboards... */}
+                  <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-green-200">
+                    <CardHeader className="text-center">
+                      <div className="mx-auto w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                        <Users className="w-8 h-8 text-white" />
+                      </div>
+                      <CardTitle className="text-xl font-bold text-gray-900">Grades 1-3 Dashboard</CardTitle>
+                      <CardDescription className="text-gray-600">
+                        Colorful and engaging interface for early elementary students
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-center">
+                      <div className="space-y-3 text-sm text-gray-600">
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Rainbow learning theme</span>
+                        </div>
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Simple navigation</span>
+                        </div>
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Visual progress indicators</span>
+                        </div>
+                        <div className="flex items-center justify-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>Kid-friendly interface</span>
+                        </div>
+                      </div>
+                      <Button 
+                        className="w-full mt-6 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700"
+                        onClick={() => navigate('/dashboards/grades1-3')}
+                      >
+                        <Users className="w-4 h-4 mr-2" />
+                        Launch Grades 1-3
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Regular Role-based Dashboards */}
+                  {enhancedRoles.map((role, index) => (
+                    <Card
+                      key={role.id}
+                      className={`relative overflow-hidden rounded-2xl shadow-xl border-0 bg-gradient-to-b ${role.gradient} h-[100px] w-full flex flex-col items-center text-white`}
+                      data-aos="fade-up"
+                      data-aos-delay={index * 150}
+                    >
+                      <CardContent className="flex flex-col items-center text-center w-full px-4 pt-3 pb-2 gap-y-2">
+                        <div className="w-16 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center mx-auto mb-3">
+                          <role.icon className={`${role.iconColor} w-6 h-6`} />
+                        </div>
+                        <h3 className="text-base font-semibold tracking-wide mb-1">
+                          {role.title}
+                        </h3>
+                        <p className="text-white/90 text-xs leading-relaxed px-1 mb-0">
+                          {role.description}
+                        </p>
+                        <Button
+                          variant="default"
+                          className="mt-2 bg-white text-gray-800 hover:bg-gray-100 rounded-full px-4 py-1 shadow-md hover:shadow-lg transition-all text-xs"
+                          onClick={() => handleAccessDashboard(role.id)}
+                        >
+                          Access Dashboard
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </section>
+          );
+        };
+        
+        export default DashboardCardsSection;

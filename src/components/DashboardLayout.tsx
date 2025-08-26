@@ -347,7 +347,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
             title: 'DASHBOARD',
             items: [
               { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
-              { name: 'Enhanced Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}/enhanced` },
               { name: 'Community', icon: Users, path: `/dashboard/${userRole}/community` },
               { name: 'Enrollments', icon: GraduationCap, path: `/dashboard/${userRole}/enrollments` },
             ]

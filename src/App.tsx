@@ -112,8 +112,9 @@ const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
 const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
 const ScratchCodeEditor = lazy(() => import("./pages/student/ScratchCodeEditor"));
-const EnhancedStudentDashboard = lazy(() => import("./pages/student/EnhancedStudentDashboard"));
-const TestEnhancedDashboard = lazy(() => import("./pages/TestEnhancedDashboard"));
+
+// Enhanced dashboard for grades 3-7
+const EnhancedGrades3To7Dashboard = lazy(() => import("./pages/G1-G7/EnhancedGrades3To7Dashboard"));
 
 // Settings pages - lazy loaded
 const SchoolAdminSettings = lazy(() => import("./pages/SchoolAdminSettings"));
@@ -167,13 +168,8 @@ const App = () => {
                       <MyAIBuddy />
                       <TextSelectionPopupWrapper />
                   <Routes>
-                                 <Route path="/" element={<Index />} />
-                 <Route path="/test-enhanced" element={
-                   <Suspense fallback={<LoadingSpinner />}>
-                     <TestEnhancedDashboard />
-                   </Suspense>
-                 } />
-                 <Route path="/debug/roles" element={
+                <Route path="/" element={<Index />} />
+                <Route path="/debug/roles" element={
                   <Suspense fallback={<LoadingSpinner />}>
                     <RoleDebug />
                   </Suspense>
@@ -241,7 +237,7 @@ const App = () => {
                 <Route path="/dashboard/student/enhanced" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
-                      <EnhancedStudentDashboard />
+                      <EnhancedGrades3To7Dashboard />
                     </Suspense>
                   </ProtectedRoute>
                 } />
