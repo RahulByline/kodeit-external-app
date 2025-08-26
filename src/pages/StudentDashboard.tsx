@@ -41,7 +41,7 @@ import {
 import DashboardLayout from '../components/DashboardLayout';
 import { moodleService } from '../services/moodleApi';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import ScratchEditor from './ScratchEditor';
 import { getDashboardTypeByGrade, extractGradeFromCohortName, getGradeCohortInfo } from '../utils/gradeCohortMapping';
 import { Skeleton } from '../components/ui/skeleton';
@@ -973,6 +973,13 @@ const StudentDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
+              <Link 
+                to="/dashboard/student/enhanced"
+                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Trophy className="w-4 h-4" />
+                <span className="text-sm font-medium">Enhanced Dashboard</span>
+              </Link>
             </div>
           </div>
 
@@ -1054,6 +1061,16 @@ const StudentDashboard: React.FC = () => {
   const renderG4G7Dashboard = () => (
     <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
       <div className="mx-auto space-y-6">
+        {/* Enhanced Dashboard Button */}
+        <div className="flex justify-end">
+          <Link 
+            to="/dashboard/student/enhanced"
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Trophy className="w-4 h-4" />
+            <span className="text-sm font-medium">Enhanced Dashboard</span>
+          </Link>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Column - Main Content */}
           <div className="lg:col-span-3 space-y-6">
@@ -1220,6 +1237,13 @@ const StudentDashboard: React.FC = () => {
         
         {/* Dashboard Controls */}
         <div className="flex items-center space-x-3">
+          <Link 
+            to="/dashboard/student/enhanced"
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Trophy className="w-4 h-4" />
+            <span className="text-sm font-medium">Enhanced Dashboard</span>
+          </Link>
           <div className="flex items-center space-x-2 bg-white border border-gray-300 rounded-lg px-3 py-2">
             <span className="text-sm font-medium text-gray-700">Q2 2025 (Apr-Jun)</span>
             <ChevronDown className="w-4 h-4 text-gray-500" />
