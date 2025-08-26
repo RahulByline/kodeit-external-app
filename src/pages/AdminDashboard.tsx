@@ -1106,13 +1106,13 @@ const AdminDashboard: React.FC = () => {
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="text-sm text-green-600 font-medium">Live Data</span>
               </div>
-            </div>
+                </div>
 
             {/* Course Statistics Cards */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-white rounded-xl p-4 border border-gray-100">
                 <div className="flex items-center justify-between">
-                  <div>
+                      <div>
                     <p className="text-sm text-gray-600">Total Courses</p>
                     <p className="text-2xl font-bold text-gray-900">{stats.totalCourses}</p>
                   </div>
@@ -1211,12 +1211,12 @@ const AdminDashboard: React.FC = () => {
                           ></div>
                         </div>
                       </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
-            </div>
-          </div>
+                </div>
+              </div>
 
           {/* Enhanced Recent Activity */}
           <div className="bg-gradient-to-br from-white to-purple-50 rounded-2xl shadow-sm border border-purple-100 p-8">
@@ -1573,7 +1573,7 @@ const AdminDashboard: React.FC = () => {
         </div>
             </div>
           </div> */}
-            </div>
+        </div>
 
 
 
@@ -1585,11 +1585,11 @@ const AdminDashboard: React.FC = () => {
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold text-gray-900">Course Statistics</h2>
                 <p className="text-gray-600">Comprehensive course analytics and performance metrics</p>
-              </div>
+            </div>
               <div className="flex items-center space-x-2 mt-4 lg:mt-0">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="text-sm text-green-600 font-medium">Live Data</span>
-              </div>
+            </div>
             </div>
 
             {/* Course Statistics Cards */}
@@ -1602,9 +1602,9 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                     <BookOpen className="w-5 h-5 text-blue-600" />
-                  </div>
                 </div>
-              </div>
+            </div>
+          </div>
               <div className="bg-white rounded-xl p-4 border border-gray-100">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1638,7 +1638,7 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
+        </div>
 
             {/* Course Category Breakdown */}
             <div className="mb-6">
@@ -1666,7 +1666,7 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             {/* Top Performing Courses */}
-            <div>
+                  <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Performing Courses</h3>
               <div className="space-y-3">
                 {courseCompletionStats.slice(0, 3).map((stat, index) => (
@@ -1683,9 +1683,9 @@ const AdminDashboard: React.FC = () => {
                             <CheckCircle className="w-3 h-3 mr-1" />
                             {stat.completedUsers} completions
                           </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
+                    </div>
+                  </div>
+                  <div className="text-right">
                         <span className="text-lg font-bold text-green-600">{stat.completionRate}%</span>
                         <div className="text-xs text-gray-500 mb-1">completion</div>
                         <div className="w-16 h-2 bg-gray-200 rounded-full">
@@ -1695,9 +1695,9 @@ const AdminDashboard: React.FC = () => {
                           ></div>
                         </div>
                       </div>
-                    </div>
                   </div>
-                ))}
+                </div>
+              ))}
               </div>
             </div>
           </div>

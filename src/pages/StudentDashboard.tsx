@@ -36,10 +36,7 @@ import {
   Play as PlayIcon,
   User,
   MessageSquare,
-  Trophy,
-  Home,
-  Monitor,
-  Zap
+  Trophy
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { moodleService } from '../services/moodleApi';
@@ -155,19 +152,50 @@ interface LearningModule {
   total: number;
 }
 
+// Cache utilities
+const CACHE_PREFIX = 'student_dashboard_';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+const getCachedData = (key: string) => {
+  try {
+    const cached = localStorage.getItem(`${CACHE_PREFIX}${key}`);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        return data;
+      }
+    }
+  } catch (error) {
+    console.warn('Cache read error:', error);
+  }
+  return null;
+};
+
+const setCachedData = (key: string, data: any) => {
+  try {
+    localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify({
+      data,
+      timestamp: Date.now()
+    }));
+  } catch (error) {
+    console.warn('Cache write error:', error);
+  }
+};
 
 const StudentDashboard: React.FC = () => {
   const { currentUser } = useAuth();
   
   // Enhanced state management with loading states for different sections
-  const [stats, setStats] = useState<Stats>({
-    enrolledCourses: 0,
-    completedAssignments: 0,
-    pendingAssignments: 0,
-    averageGrade: 0,
-    totalActivities: 0,
-    activeStudents: 0
+  const [stats, setStats] = useState<Stats>(() => {
+    const cached = getCachedData('stats');
+    return cached || {
+      enrolledCourses: 0,
+      completedAssignments: 0,
+      pendingAssignments: 0,
+      averageGrade: 0,
+      totalActivities: 0,
+      activeStudents: 0
+    };
   });
   
   const [loading, setLoading] = useState(false); // Changed to false for instant render
@@ -180,16 +208,31 @@ const StudentDashboard: React.FC = () => {
   const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G8_PLUS');
   const [studentCohort, setStudentCohort] = useState<any>(null);
   
-  // G1-G3 Dashboard state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule'>('dashboard');
-  
   // Real data states with individual loading states
-  const [courseProgress, setCourseProgress] = useState<CourseProgress[]>([]);
-  const [gradeBreakdown, setGradeBreakdown] = useState<GradeBreakdown[]>([]);
-  const [studentActivities, setStudentActivities] = useState<StudentActivity[]>([]);
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
-  const [userCourses, setUserCourses] = useState<any[]>([]);
-  const [userAssignments, setUserAssignments] = useState<any[]>([]);
+  const [courseProgress, setCourseProgress] = useState<CourseProgress[]>(() => {
+    const cached = getCachedData('courseProgress');
+    return cached || [];
+  });
+  const [gradeBreakdown, setGradeBreakdown] = useState<GradeBreakdown[]>(() => {
+    const cached = getCachedData('gradeBreakdown');
+    return cached || [];
+  });
+  const [studentActivities, setStudentActivities] = useState<StudentActivity[]>(() => {
+    const cached = getCachedData('studentActivities');
+    return cached || [];
+  });
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>(() => {
+    const cached = getCachedData('recentActivities');
+    return cached || [];
+  });
+  const [userCourses, setUserCourses] = useState<any[]>(() => {
+    const cached = getCachedData('userCourses');
+    return cached || [];
+  });
+  const [userAssignments, setUserAssignments] = useState<any[]>(() => {
+    const cached = getCachedData('userAssignments');
+    return cached || [];
+  });
 
   // Individual loading states for progressive loading
   const [loadingStates, setLoadingStates] = useState({
@@ -395,15 +438,29 @@ const StudentDashboard: React.FC = () => {
       timestamp: new Date().toISOString()
     };
     setSavedProjects([...savedProjects, newProject]);
+    
+    // Save to localStorage
+    localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
   };
 
   const determineStudentGradeAndDashboard = useCallback(async () => {
     try {
       console.log('🎓 Determining student grade and dashboard type...');
       
+      // Check cache first
+      const cachedCohort = getCachedData('studentCohort');
+      if (cachedCohort) {
+        setStudentCohort(cachedCohort);
+        const grade = extractGradeFromCohortName(cachedCohort.name) || 8;
+        setStudentGrade(grade);
+        setDashboardType(getDashboardTypeByGrade(grade));
+        return;
+      }
+      
       // Get student's cohort
       const cohort = await moodleService.getStudentCohort(currentUser?.id.toString());
       setStudentCohort(cohort);
+      setCachedData('studentCohort', cohort);
       
       let grade = 8; // Default to grade 8+
       
@@ -450,7 +507,14 @@ const StudentDashboard: React.FC = () => {
     try {
       setError('');
       
-
+      // Start with cached data for instant display
+      const cachedStats = getCachedData('stats');
+      const cachedCourses = getCachedData('userCourses');
+      const cachedProgress = getCachedData('courseProgress');
+      
+      if (cachedStats) setStats(cachedStats);
+      if (cachedCourses) setUserCourses(cachedCourses);
+      if (cachedProgress) setCourseProgress(cachedProgress);
       
       console.log('🔄 Fetching real student data from IOMAD API...');
       
@@ -460,7 +524,18 @@ const StudentDashboard: React.FC = () => {
       // ULTRA-FAST COURSE LOADING: Show courses immediately
       setLoadingStates(prev => ({ ...prev, userCourses: true }));
       
-
+      // Show cached courses instantly if available
+      if (cachedCourses && cachedCourses.length > 0) {
+        setUserCourses(cachedCourses);
+        setLoadingStates(prev => ({ ...prev, userCourses: false }));
+        console.log('✅ Cached courses displayed instantly:', cachedCourses.length);
+      }
+      
+      // Show cached course progress instantly if available
+      if (cachedProgress && cachedProgress.length > 0) {
+        setCourseProgress(cachedProgress);
+        console.log('✅ Cached course progress displayed instantly');
+      }
       
       // Load real course data in background (non-blocking)
       const loadRealCourseData = async () => {
@@ -476,6 +551,7 @@ const StudentDashboard: React.FC = () => {
           );
           
           setUserCourses(enrolledCourses);
+          setCachedData('userCourses', enrolledCourses);
           setLoadingStates(prev => ({ ...prev, userCourses: false }));
           
           console.log('✅ Real courses loaded:', enrolledCourses.length);
@@ -491,13 +567,14 @@ const StudentDashboard: React.FC = () => {
           }));
           
           setCourseProgress(realCourseProgress);
+          setCachedData('courseProgress', realCourseProgress);
           
         } catch (error) {
           console.error('❌ Error loading real course data:', error);
           setLoadingStates(prev => ({ ...prev, userCourses: false }));
           
-          // If API fails, show mock courses for better UX
-          if (userCourses.length === 0) {
+          // If no cached data and API fails, show mock courses for better UX
+          if (!cachedCourses || cachedCourses.length === 0) {
             const mockCourses = [
               {
                 id: '1',
@@ -561,7 +638,7 @@ const StudentDashboard: React.FC = () => {
           // Update course progress with real data
           setLoadingStates(prev => ({ ...prev, courseProgress: true }));
           
-          const enrolledCourses = userCourses;
+          const enrolledCourses = getCachedData('userCourses') || [];
           const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => {
             const enrollment = courseEnrollments.find(e => e.courseId === course.id);
             const completion = courseCompletion.find(c => c.courseId === course.id);
@@ -577,6 +654,7 @@ const StudentDashboard: React.FC = () => {
           });
           
           setCourseProgress(realCourseProgress);
+          setCachedData('courseProgress', realCourseProgress);
           setLoadingStates(prev => ({ ...prev, courseProgress: false }));
           
           console.log('✅ Detailed course data loaded');
@@ -603,9 +681,9 @@ const StudentDashboard: React.FC = () => {
           // Process stats
           setLoadingStates(prev => ({ ...prev, stats: true }));
           
-          const enrolledCourses = userCourses;
-          const courseEnrollments = [];
-          const teacherAssignments = [];
+          const enrolledCourses = getCachedData('userCourses') || [];
+          const courseEnrollments = getCachedData('courseEnrollments') || [];
+          const teacherAssignments = getCachedData('teacherAssignments') || [];
           
           const totalAssignments = teacherAssignments.length > 0 ? 
             teacherAssignments.length : 
@@ -631,6 +709,7 @@ const StudentDashboard: React.FC = () => {
           };
 
           setStats(newStats);
+          setCachedData('stats', newStats);
           setLoadingStates(prev => ({ ...prev, stats: false }));
 
           // Process activities
@@ -700,6 +779,10 @@ const StudentDashboard: React.FC = () => {
           setStudentActivities(realStudentActivities);
           setRecentActivities(realRecentActivities.slice(0, 10));
           setUserAssignments(userAssignments);
+          
+          setCachedData('studentActivities', realStudentActivities);
+          setCachedData('recentActivities', realRecentActivities.slice(0, 10));
+          setCachedData('userAssignments', userAssignments);
           
           setLoadingStates(prev => ({ 
             ...prev, 
@@ -872,912 +955,101 @@ const StudentDashboard: React.FC = () => {
   }
 
   // Dashboard render functions
-  const renderG1G3Dashboard = () => {
-    // Calculate real statistics from actual data
-    const totalCourses = userCourses.length;
-    const completedLessons = studentActivities.filter(activity => activity.status === 'completed').length;
-    const totalPoints = userAssignments.reduce((sum, assignment) => sum + (assignment.grade || 0), 0);
-    const weeklyGoal = Math.min(5, Math.floor(completedLessons / 2) + 1); // Dynamic weekly goal
-
-    // Get real course data for display with realistic course names
-    const displayCourses = userCourses.slice(0, 3).map((course, index) => {
-      const courseProgressData = courseProgress.find(cp => cp.courseId === course.id);
-      const courseAssignments = studentActivities.filter(activity => activity.courseName === course.fullname);
-      const completedAssignments = courseAssignments.filter(activity => activity.status === 'completed').length;
-      const totalAssignments = courseAssignments.length;
-      
-      // Define realistic course data based on index
-      const courseTemplates = [
-        {
-          name: "Computer Basics & Digital Literacy",
-          shortname: "Learn fundamental computer skills and digital citizenship",
-          difficulty: "Beginner",
-          weeks: 4,
-          lessons: 12
-        },
-        {
-          name: "Web Development Fundamentals", 
-          shortname: "Introduction to HTML, CSS, and basic web design principles",
-          difficulty: "Intermediate",
-          weeks: 6,
-          lessons: 16
-        },
-        {
-          name: "Programming Logic & Problem Solving",
-          shortname: "Develop logical thinking and basic programming concepts",
-          difficulty: "Intermediate", 
-          weeks: 8,
-          lessons: 20
-        }
-      ];
-      
-      const template = courseTemplates[index] || courseTemplates[0];
-      
-      return {
-        id: course.id,
-        name: template.name,
-        shortname: template.shortname,
-        progress: courseProgressData?.progress || course.progress || Math.floor(Math.random() * 100),
-        completedAssignments: Math.floor(template.lessons * (courseProgressData?.progress || course.progress || 0) / 100),
-        totalAssignments: template.lessons,
-        difficulty: template.difficulty,
-        color: ['blue', 'purple', 'green'][index] || 'blue',
-        weeks: template.weeks
-      };
-    });
-
-    // Generate real lesson data with realistic lesson names
-    const lessonTemplates = [
-      {
-        title: "Internet Safety & Digital Citizenship",
-        description: "Learn how to stay safe online and be a good digital citizen",
-        duration: "45 min",
-        progress: 75,
-        status: "continue"
-      },
-      {
-        title: "Computer Hardware Basics",
-        description: "Understanding computer components and how they work together",
-        duration: "60 min", 
-        progress: 100,
-        status: "completed"
-      },
-      {
-        title: "File Management & Organization",
-        description: "Learn to organize and manage digital files effectively",
-        duration: "50 min",
-        progress: 45,
-        status: "continue",
-        prerequisites: "Computer Hardware Basics"
-      },
-      {
-        title: "Digital Communication Tools",
-        description: "Explore email, messaging, and collaboration platforms",
-        duration: "55 min",
-        progress: 0,
-        status: "locked",
-        prerequisites: "File Management & Organization"
-      },
-      {
-        title: "Creating Your First Website",
-        description: "Build a simple website using HTML and CSS",
-        duration: "60 min",
-        progress: 30,
-        status: "continue",
-        prerequisites: "HTML Basics, CSS Introduction"
-      },
-      {
-        title: "HTML Fundamentals",
-        description: "Learn the basics of HTML markup language",
-        duration: "90 min",
-        progress: 60,
-        status: "continue"
-      }
-    ];
-
-    const realLessons = lessonTemplates.map((lesson, index) => {
-      return {
-        title: lesson.title,
-        description: lesson.description,
-        duration: lesson.duration,
-        progress: lesson.progress,
-        status: lesson.status,
-        prerequisites: lesson.prerequisites
-      };
-    });
-
-    // Generate real activities with realistic names
-    const activityTemplates = [
-      {
-        title: "Digital Footprint Quiz",
-        difficulty: "Easy",
-        points: "50 pts",
-        duration: "15 min",
-        status: "overdue",
-        icon: FileText
-      },
-      {
-        title: "Hardware Components Reading",
-        difficulty: "Easy", 
-        points: "40 pts",
-        duration: "30 min",
-        status: "completed",
-        icon: BookOpen
-      },
-      {
-        title: "Build Your Portfolio Page",
-        difficulty: "Medium",
-        points: "100 pts", 
-        duration: "120 min",
-        status: "overdue",
-        icon: BookOpen
-      },
-      {
-        title: "Online Safety Video",
-        difficulty: "Easy",
-        points: "25 pts",
-        duration: "20 min", 
-        status: "completed",
-        icon: Play
-      },
-      {
-        title: "Build a Virtual Computer",
-        difficulty: "Medium",
-        points: "80 pts",
-        duration: "40 min",
-        status: "completed", 
-        icon: BookOpen
-      },
-      {
-        title: "Create a Digital Citizenship Poster",
-        difficulty: "Medium",
-        points: "75 pts",
-        duration: "45 min",
-        status: "overdue",
-        icon: BookOpen
-      }
-    ];
-
-    const realActivities = activityTemplates.map((activity, index) => {
-      return {
-        title: activity.title,
-        difficulty: activity.difficulty,
-        points: activity.points,
-        duration: activity.duration,
-        status: activity.status,
-        icon: activity.icon
-      };
-    });
-
-    // Helper function to get color classes safely
-    const getColorClasses = (color: string, type: 'bg' | 'hover' | 'gradient' = 'bg') => {
-      const colorMap: { [key: string]: { bg: string; hover: string; gradient: string } } = {
-        'blue': { bg: 'bg-blue-600', hover: 'hover:bg-blue-700', gradient: 'bg-gradient-to-br from-blue-400 to-blue-600' },
-        'purple': { bg: 'bg-purple-600', hover: 'hover:bg-purple-700', gradient: 'bg-gradient-to-br from-purple-400 to-purple-600' },
-        'green': { bg: 'bg-green-600', hover: 'hover:bg-green-700', gradient: 'bg-gradient-to-br from-green-400 to-green-600' },
-        'orange': { bg: 'bg-orange-600', hover: 'hover:bg-orange-700', gradient: 'bg-gradient-to-br from-orange-400 to-orange-600' },
-        'yellow': { bg: 'bg-yellow-600', hover: 'hover:bg-yellow-700', gradient: 'bg-gradient-to-br from-yellow-400 to-yellow-600' },
-        'red': { bg: 'bg-red-600', hover: 'hover:bg-red-700', gradient: 'bg-gradient-to-br from-red-400 to-red-600' },
-        'indigo': { bg: 'bg-indigo-600', hover: 'hover:bg-indigo-700', gradient: 'bg-gradient-to-br from-indigo-400 to-indigo-600' },
-        'pink': { bg: 'bg-pink-600', hover: 'hover:bg-pink-700', gradient: 'bg-gradient-to-br from-pink-400 to-pink-600' }
-      };
-      
-      const defaultColor = colorMap.blue;
-      const selectedColor = colorMap[color] || defaultColor;
-      
-      return selectedColor[type];
-    };
-
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">K</span>
+  const renderG1G3Dashboard = () => (
+    <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
+      <div className="min-h-screen py-4">
+        <div className="mx-auto space-y-6">
+          {/* Enhanced Course Header */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                  <BookOpen className="w-6 h-6 text-white" />
                 </div>
-                <span className="text-xl font-bold text-gray-900">kodeit</span>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search courses, teachers, or resources..."
-                  className="w-96 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-medium">3</span>
-                </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
-              </div>
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                + New Report
-              </button>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4 text-gray-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-900">Grade 1 Student</span>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex h-screen overflow-hidden">
-          {/* Left Sidebar */}
-          <div className="w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col overflow-y-auto">
-            <div className="p-6">
-            {/* Navigation Section */}
-            <div className="mb-8">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">&lt;/&gt; NAVIGATION</h3>
-              <nav className="space-y-2">
-                <button 
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Home className="w-4 h-4" />
-                  <span>Dashboard</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('courses')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === 'courses' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <BookOpen className="w-4 h-4" />
-                  <span>My Courses</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('lessons')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === 'lessons' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Play className="w-4 h-4" />
-                  <span>Current Lessons</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('activities')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === 'activities' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Activities</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('achievements')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === 'achievements' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Award className="w-4 h-4" />
-                  <span>Achievements</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('schedule')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Calendar className="w-4 h-4" />
-                  <span>Schedule</span>
-                </button>
-              </nav>
-            </div>
-
-                                                   {/* Quick Tools Section */}
-              <div className="mb-8">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">QUICK TOOLS</h3>
-                <div className="space-y-3">
-                  <button 
-                    onClick={() => window.open('/dashboard/student/code-editor', '_blank')}
-                    className="w-full bg-purple-50 rounded-lg p-3 cursor-pointer hover:bg-purple-100 transition-colors text-left"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Monitor className="w-5 h-5 text-purple-600" />
-                      <div>
-                        <h4 className="text-sm font-medium text-purple-900">Code Emulators</h4>
-                        <p className="text-xs text-purple-700">Practice coding in virtual envir...</p>
-                      </div>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={() => window.open('/dashboard/student/ebooks', '_blank')}
-                    className="w-full bg-blue-50 rounded-lg p-3 cursor-pointer hover:bg-blue-100 transition-colors text-left"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <BookOpen className="w-5 h-5 text-blue-600" />
-                      <div>
-                        <h4 className="text-sm font-medium text-blue-900">E-books</h4>
-                        <p className="text-xs text-blue-700">Access digital learning materials</p>
-                      </div>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={() => window.open('/dashboard/student/ask-teacher', '_blank')}
-                    className="w-full bg-green-50 rounded-lg p-3 cursor-pointer hover:bg-green-100 transition-colors text-left"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <MessageSquare className="w-5 h-5 text-green-600" />
-                      <div>
-                        <h4 className="text-sm font-medium text-green-900">Ask Teacher</h4>
-                        <p className="text-xs text-green-700">Get help from your instructor</p>
-                      </div>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={() => window.open('/dashboard/student/ai-buddy', '_blank')}
-                    className="w-full bg-orange-50 rounded-lg p-3 cursor-pointer hover:bg-orange-100 transition-colors text-left"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Zap className="w-5 h-5 text-orange-600" />
-                      <div>
-                        <h4 className="text-sm font-medium text-orange-900">KODEIT AI Buddy</h4>
-                        <p className="text-xs text-orange-700">Get instant coding help</p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Quick Actions Section */}
-              <div className="mb-8">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">+ QUICK ACTIONS</h3>
-                <div className="space-y-3">
-                  <button 
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: 'Check out my learning progress!',
-                          text: 'I\'m learning coding with KODEIT platform',
-                          url: window.location.href
-                        });
-                      } else {
-                        // Fallback for browsers that don't support Web Share API
-                        navigator.clipboard.writeText(window.location.href);
-                        alert('Link copied to clipboard!');
-                      }
-                    }}
-                    className="w-full bg-purple-50 rounded-lg p-3 cursor-pointer hover:bg-purple-100 transition-colors text-left"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Share2 className="w-5 h-5 text-purple-600" />
-                      <div>
-                        <h4 className="text-sm font-medium text-purple-900">Share with Class</h4>
-                        <p className="text-xs text-purple-700">Collaborate with classmates</p>
-                      </div>
-                    </div>
-                  </button>
+                <div>
+                  <h1 className="text-xl font-semibold text-gray-900">Welcome to Your Learning Journey!</h1>
+                  <div className="w-64 bg-gray-200 rounded-full h-2 mt-2">
+                    <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full" style={{ width: '65%' }}></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Main Content Area */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-8">
-             {/* Top Navigation Tabs */}
-             <div className="flex items-center justify-between mb-8">
-               <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                 <button 
-                   onClick={() => setActiveTab('dashboard')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   Dashboard
-                 </button>
-                 <button 
-                   onClick={() => setActiveTab('courses')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'courses' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   My Courses
-                 </button>
-                 <button 
-                   onClick={() => setActiveTab('lessons')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'lessons' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   Current Lessons
-                 </button>
-                 <button 
-                   onClick={() => setActiveTab('activities')}
-                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                     activeTab === 'activities' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                   }`}
-                 >
-                   Activities
-                 </button>
-               </div>
-               <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                 <button className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium">Card View</button>
-                 <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Tree View</button>
-                 <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Journey View</button>
-               </div>
-             </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Main Content */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Status Section */}
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">My Progress</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Lessons Card */}
+                  <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl p-6 text-white">
+                    <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mb-4">
+                      <BookOpen className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1">42</h3>
+                    <p className="text-sm opacity-90">Lessons</p>
+                    <p className="text-xs opacity-75 mt-1">of 73 completed</p>
+                  </div>
 
-             {/* Content based on active tab */}
-             {activeTab === 'dashboard' && (
-               <>
-                 {/* Summary Cards with Real Data - Matching Image Design */}
-                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                     <div className="flex items-center justify-between">
-                       <div>
-                         <p className="text-sm font-medium text-gray-600">Courses</p>
-                         <p className="text-2xl font-bold text-gray-900">{totalCourses}</p>
-                       </div>
-                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                         <Target className="w-5 h-5 text-blue-600" />
-                       </div>
-                     </div>
-                   </div>
-                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                     <div className="flex items-center justify-between">
-                       <div>
-                         <p className="text-sm font-medium text-gray-600">Lessons Done</p>
-                         <p className="text-2xl font-bold text-gray-900">{completedLessons}</p>
-                       </div>
-                       <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                         <TrendingUp className="w-5 h-5 text-green-600" />
-                       </div>
-                     </div>
-                   </div>
-                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                     <div className="flex items-center justify-between">
-                       <div>
-                         <p className="text-sm font-medium text-gray-600">Total Points</p>
-                         <p className="text-2xl font-bold text-gray-900">{totalPoints}</p>
-                       </div>
-                       <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                         <Award className="w-5 h-5 text-yellow-600" />
-                       </div>
-                     </div>
-                   </div>
-                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                     <div className="flex items-center justify-between">
-                       <div>
-                         <p className="text-sm font-medium text-gray-600">Weekly Goal</p>
-                         <p className="text-2xl font-bold text-gray-900">{weeklyGoal}/5</p>
-                       </div>
-                       <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                         <Clock className="w-5 h-5 text-purple-600" />
-                       </div>
-                     </div>
-                   </div>
-                 </div>
+                  {/* Assignments Card */}
+                  <div className="bg-gradient-to-r from-pink-400 to-red-500 rounded-xl p-6 text-white">
+                    <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mb-4">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1">08</h3>
+                    <p className="text-sm opacity-90">Assignments</p>
+                    <p className="text-xs opacity-75 mt-1">of 24 completed</p>
+                  </div>
 
-                 {/* My Courses Section with Real Data - Matching Image Design */}
-                 <div className="mb-8">
-                   <h2 className="text-2xl font-bold text-gray-900 mb-6">My Courses</h2>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                     {displayCourses.map((course, index) => (
-                       <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                         {/* Course Image with Difficulty Tag */}
-                         <div className="h-40 bg-gradient-to-br from-blue-400 to-blue-600 relative">
-                           {/* Placeholder for course image - you can replace with actual images */}
-                           <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                             <BookOpen className="w-12 h-12 text-white opacity-80" />
-                           </div>
-                           <div className="absolute top-3 right-3">
-                             <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                               course.difficulty === 'Beginner' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                             }`}>
-                               {course.difficulty}
-                             </span>
-                           </div>
-                         </div>
-                         <div className="p-6">
-                           <h3 className="text-lg font-semibold text-gray-900 mb-2">{course.name}</h3>
-                           <p className="text-gray-600 text-sm mb-4">{course.shortname}</p>
-                           <div className="mb-4">
-                             <div className="flex justify-between text-sm mb-1">
-                               <span className="text-gray-600">Progress</span>
-                               <span className="text-gray-900 font-medium">{course.progress}%</span>
-                             </div>
-                             <div className="w-full bg-gray-200 rounded-full h-2">
-                               <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${course.progress}%` }}></div>
-                             </div>
-                             <p className="text-xs text-gray-500 mt-1">{course.completedAssignments}/{course.totalAssignments} lessons</p>
-                           </div>
-                           <div className="flex items-center justify-between">
-                             <span className="text-sm text-gray-600">{course.weeks} weeks</span>
-                             <button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2">
-                               <Play className="w-4 h-4" />
-                               <span>Continue Learning</span>
-                             </button>
-                           </div>
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                 </div>
+                  {/* Tests Card */}
+                  <div className="bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl p-6 text-white">
+                    <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mb-4">
+                      <BarChart3 className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1">03</h3>
+                    <p className="text-sm opacity-90">Tests</p>
+                    <p className="text-xs opacity-75 mt-1">of 15 completed</p>
+                  </div>
+                </div>
+              </div>
 
-                 {/* Current Lessons Section with Real Data */}
-                 <div className="mb-8">
-                   <h2 className="text-2xl font-bold text-gray-900 mb-6">Current Lessons</h2>
-                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                     {realLessons.map((lesson, index) => (
-                       <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                         <div className="h-32 bg-gradient-to-br from-blue-400 to-blue-600 relative">
-                           {/* Status Icon */}
-                           <div className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center">
-                             {lesson.status === 'completed' ? (
-                               <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                                 <CheckCircle className="w-3 h-3 text-green-600" />
-                               </div>
-                             ) : lesson.status === 'locked' ? (
-                               <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
-                                 <Circle className="w-3 h-3 text-gray-600" />
-                               </div>
-                             ) : (
-                               <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                                 <Info className="w-3 h-3 text-blue-600" />
-                               </div>
-                             )}
-                           </div>
-                         </div>
-                         <div className="p-6">
-                           <div className="mb-4">
-                             <div className="flex justify-between text-sm mb-1">
-                               <span className="text-gray-600">Progress</span>
-                               <span className="text-gray-900 font-medium">{lesson.progress}%</span>
-                             </div>
-                             <div className="w-full bg-gray-200 rounded-full h-2">
-                               <div className={`h-2 rounded-full ${
-                                 lesson.status === 'completed' ? 'bg-green-600' : 
-                                 lesson.status === 'locked' ? 'bg-gray-400' : 'bg-blue-600'
-                               }`} style={{ width: `${lesson.progress}%` }}></div>
-                             </div>
-                           </div>
-                           <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
-                           <p className="text-gray-600 text-sm mb-3">{lesson.description}</p>
-                           <div className="flex items-center space-x-2 mb-3">
-                             <Clock className="w-4 h-4 text-gray-400" />
-                             <span className="text-sm text-gray-600">{lesson.duration}</span>
-                           </div>
-                           {lesson.prerequisites && (
-                             <p className="text-xs text-gray-500 mb-4">Prerequisites: {lesson.prerequisites}</p>
-                           )}
-                           <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                             lesson.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
-                             lesson.status === 'continue' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
-                             lesson.status === 'locked' ? 'bg-gray-100 text-gray-700 cursor-not-allowed' :
-                             'bg-blue-600 text-white hover:bg-blue-700'
-                           }`}>
-                             {lesson.status === 'completed' ? 'Review Lesson' : 
-                              lesson.status === 'continue' ? 'Continue Lesson' : 
-                              lesson.status === 'locked' ? 'Locked' : 'Start Lesson'}
-                           </button>
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                 </div>
 
-                 {/* Upcoming Activities Section with Real Data - Matching Image Design */}
-                 <div>
-                   <h2 className="text-2xl font-bold text-gray-900 mb-6">Upcoming Activities</h2>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                     {realActivities.map((activity, index) => (
-                       <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                         <div className="flex items-start space-x-4 mb-4">
-                           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                             <activity.icon className="w-5 h-5 text-blue-600" />
-                           </div>
-                           <div className="flex-1">
-                             <h3 className="text-lg font-semibold text-gray-900 mb-1">{activity.title}</h3>
-                             <div className="flex items-center space-x-2 mb-2">
-                               <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                                 activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                               }`}>
-                                 {activity.difficulty}
-                               </span>
-                               <span className="text-sm font-medium text-blue-600">{activity.points}</span>
-                             </div>
-                             <div className="flex items-center space-x-2 mb-3">
-                               <Clock className="w-4 h-4 text-gray-400" />
-                               <span className="text-sm text-gray-600">{activity.duration}</span>
-                             </div>
-                             <div className="flex items-center space-x-2 mb-4">
-                               {activity.status === 'completed' ? (
-                                 <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
-                                   <CheckCircle className="w-3 h-3 text-green-600" />
-                                 </div>
-                               ) : (
-                                 <Calendar className="w-4 h-4 text-red-400" />
-                               )}
-                               <span className={`text-sm font-medium ${
-                                 activity.status === 'overdue' ? 'text-red-600' : 
-                                 activity.status === 'completed' ? 'text-green-600' : 'text-gray-600'
-                               }`}>
-                                 {activity.status === 'overdue' ? 'Overdue' : 
-                                  activity.status === 'completed' ? 'Completed' : 'Pending'}
-                               </span>
-                             </div>
-                           </div>
-                         </div>
-                         <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                           activity.status === 'overdue' ? 'bg-orange-500 text-white hover:bg-orange-600' : 
-                           activity.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
-                           'bg-blue-600 text-white hover:bg-blue-700'
-                         }`}>
-                           {activity.status === 'overdue' ? 'Continue' : 
-                            activity.status === 'completed' ? 'Review' : 'Start'}
-                         </button>
-                       </div>
-                     ))}
-                   </div>
-                 </div>
-               </>
-             )}
+            </div>
 
-             {activeTab === 'courses' && (
-               <div>
-                 <h2 className="text-2xl font-bold text-gray-900 mb-6">All My Courses</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {userCourses.map((course, index) => (
-                     <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                       <div className={`h-32 ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'gradient')} relative`}>
-                         <div className="absolute top-3 right-3">
-                           <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-800">
-                             Active
-                           </span>
-                         </div>
-                       </div>
-                       <div className="p-6">
-                         <h3 className="text-lg font-semibold text-gray-900 mb-2">{course.fullname}</h3>
-                         <p className="text-gray-600 text-sm mb-4">{course.shortname}</p>
-                         <div className="mb-4">
-                           <div className="flex justify-between text-sm mb-1">
-                             <span className="text-gray-600">Progress</span>
-                             <span className="text-gray-900 font-medium">{course.progress || 0}%</span>
-                           </div>
-                                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                               <div className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} h-2 rounded-full`} style={{ width: `${course.progress || 0}%` }}></div>
-                             </div>
-                           </div>
-                           <div className="flex items-center justify-between">
-                             <span className="text-sm text-gray-600">Course ID: {course.id}</span>
-                             <button className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} ${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'hover')} text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors`}>
-                             View Course
-                           </button>
-                         </div>
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-             )}
-
-             {activeTab === 'lessons' && (
-               <div>
-                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Current Lessons</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {realLessons.map((lesson, index) => (
-                     <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                       <div className="h-32 bg-gradient-to-br from-green-400 to-green-600 relative">
-                         <div className="absolute top-3 right-3 w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                           <Play className="w-3 h-3 text-green-600" />
-                         </div>
-                       </div>
-                       <div className="p-6">
-                         <div className="mb-4">
-                           <div className="flex justify-between text-sm mb-1">
-                             <span className="text-gray-600">Progress</span>
-                             <span className="text-gray-900 font-medium">{lesson.progress}%</span>
-                           </div>
-                           <div className="w-full bg-gray-200 rounded-full h-2">
-                             <div className="bg-green-600 h-2 rounded-full" style={{ width: `${lesson.progress}%` }}></div>
-                           </div>
-                         </div>
-                         <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
-                         <p className="text-gray-600 text-sm mb-3">{lesson.description}</p>
-                         <div className="flex items-center space-x-2 mb-3">
-                           <Clock className="w-4 h-4 text-gray-400" />
-                           <span className="text-sm text-gray-600">{lesson.duration}</span>
-                         </div>
-                         <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                           lesson.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
-                           lesson.status === 'continue' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
-                           'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                         }`}>
-                           {lesson.status === 'completed' ? 'Completed' : 
-                            lesson.status === 'continue' ? 'Continue Lesson' : 'Start Lesson'}
-                         </button>
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-             )}
-
-             {activeTab === 'activities' && (
-               <div>
-                 <h2 className="text-2xl font-bold text-gray-900 mb-6">All Activities</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {realActivities.map((activity, index) => (
-                     <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                       <div className="flex items-start space-x-4 mb-4">
-                         <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                           <activity.icon className="w-5 h-5 text-purple-600" />
-                         </div>
-                         <div className="flex-1">
-                           <h3 className="text-lg font-semibold text-gray-900 mb-1">{activity.title}</h3>
-                           <div className="flex items-center space-x-2 mb-2">
-                             <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                               activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                             }`}>
-                               {activity.difficulty}
-                             </span>
-                             <span className="text-sm font-medium text-purple-600">{activity.points}</span>
-                           </div>
-                           <div className="flex items-center space-x-2 mb-3">
-                             <Clock className="w-4 h-4 text-gray-400" />
-                             <span className="text-sm text-gray-600">{activity.duration}</span>
-                           </div>
-                           <div className="flex items-center space-x-2 mb-4">
-                             <Calendar className="w-4 h-4 text-red-400" />
-                             <span className={`text-sm font-medium ${
-                               activity.status === 'overdue' ? 'text-red-600' : 
-                               activity.status === 'completed' ? 'text-green-600' : 'text-gray-600'
-                             }`}>
-                               {activity.status === 'overdue' ? 'Overdue' : 
-                                activity.status === 'completed' ? 'Completed' : 'Pending'}
-                             </span>
-                           </div>
-                         </div>
-                       </div>
-                       <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                         activity.status === 'overdue' ? 'bg-orange-500 text-white hover:bg-orange-600' : 
-                         activity.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
-                         'bg-purple-600 text-white hover:bg-purple-700'
-                       }`}>
-                         {activity.status === 'overdue' ? 'Continue' : 
-                          activity.status === 'completed' ? 'View' : 'Start'}
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-             )}
-
-             {activeTab === 'achievements' && (
-               <div>
-                 <h2 className="text-2xl font-bold text-gray-900 mb-6">My Achievements</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                     <div className="flex items-center space-x-4 mb-4">
-                       <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                         <Trophy className="w-6 h-6 text-yellow-600" />
-                       </div>
-                       <div>
-                         <h3 className="text-lg font-semibold text-gray-900">First Course Completed</h3>
-                         <p className="text-gray-600 text-sm">Completed your first course</p>
-                       </div>
-                     </div>
-                     <div className="flex items-center justify-between">
-                       <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
-                       <span className="text-sm font-medium text-green-600">+50 points</span>
-                     </div>
-                   </div>
-                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                     <div className="flex items-center space-x-4 mb-4">
-                       <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                         <Star className="w-6 h-6 text-blue-600" />
-                       </div>
-                       <div>
-                         <h3 className="text-lg font-semibold text-gray-900">Perfect Score</h3>
-                         <p className="text-gray-600 text-sm">Got 100% on an assignment</p>
-                       </div>
-                     </div>
-                     <div className="flex items-center justify-between">
-                       <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
-                       <span className="text-sm font-medium text-green-600">+100 points</span>
-                     </div>
-                   </div>
-                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                     <div className="flex items-center space-x-4 mb-4">
-                       <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                         <Flame className="w-6 h-6 text-green-600" />
-                       </div>
-                       <div>
-                         <h3 className="text-lg font-semibold text-gray-900">Learning Streak</h3>
-                         <p className="text-gray-600 text-sm">7 days of continuous learning</p>
-                       </div>
-                     </div>
-                     <div className="flex items-center justify-between">
-                       <span className="text-sm text-gray-600">Earned: {new Date().toLocaleDateString()}</span>
-                       <span className="text-sm font-medium text-green-600">+75 points</span>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             )}
-
-             {activeTab === 'schedule' && (
-               <div>
-                 <h2 className="text-2xl font-bold text-gray-900 mb-6">My Schedule</h2>
-                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                   <div className="grid grid-cols-7 gap-2 mb-6">
-                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                       <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
-                         {day}
-                       </div>
-                     ))}
-                     {Array.from({ length: 35 }, (_, i) => {
-                       const date = new Date();
-                       date.setDate(date.getDate() - 15 + i);
-                       const isToday = date.toDateString() === new Date().toDateString();
-                       const hasActivity = Math.random() > 0.7;
-                       
-                       return (
-                         <div
-                           key={i}
-                           className={`text-center py-2 rounded-lg cursor-pointer transition-colors ${
-                             isToday 
-                               ? 'bg-blue-600 text-white' 
-                               : hasActivity 
-                                 ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                                 : 'text-gray-600 hover:bg-gray-100'
-                           }`}
-                         >
-                           {date.getDate()}
-                         </div>
-                       );
-                     })}
-                   </div>
-                   <div className="space-y-3">
-                     <h3 className="font-semibold text-gray-900">Today's Schedule</h3>
-                     <div className="space-y-2">
-                       <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
-                         <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
-                         <div>
-                           <p className="text-sm font-medium text-gray-900">HTML Basics Lesson</p>
-                           <p className="text-xs text-gray-600">9:00 AM - 10:30 AM</p>
-                         </div>
-                       </div>
-                       <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
-                         <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                         <div>
-                           <p className="text-sm font-medium text-gray-900">Assignment Due</p>
-                           <p className="text-xs text-gray-600">2:00 PM - 3:00 PM</p>
-                         </div>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             )}
-           </div>
-
-           {/* Floating Action Button for AI Buddy */}
-           <div className="fixed bottom-6 right-6 z-50">
-             <button 
-               onClick={() => window.open('/dashboard/student/ai-buddy', '_blank')}
-               className="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-               title="KODEIT AI Buddy"
-             >
-               <Zap className="w-6 h-6" />
-             </button>
+            {/* Right Column - Sidebar */}
+            <div className="space-y-6">
+              {/* Calendar Section */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Schedule</h3>
+                <div className="space-y-4">
+                  {upcomingEvents.map((event, index) => (
+                    <div key={index} className="flex items-center space-x-3">
+                      <div className="bg-purple-100 text-purple-600 text-xs font-medium px-2 py-1 rounded">
+                        {event.date}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">{event.title}</p>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <div className={`w-2 h-2 rounded-full ${
+                            event.type === 'assignment' ? 'bg-red-500' :
+                            event.type === 'test' ? 'bg-green-500' :
+                            'bg-blue-500'
+                          }`}></div>
+                          <span className="text-xs text-gray-500 capitalize">{event.type}s</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
   const renderG4G7Dashboard = () => (
     <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
@@ -2361,11 +1633,6 @@ const StudentDashboard: React.FC = () => {
         return renderG8PlusDashboard();
     }
   };
-
-  // For G1-G3 dashboard, render without main dashboard layout
-  if (dashboardType === 'G1_G3') {
-    return renderG1G3Dashboard();
-  }
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
