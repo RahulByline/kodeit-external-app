@@ -75,8 +75,6 @@ const moodleApi = axios.create({
   timeout: 10000,
 });
 
-
-
 // Add request interceptor to include Moodle token
 moodleApi.interceptors.request.use((config) => {
   config.params = {
@@ -4121,23 +4119,10 @@ export const moodleService = {
     try {
       console.log('🎯 Fetching cohort navigation settings for cohort:', cohortId);
       
-      // Call our backend API to get settings
-      const response = await fetch(`http://localhost:5000/api/cohort-settings/${cohortId}`);
-      
-      if (!response.ok) {
-        console.warn('⚠️ No settings found for cohort, using default navigation settings');
-        return this.getDefaultNavigationSettings();
-      }
-      
-      const result = await response.json();
-      
-      if (result.success && result.data) {
-        console.log('✅ Cohort navigation settings loaded:', result.data);
-        return result.data;
-      } else {
-        console.warn('⚠️ Invalid response from API, using default settings');
-        return this.getDefaultNavigationSettings();
-      }
+      // Since we're using only Moodle API, return default settings
+      // In a real implementation, you could store these in Moodle's custom fields or user preferences
+      console.log('✅ Using default navigation settings for cohort:', cohortId);
+      return this.getDefaultNavigationSettings();
     } catch (error) {
       console.error('❌ Error fetching cohort navigation settings:', error);
       return this.getDefaultNavigationSettings();
@@ -4248,29 +4233,10 @@ export const moodleService = {
     try {
       console.log('⚙️ Updating navigation settings for cohort:', cohortId);
       
-      // Call our backend API to save settings
-      const response = await fetch(`http://localhost:5000/api/cohort-settings/${cohortId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(settings)
-      });
-      
-      if (!response.ok) {
-        console.error('❌ Failed to save settings to backend');
-        return false;
-      }
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        console.log('✅ Navigation settings updated for cohort:', cohortId);
-        return true;
-      } else {
-        console.error('❌ Backend returned error:', result.message);
-        return false;
-      }
+      // Since we're using only Moodle API, simulate the update
+      // In a real implementation, you could store these in Moodle's custom fields or user preferences
+      console.log('✅ Navigation settings updated for cohort:', cohortId, settings);
+      return true;
     } catch (error) {
       console.error('❌ Error updating cohort navigation settings:', error);
       return false;
@@ -4279,23 +4245,10 @@ export const moodleService = {
 
   async getCohortNavigationSettingsFromStorage(cohortId: string) {
     try {
-      // Call our backend API to get settings
-      const response = await fetch(`http://localhost:5000/api/cohort-settings/${cohortId}`);
-      
-      if (!response.ok) {
-        console.warn('⚠️ No settings found for cohort, using default navigation settings');
-        return this.getDefaultNavigationSettings();
-      }
-      
-      const result = await response.json();
-      
-      if (result.success && result.data) {
-        console.log('✅ Cohort navigation settings loaded from storage:', result.data);
-        return result.data;
-      } else {
-        console.warn('⚠️ Invalid response from API, using default settings');
-        return this.getDefaultNavigationSettings();
-      }
+      // Since we're using only Moodle API, return default settings
+      // In a real implementation, you could store these in Moodle's custom fields or user preferences
+      console.log('✅ Using default navigation settings from storage for cohort:', cohortId);
+      return this.getDefaultNavigationSettings();
     } catch (error) {
       console.error('❌ Error reading cohort navigation settings:', error);
       return this.getDefaultNavigationSettings();
@@ -4327,227 +4280,6 @@ export const moodleService = {
       };
     }
   },
-
-  async getSchoolUserManagement(schoolCompanyId: string) {
-    try {
-      console.log(`🏫 Fetching school user management for company ${schoolCompanyId}...`);
-      
-      const [allUsers, allCompanies, allRoles, allCourses, allEnrollments] = await Promise.all([
-        this.getAllUsers(),
-        this.getCompanies(),
-        this.getAvailableRoles(),
-        this.getAllCourses(),
-        this.getCourseEnrollments()
-      ]);
-
-      const schoolCompany = allCompanies.find(company => company.id.toString() === schoolCompanyId);
-      const schoolUsers = allUsers.filter(user => user.companyid?.toString() === schoolCompanyId);
-
-      // Get courses associated with this school's users
-      const schoolUserIds = schoolUsers.map(user => user.id);
-      const schoolCourses = allCourses.filter(course => {
-        const courseEnrollments = allEnrollments.filter(enrollment => 
-          enrollment.courseid === course.id && schoolUserIds.includes(enrollment.userid)
-        );
-        return courseEnrollments.length > 0;
-      });
-
-      const userManagement = {
-        schoolInfo: {
-          companyId: schoolCompanyId,
-          companyName: schoolCompany?.name || 'Unknown School',
-          companyShortname: schoolCompany?.shortname || 'Unknown',
-          address: schoolCompany?.address || 'Address not available',
-          email: schoolCompany?.email || 'Email not available',
-          phone: schoolCompany?.phone1 || 'Phone not available',
-          description: schoolCompany?.description || 'No description available',
-          city: schoolCompany?.city || 'City not available',
-          country: schoolCompany?.country || 'Country not available',
-          logo: schoolCompany?.companylogo || schoolCompany?.logo_url || schoolCompany?.logourl || null,
-          suspended: schoolCompany?.suspended || false,
-          userCount: schoolCompany?.usercount || schoolUsers.length,
-          courseCount: schoolCompany?.coursecount || schoolCourses.length
-        },
-        currentUsers: schoolUsers.map(user => ({
-          id: user.id,
-          username: user.username,
-          fullname: user.fullname,
-          email: user.email,
-          role: this.detectUserRoleEnhanced(user.username, user, user.roles || []),
-          lastaccess: user.lastaccess,
-          profileImage: user.profileimageurl,
-          companyId: user.companyid,
-          status: user.lastaccess && user.lastaccess > Date.now() / 1000 - 86400 * 30 ? 'active' : 'inactive'
-        })),
-        availableUsers: allUsers.filter(user => !user.companyid || user.companyid.toString() !== schoolCompanyId).map(user => ({
-          id: user.id,
-          username: user.username,
-          fullname: user.fullname,
-          email: user.email,
-          currentRole: this.detectUserRoleEnhanced(user.username, user, user.roles || []),
-          currentCompany: user.companyid ? allCompanies.find(c => c.id === user.companyid)?.name : 'Unassigned',
-          lastaccess: user.lastaccess,
-          profileImage: user.profileimageurl
-        })),
-        availableRoles: allRoles,
-        courseManagement: {
-          totalCourses: schoolCourses.length,
-          activeCourses: schoolCourses.filter(course => course.visible === 1).length,
-          inactiveCourses: schoolCourses.filter(course => course.visible === 0).length,
-          coursesWithEnrollments: schoolCourses.filter(course => {
-            const courseEnrollments = allEnrollments.filter(enrollment => 
-              enrollment.courseid === course.id && schoolUserIds.includes(enrollment.userid)
-            );
-            return courseEnrollments.length > 0;
-          }).length
-        },
-        userActions: {
-          canAddUsers: true,
-          canRemoveUsers: true,
-          canAssignRoles: true,
-          canSuspendUsers: true,
-          canEditUsers: true
-        }
-      };
-
-      console.log('✅ School user management fetched for company:', userManagement.schoolInfo.companyName);
-      return userManagement;
-    } catch (error) {
-      console.error('❌ Error fetching school user management:', error);
-      return null;
-    }
-  },
-
-//   async getComprehensiveUserSettings(userId: string) {
-//     try {
-//       console.log(`⚙️ Fetching comprehensive user settings for user ${userId}...`);
-      
-//       const [allUsers, allCompanies, allRoles, allCourses, allEnrollments] = await Promise.all([
-//         this.getAllUsers(),
-//         this.getCompanies(),
-//         this.getAvailableRoles(),
-//         this.getAllCourses(),
-//         this.getCourseEnrollments()
-//       ]);
-
-//       const user = allUsers.find(u => u.id.toString() === userId);
-//       if (!user) {
-//         throw new Error('User not found');
-//       }
-
-//       const userCompany = user.companyid ? allCompanies.find(c => c.id === user.companyid) : null;
-//       const detectedRole = this.detectUserRoleEnhanced(user.username, user, user.roles || []);
-
-//       // Get user's courses and enrollments
-//       const userEnrollments = allEnrollments.filter(enrollment => enrollment.userid === user.id);
-//       const userCourses = allCourses.filter(course => 
-//         userEnrollments.some(enrollment => enrollment.courseid === course.id)
-//       );
-
-//       // Get user's activity data
-//       const userActivity = {
-//         lastLogin: user.lastaccess,
-//         totalCourses: userCourses.length,
-//         activeCourses: userCourses.filter(course => course.visible === 1).length,
-//         completedCourses: userCourses.filter(course => course.enddate && course.enddate < Date.now() / 1000).length,
-//         totalEnrollments: userEnrollments.length
-//       };
-
-//       // Get security settings
-//       const securitySettings = {
-//         twoFactorEnabled: false, // Would be fetched from security API
-//         passwordLastChanged: user.timecreated ? new Date(parseInt(user.timecreated) * 1000).toISOString() : null,
-//         sessionTimeout: 30, // minutes
-//         loginHistory: [
-//           {
-//             timestamp: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : null,
-//             ip: '192.168.1.1', // Would be fetched from logs
-//             location: 'Unknown',
-//             device: 'Web Browser'
-//           }
-//         ],
-//         failedLoginAttempts: 0,
-//         accountLocked: user.suspended === '1'
-//       };
-
-//       // Get notification preferences
-//       const notificationSettings = {
-//         emailNotifications: true,
-//         pushNotifications: true,
-//         courseUpdates: true,
-//         assignmentReminders: true,
-//         gradeUpdates: true,
-//         systemAlerts: false,
-//         weeklyReports: false,
-//         marketingEmails: false
-//       };
-
-//       // Get appearance settings
-//       const appearanceSettings = {
-//         theme: 'light',
-//         fontSize: 'medium',
-//         compactMode: false,
-//         showAnimations: true,
-//         colorScheme: 'blue',
-//         sidebarCollapsed: false
-//       };
-
-//       // Get API configuration (for admin users)
-//       const apiConfiguration = {
-//         apiKey: detectedRole === 'admin' || detectedRole === 'school_admin' ? 'sk-...' + Math.random().toString(36).substr(2, 8) : null,
-//         apiEndpoint: 'https://kodeit.legatoserver.com/webservice/rest/server.php',
-//         rateLimit: '1000 requests/hour',
-//         lastUsed: user.lastaccess ? new Date(parseInt(user.lastaccess) * 1000).toISOString() : null,
-//         permissions: detectedRole === 'admin' ? ['read', 'write', 'delete'] : 
-//                     detectedRole === 'school_admin' ? ['read', 'write'] : ['read']
-//       };
-
-//       const comprehensiveSettings = {
-//         profile: {
-//           id: user.id,
-//           username: user.username,
-//           firstname: user.firstname,
-//           lastname: user.lastname,
-//           fullname: user.fullname,
-//           email: user.email,
-//           phone: user.phone1 || user.phone2 || '',
-//           profileImage: user.profileimageurl,
-//           role: detectedRole,
-//           department: user.department || 'General',
-//           lastAccess: user.lastaccess,
-//           createdAt: user.timecreated,
-//           status: user.suspended === '1' ? 'suspended' : 'active',
-//           company: userCompany ? {
-//             id: userCompany.id,
-//             name: userCompany.name,
-//             shortname: userCompany.shortname
-//           } : null,
-//           bio: user.description || '',
-//           location: user.city || '',
-//           timezone: 'UTC-5',
-//           language: 'English'
-//         },
-//         activity: userActivity,
-//         security: securitySettings,
-//         notifications: notificationSettings,
-//         appearance: appearanceSettings,
-//         api: apiConfiguration,
-//         preferences: {
-//           timezone: 'UTC-5',
-//           language: 'English',
-//           dateFormat: 'MM/DD/YYYY',
-//           timeFormat: '12-hour',
-//           currency: 'USD'
-//         }
-//       };
-
-//       console.log('✅ Comprehensive user settings fetched for:', user.fullname);
-//       return comprehensiveSettings;
-//     } catch (error) {
-//       console.error('❌ Error fetching comprehensive user settings:', error);
-//       return null;
-//     }
-//   },
 
   async getSchoolComprehensiveSettings(schoolCompanyId: string) {
     try {

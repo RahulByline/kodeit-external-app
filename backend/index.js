@@ -11,6 +11,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import compilerRoutes from './routes/compiler.js';
 import cohortSettingsRoutes from './routes/cohortSettings.js';
+import blocklyRoutes from './routes/blockly.routes.js';
 // Note: Using native fetch (available in Node.js 18+)
  
 const app = express();
@@ -1703,6 +1704,39 @@ app.use('/api/compiler', compilerRoutes);
 
 // --- Cohort Settings API routes
 app.use('/api/cohort-settings', cohortSettingsRoutes);
+
+// --- Moodle API Proxy Route
+app.use('/api/moodle', async (req, res) => {
+  try {
+    const MOODLE_BASE_URL = 'https://kodeit.legatoserver.com/webservice/rest/server.php';
+    const MOODLE_TOKEN = process.env.MOODLE_TOKEN || '2eabaa23e0cf9a5442be25613c41abf5';
+    
+    // Forward the request to Moodle API
+    const response = await axios({
+      method: req.method,
+      url: MOODLE_BASE_URL,
+      params: {
+        ...req.query,
+        wstoken: MOODLE_TOKEN,
+        moodlewsrestformat: 'json'
+      },
+      data: req.body,
+      headers: {
+        'Content-Type': 'application/json',
+        ...req.headers
+      },
+      timeout: 10000
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Moodle API Proxy Error:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to proxy request to Moodle API',
+      details: error.message 
+    });
+  }
+});
 
 // --- Static files: serves /editor/* and other public assets
 app.use(express.static(path.join(process.cwd(), '..', 'public')));
