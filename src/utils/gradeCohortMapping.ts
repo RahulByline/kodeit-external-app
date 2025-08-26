@@ -16,13 +16,6 @@ export const GRADE_COHORT_MAPPING: GradeCohortMapping[] = [
     maxGrade: 3
   },
   {
-    gradeRange: 'Grade 3-7',
-    dashboardType: 'G3_G7_ENHANCED',
-    description: 'Enhanced Elementary to Middle School (Ages 9-13)',
-    minGrade: 3,
-    maxGrade: 7
-  },
-  {
     gradeRange: 'Grade 4-7',
     dashboardType: 'G4_G7',
     description: 'Upper Elementary to Middle School (Ages 10-13)',
@@ -43,7 +36,7 @@ export const GRADE_COHORT_MAPPING: GradeCohortMapping[] = [
  * @param grade - Student's grade level (1-12)
  * @returns Dashboard type to render
  */
-export const getDashboardTypeByGrade = (grade: number): 'G1_G3' | 'G3_G7_ENHANCED' | 'G4_G7' | 'G8_PLUS' => {
+export const getDashboardTypeByGrade = (grade: number): 'G1_G3' | 'G4_G7' | 'G8_PLUS' => {
   const mapping = GRADE_COHORT_MAPPING.find(m => grade >= m.minGrade && grade <= m.maxGrade);
   return mapping?.dashboardType || 'G8_PLUS'; // Default to advanced dashboard
 };
