@@ -48,7 +48,7 @@ import { Link } from 'react-router-dom';
 import ScratchEditor from './ScratchEditor';
 import { getDashboardTypeByGrade, extractGradeFromCohortName, getGradeCohortInfo, detectGradeFromMultipleSources, clearGradeCache, debugGradeDetection } from '../utils/gradeCohortMapping';
 import { Skeleton } from '../components/ui/skeleton';
-import DashboardComparison from '../components/DashboardComparison';
+
 
 interface Stats {
   enrolledCourses: number;
@@ -447,41 +447,7 @@ const StudentDashboard: React.FC = () => {
     localStorage.setItem('scratch-projects', JSON.stringify([...savedProjects, newProject]));
   };
 
-  // Manual grade override for testing (remove in production)
-  const forceGrade1ForTesting = useCallback(() => {
-    console.log('🧪 FORCING GRADE 1 FOR TESTING');
-    setStudentGrade(1);
-    setDashboardType('G1_G3');
-    setGradeDetectionComplete(true);
-  }, []);
 
-  // Debug function to test grade detection
-  const debugGradeDetectionTest = useCallback(() => {
-    console.log('🔍 DEBUG: Testing Grade Detection');
-    console.log('================================');
-    
-    debugGradeDetection();
-    
-    // Test with current user data
-    if (currentUser) {
-      console.log('🧪 Testing with current user data:');
-      console.log('- Username:', currentUser.username);
-      console.log('- User ID:', currentUser.id);
-      console.log('- Full name:', currentUser.fullname);
-      
-      const detectedGrade = detectGradeFromMultipleSources(
-        studentCohort?.name,
-        currentUser.username,
-        currentUser.id?.toString()
-      );
-      
-      console.log('🎓 Detected grade:', detectedGrade);
-      console.log('📱 Current dashboard type:', dashboardType);
-      console.log('📊 Student grade state:', studentGrade);
-    }
-    
-    console.log('================================');
-  }, [currentUser, studentCohort, dashboardType, studentGrade]);
 
   // Clear all cached data and force fresh detection
   const clearAllCachedData = useCallback(() => {
@@ -2666,7 +2632,6 @@ const StudentDashboard: React.FC = () => {
 
   // Render appropriate dashboard based on grade
   const renderGradeBasedDashboard = () => {
-    console.log('🎓 Rendering dashboard - Type:', dashboardType, 'Grade:', studentGrade);
     
     // Show loading state while grade detection is in progress
     if (!gradeDetectionComplete) {
@@ -2682,46 +2647,7 @@ const StudentDashboard: React.FC = () => {
             </div>
           </div>
           
-          {/* Debug button for development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="space-y-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-medium text-yellow-800">Debug Mode</h3>
-                    <p className="text-sm text-yellow-700">Current Grade: {studentGrade}, Dashboard Type: {dashboardType}</p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={clearAllCachedData}
-                      className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
-                    >
-                      Clear Cache
-                    </button>
-                    <button
-                      onClick={forceGrade1ForTesting}
-                      className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                    >
-                      Force Grade 1
-                    </button>
-                    <button
-                      onClick={debugGradeDetectionTest}
-                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                    >
-                      Debug Grade
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Dashboard Comparison */}
-              <DashboardComparison 
-                currentGrade={studentGrade}
-                currentDashboardType={dashboardType}
-                detectedCohort={studentCohort?.name}
-              />
-            </div>
-          )}
+          
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
@@ -2734,20 +2660,16 @@ const StudentDashboard: React.FC = () => {
     
     switch (dashboardType) {
       case 'G1_G3':
-        console.log('🎓 Rendering G1-G3 Dashboard');
         return renderG1G3Dashboard();
       case 'G4_G7':
-        console.log('🎓 Rendering G4-G7 Dashboard');
         return renderG4G7Dashboard();
       case 'G8_PLUS':
       default:
-        console.log('🎓 Rendering G8+ Dashboard');
         return renderG8PlusDashboard();
     }
   };
 
   // All dashboards should use DashboardLayout for consistent functionality
-  console.log('🎓 Final render - Dashboard Type:', dashboardType, 'Grade:', studentGrade, 'User:', currentUser?.fullname);
 
   return (
     <DashboardLayout 
