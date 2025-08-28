@@ -59,68 +59,7 @@ const numbers = [1, 2, 3, 4, 5];
 console.log("Numbers:", numbers);
 console.log("Sum:", numbers.reduce((sum, num) => sum + num, 0));`,
 
-  c: `#include <stdio.h>
 
-int main() {
-    printf("Hello, World!\\n");
-    
-    // Simple calculation
-    int a = 10;
-    int b = 5;
-    printf("%d + %d = %d\\n", a, b, a + b);
-    
-    // Array example
-    int numbers[] = {1, 2, 3, 4, 5};
-    int sum = 0;
-    for (int i = 0; i < 5; i++) {
-        sum += numbers[i];
-    }
-    printf("Sum of array: %d\\n", sum);
-    
-    return 0;
-}`,
-
-  cpp: `#include <iostream>
-#include <vector>
-#include <string>
-
-int main() {
-    std::cout << "Hello, World!" << std::endl;
-    
-    // Simple calculation
-    int a = 10;
-    int b = 5;
-    std::cout << a << " + " << b << " = " << a + b << std::endl;
-    
-    // Vector example
-    std::vector<int> numbers = {1, 2, 3, 4, 5};
-    int sum = 0;
-    for (int num : numbers) {
-        sum += num;
-    }
-    std::cout << "Sum of vector: " << sum << std::endl;
-    
-    return 0;
-}`,
-
-  java: `public class Main {
-    public static void main(String[] args) {
-        System.out.println("Hello, World!");
-        
-        // Simple calculation
-        int a = 10;
-        int b = 5;
-        System.out.println(a + " + " + b + " = " + (a + b));
-        
-        // Array example
-        int[] numbers = {1, 2, 3, 4, 5};
-        int sum = 0;
-        for (int num : numbers) {
-            sum += num;
-        }
-        System.out.println("Sum of array: " + sum);
-    }
-}`
 };
 
 const Compiler: React.FC = () => {
@@ -237,30 +176,7 @@ const Compiler: React.FC = () => {
             style={iconStyle}
           />
         );
-      case 'c':
-        return (
-          <img
-            src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/c/c-original.svg"
-            alt="C"
-            style={iconStyle}
-          />
-        );
-      case 'cpp':
-        return (
-          <img
-            src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/cplusplus/cplusplus-original.svg"
-            alt="C++"
-            style={iconStyle}
-          />
-        );
-      case 'java':
-        return (
-          <img
-            src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg"
-            alt="Java"
-            style={iconStyle}
-          />
-        );
+
       default:
         return null;
     }

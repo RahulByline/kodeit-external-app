@@ -11,11 +11,8 @@ type Props = {
 
 function mapLang(lang: string): string {
   switch (lang) {
-    case "cpp": return "cpp";
-    case "c": return "c";
     case "python": return "python";
     case "javascript": return "javascript";
-    case "java": return "java";
     case "html": return "html";
     case "css": return "css";
     default: return "plaintext";

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   BookOpen, 
   FileText, 
@@ -162,12 +162,12 @@ const StudentDashboard: React.FC = () => {
   
   // Enhanced state management with loading states for different sections
   const [stats, setStats] = useState<Stats>({
-    enrolledCourses: 0,
-    completedAssignments: 0,
-    pendingAssignments: 0,
-    averageGrade: 0,
-    totalActivities: 0,
-    activeStudents: 0
+      enrolledCourses: 0,
+      completedAssignments: 0,
+      pendingAssignments: 0,
+      averageGrade: 0,
+      totalActivities: 0,
+      activeStudents: 0
   });
   
   const [loading, setLoading] = useState(false); // Changed to false for instant render
@@ -450,7 +450,7 @@ const StudentDashboard: React.FC = () => {
     try {
       setError('');
       
-
+      
       
       console.log('🔄 Fetching real student data from IOMAD API...');
       
@@ -1073,7 +1073,7 @@ const StudentDashboard: React.FC = () => {
         {/* Header */}
         <div className="bg-white shadow-sm border-b border-gray-200">
           <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-blue-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-sm">K</span>
@@ -1184,11 +1184,11 @@ const StudentDashboard: React.FC = () => {
                   >
                     <div className="flex items-center space-x-3">
                       <Monitor className="w-5 h-5 text-purple-600" />
-                      <div>
+                <div>
                         <h4 className="text-sm font-medium text-purple-900">Code Emulators</h4>
                         <p className="text-xs text-purple-700">Practice coding in virtual envir...</p>
-                      </div>
-                    </div>
+                  </div>
+                </div>
                   </button>
                   <button 
                     onClick={() => window.open('/dashboard/student/ebooks', '_blank')}
@@ -1199,7 +1199,7 @@ const StudentDashboard: React.FC = () => {
                       <div>
                         <h4 className="text-sm font-medium text-blue-900">E-books</h4>
                         <p className="text-xs text-blue-700">Access digital learning materials</p>
-                      </div>
+              </div>
                     </div>
                   </button>
                   <button 
@@ -1226,8 +1226,8 @@ const StudentDashboard: React.FC = () => {
                       </div>
                     </div>
                   </button>
-                </div>
-              </div>
+            </div>
+          </div>
 
               {/* Quick Actions Section */}
               <div className="mb-8">
@@ -1251,16 +1251,16 @@ const StudentDashboard: React.FC = () => {
                   >
                     <div className="flex items-center space-x-3">
                       <Share2 className="w-5 h-5 text-purple-600" />
-                      <div>
+              <div>
                         <h4 className="text-sm font-medium text-purple-900">Share with Class</h4>
                         <p className="text-xs text-purple-700">Collaborate with classmates</p>
-                      </div>
+                    </div>
                     </div>
                   </button>
                 </div>
               </div>
             </div>
-          </div>
+                  </div>
 
           {/* Main Content Area */}
           <div className="flex-1 overflow-y-auto">
@@ -1300,13 +1300,13 @@ const StudentDashboard: React.FC = () => {
                  >
                    Activities
                  </button>
-               </div>
+                    </div>
                <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
                  <button className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium">Card View</button>
                  <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Tree View</button>
                  <button className="px-3 py-1 text-gray-600 hover:text-gray-900 text-xs font-medium">Journey View</button>
                </div>
-             </div>
+                  </div>
 
              {/* Content based on active tab */}
              {activeTab === 'dashboard' && (
@@ -1318,7 +1318,7 @@ const StudentDashboard: React.FC = () => {
                        <div>
                          <p className="text-sm font-medium text-gray-600">Courses</p>
                          <p className="text-2xl font-bold text-gray-900">{totalCourses}</p>
-                       </div>
+                    </div>
                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                          <Target className="w-5 h-5 text-blue-600" />
                        </div>
@@ -1355,9 +1355,9 @@ const StudentDashboard: React.FC = () => {
                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                          <Clock className="w-5 h-5 text-purple-600" />
                        </div>
-                     </div>
-                   </div>
-                 </div>
+                  </div>
+                </div>
+              </div>
 
                  {/* My Courses Section with Real Data - Matching Image Design */}
                  <div className="mb-8">
@@ -1465,7 +1465,7 @@ const StudentDashboard: React.FC = () => {
                        </div>
                      ))}
                    </div>
-                 </div>
+            </div>
 
                  {/* Upcoming Activities Section with Real Data - Matching Image Design */}
                  <div>
@@ -1476,8 +1476,8 @@ const StudentDashboard: React.FC = () => {
                          <div className="flex items-start space-x-4 mb-4">
                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                              <activity.icon className="w-5 h-5 text-blue-600" />
-                           </div>
-                           <div className="flex-1">
+                      </div>
+                      <div className="flex-1">
                              <h3 className="text-lg font-semibold text-gray-900 mb-1">{activity.title}</h3>
                              <div className="flex items-center space-x-2 mb-2">
                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
@@ -1486,11 +1486,11 @@ const StudentDashboard: React.FC = () => {
                                  {activity.difficulty}
                                </span>
                                <span className="text-sm font-medium text-blue-600">{activity.points}</span>
-                             </div>
+                        </div>
                              <div className="flex items-center space-x-2 mb-3">
                                <Clock className="w-4 h-4 text-gray-400" />
                                <span className="text-sm text-gray-600">{activity.duration}</span>
-                             </div>
+                      </div>
                              <div className="flex items-center space-x-2 mb-4">
                                {activity.status === 'completed' ? (
                                  <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
@@ -1517,10 +1517,10 @@ const StudentDashboard: React.FC = () => {
                            {activity.status === 'overdue' ? 'Continue' : 
                             activity.status === 'completed' ? 'Review' : 'Start'}
                          </button>
-                       </div>
-                     ))}
-                   </div>
-                 </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
                </>
              )}
 
@@ -1535,8 +1535,8 @@ const StudentDashboard: React.FC = () => {
                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-800">
                              Active
                            </span>
-                         </div>
-                       </div>
+            </div>
+          </div>
                        <div className="p-6">
                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{course.fullname}</h3>
                          <p className="text-gray-600 text-sm mb-4">{course.shortname}</p>
@@ -1544,10 +1544,10 @@ const StudentDashboard: React.FC = () => {
                            <div className="flex justify-between text-sm mb-1">
                              <span className="text-gray-600">Progress</span>
                              <span className="text-gray-900 font-medium">{course.progress || 0}%</span>
-                           </div>
+        </div>
                                                         <div className="w-full bg-gray-200 rounded-full h-2">
                                <div className={`${getColorClasses(['blue', 'purple', 'green'][index] || 'blue', 'bg')} h-2 rounded-full`} style={{ width: `${course.progress || 0}%` }}></div>
-                             </div>
+      </div>
                            </div>
                            <div className="flex items-center justify-between">
                              <span className="text-sm text-gray-600">Course ID: {course.id}</span>
@@ -1735,8 +1735,8 @@ const StudentDashboard: React.FC = () => {
                            }`}
                          >
                            {date.getDate()}
-                         </div>
-                       );
+    </div>
+  );
                      })}
                    </div>
                    <div className="space-y-3">
@@ -2052,75 +2052,146 @@ const StudentDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Course Progress Analysis - Simplified */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Course Progress Overview</h2>
+      {/* My Enrolled Courses Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">My Enrolled Courses</h2>
+            <p className="text-gray-600 mt-1">All your available courses from IOMAD Moodle</p>
           </div>
-          
-          {/* Subject Breakdown */}
-          <div className="space-y-3">
-            {loadingStates.userCourses || loadingStates.courseProgress ? (
-              <SkeletonProgressBar />
-            ) : courseProgress.length > 0 ? (
-              courseProgress.map((item, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700">{item.subject}</span>
-                  <span className="text-sm font-semibold text-green-600">{item.progress}%</span>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-4 text-gray-500">
-                <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">No courses available</p>
+          <div className="flex items-center space-x-2">
+            {loadingStates.userCourses && (
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-gray-500">Loading courses...</span>
               </div>
             )}
           </div>
         </div>
-
-        {/* Grade Distribution Analysis */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Grade Distribution Analysis</h2>
-          </div>
-
-          <div className="space-y-4">
-            {loadingStates.gradeBreakdown ? (
-              <SkeletonProgressBar />
-            ) : (
-              gradeBreakdown.map((item, index) => (
-                <div key={index}>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">{item.grade}</span>
-                    <span className="text-sm font-semibold text-gray-900">{item.count} assignments</span>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {loadingStates.userCourses ? (
+            <>
+              <SkeletonCourseCard />
+              <SkeletonCourseCard />
+              <SkeletonCourseCard />
+            </>
+          ) : userCourses.length > 0 ? (
+            userCourses.map((course, index) => (
+              <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                {/* Course Image */}
+                <div className="relative h-48 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
+                  {course.courseimage ? (
+                    <img 
+                      src={course.courseimage} 
+                      alt={course.fullname}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to placeholder if image fails to load
+                        const target = e.currentTarget as HTMLImageElement;
+                        target.style.display = 'none';
+                        const nextElement = target.nextElementSibling as HTMLElement;
+                        if (nextElement) {
+                          nextElement.style.display = 'flex';
+                        }
+                      }}
+                    />
+                  ) : null}
+                  {/* Fallback placeholder when no image or image fails to load */}
+                  <div className={`absolute inset-0 flex items-center justify-center ${course.courseimage ? 'hidden' : 'flex'}`}>
+                    <div className="text-center">
+                      <BookOpen className="w-16 h-16 text-blue-500 mx-auto mb-2" />
+                      <div className="text-sm text-gray-600">{course.shortname}</div>
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  {/* Course Type Icon */}
+                  <div className="absolute bottom-2 right-2 w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                    <BookOpen className="w-4 h-4 text-white" />
+                  </div>
+                  {/* New Badge for first course */}
+                  {index === 0 && (
+                    <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                      New
+                    </div>
+                  )}
+                </div>
+                
+                {/* Course Details */}
+                <div className="p-4">
+                  {/* Dates */}
+                  <div className="text-xs text-gray-500 mb-2">
+                    {course.startdate ? (
+                      <>
+                        Inicia {new Date(course.startdate * 1000).toLocaleDateString('es-ES', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          year: 'numeric' 
+                        })}
+                        {course.enddate && (
+                          <> | Finaliza {new Date(course.enddate * 1000).toLocaleDateString('es-ES', { 
+                            day: 'numeric', 
+                            month: 'short', 
+                            year: 'numeric' 
+                          })}</>
+                        )}
+                      </>
+                    ) : (
+                      'Dates not available'
+                    )}
+                  </div>
+                  
+                  {/* Course Title */}
+                  <h3 className="font-bold text-gray-900 text-lg mb-2 line-clamp-2">
+                    {course.fullname}
+                  </h3>
+                  
+                  {/* Status */}
+                  <div className="flex items-center text-sm text-gray-600 mb-3">
+                    <div className="w-3 h-3 bg-gray-400 rounded-full mr-2 animate-pulse"></div>
+                    Course Not Started
+                  </div>
+                  
+                  {/* Progress */}
+                  <div className="flex items-center justify-between text-sm mb-3">
+                    <span className="text-gray-700">Progress</span>
+                    <span className="font-medium text-green-600">{course.progress || 0}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1 mb-4">
                     <div 
-                      className={`h-2 rounded-full ${
-                        item.grade.includes('A') ? 'bg-green-600' :
-                        item.grade.includes('B') ? 'bg-blue-600' :
-                        item.grade.includes('C') ? 'bg-yellow-600' : 'bg-red-600'
-                      }`}
-                      style={{ width: `${item.percentage}%` }}
+                      className="bg-green-500 h-1 rounded-full transition-all duration-300"
+                      style={{ width: `${course.progress || 0}%` }}
                     ></div>
                   </div>
+                  
+                  {/* Modules and Activities */}
+                  <div className="grid grid-cols-2 gap-4 mb-4 text-center">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {Math.floor(Math.random() * 10) + 3} Modules
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {Math.floor(Math.random() * 15) + 5} Activities
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Start Learning Button */}
+                  <button className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center">
+                    <Play className="w-4 h-4 mr-2" />
+                    Start Learning
+                  </button>
                 </div>
-              ))
-            )}
-          </div>
-
-          {/* Totals */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">Total Assignments</span>
-              <span className="text-sm font-bold text-gray-900">{stats.completedAssignments + stats.pendingAssignments}</span>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full text-center py-8">
+              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Courses Available</h3>
+              <p className="text-gray-600 text-sm">You haven't been enrolled in any courses yet.</p>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">GPA</span>
-              <span className="text-sm font-bold text-green-600">{(stats.averageGrade / 25).toFixed(1)}</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
