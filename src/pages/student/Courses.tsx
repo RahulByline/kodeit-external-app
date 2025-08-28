@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   BookOpen, 
   Clock, 
@@ -44,7 +45,9 @@ import {
   Target as TargetIcon,
   ArrowLeft,
   Bell,
-  Info
+  Info,
+  LayoutDashboard,
+  Activity
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import moodleService from '../../services/moodleApi';
@@ -337,12 +340,33 @@ const getBestCourseImage = (courses: Course[]): string => {
 
 const Courses: React.FC = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
+
+  // Top navigation items
+  const topNavItems = [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
+    { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+    { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' },
+    { name: 'Activities', icon: Activity, path: '/dashboard/student/activities' }
+  ];
+
+  const isActivePath = (path: string) => {
+    if (path === '/dashboard/student') {
+      return location.pathname === '/dashboard/student' || location.pathname === '/dashboard/student/';
+    }
+    return location.pathname === path;
+  };
+
+  const handleTopNavClick = (path: string) => {
+    navigate(path);
+  };
   
   // Course details and activities
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -695,6 +719,29 @@ const Courses: React.FC = () => {
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+      {/* Top Navigation Bar */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="flex space-x-1 p-1">
+          {topNavItems.map((item) => {
+            const isActive = isActivePath(item.path);
+            return (
+              <button
+                key={item.name}
+                onClick={() => handleTopNavClick(item.path)}
+                className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                <span>{item.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">

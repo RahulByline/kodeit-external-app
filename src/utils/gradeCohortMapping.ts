@@ -38,7 +38,7 @@ export const GRADE_COHORT_MAPPING: GradeCohortMapping[] = [
  */
 export const getDashboardTypeByGrade = (grade: number): 'G1_G3' | 'G4_G7' | 'G8_PLUS' => {
   const mapping = GRADE_COHORT_MAPPING.find(m => grade >= m.minGrade && grade <= m.maxGrade);
-  return mapping?.dashboardType || 'G8_PLUS'; // Default to advanced dashboard
+  return mapping?.dashboardType || 'G4_G7'; // Default to G4-G7 dashboard
 };
 
 /**

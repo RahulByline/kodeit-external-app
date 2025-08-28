@@ -4138,6 +4138,8 @@ export const moodleService = {
       },
       courses: {
         'My Courses': true,
+        'Current Lessons': true,
+        'Activities': true,
         Assignments: true,
         Assessments: true
       },

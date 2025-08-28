@@ -88,8 +88,8 @@ const StudentDashboard: React.FC = () => {
   const [error, setError] = useState('');
   
   // Grade-based dashboard state
-  const [studentGrade, setStudentGrade] = useState<number>(8);
-  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G8_PLUS');
+  const [studentGrade, setStudentGrade] = useState<number>(6);
+  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G4_G7');
   const [studentCohort, setStudentCohort] = useState<any>(null);
   
   // Real data states with individual loading states
@@ -211,7 +211,7 @@ const StudentDashboard: React.FC = () => {
       const cohort = await moodleService.getStudentCohort(currentUser?.id.toString());
       setStudentCohort(cohort);
       
-      let grade = 8; // Default to grade 8+
+      let grade = 6; // Default to grade 6 (G4-G7)
       
       if (cohort && cohort.name) {
         console.log('🎓 Student cohort:', cohort.name);
@@ -222,10 +222,10 @@ const StudentDashboard: React.FC = () => {
           grade = extractedGrade;
           console.log('🎓 Grade extracted from cohort name:', grade);
         } else {
-          console.log('🎓 No grade found in cohort name, using default grade 8+');
+          console.log('🎓 No grade found in cohort name, using default grade 6 (G4-G7)');
         }
       } else {
-        console.log('🎓 No cohort found, using default grade 8+');
+        console.log('🎓 No cohort found, using default grade 6 (G4-G7)');
       }
       
       setStudentGrade(grade);
@@ -244,8 +244,8 @@ const StudentDashboard: React.FC = () => {
     } catch (error) {
       console.error('❌ Error determining student grade:', error);
       // Use default values
-      setStudentGrade(8);
-      setDashboardType('G8_PLUS');
+      setStudentGrade(6);
+      setDashboardType('G4_G7');
     }
   }, [currentUser?.id]);
 
