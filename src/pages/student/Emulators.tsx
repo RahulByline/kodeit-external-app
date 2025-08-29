@@ -68,12 +68,6 @@ const Emulators: React.FC = () => {
           {/* Header */}
           <div className="flex justify-between items-start">
             <div>
-              <button 
-                onClick={handleBackToSelection}
-                className="text-blue-600 hover:text-blue-800 mb-2 flex items-center"
-              >
-                ← Back to Emulators
-              </button>
               <h1 className="text-2xl font-bold text-gray-900">Scratch Programming</h1>
               <p className="text-gray-600 mt-1">Create interactive stories, games, and animations with visual programming blocks</p>
             </div>
