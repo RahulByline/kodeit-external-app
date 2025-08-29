@@ -111,11 +111,14 @@ const StudentEbooks = lazy(() => import("./pages/student/Ebooks"));
 const StudentAskTeacher = lazy(() => import("./pages/student/AskTeacher"));
 const StudentAiBuddy = lazy(() => import("./pages/student/AiBuddy"));
 const StudentShare = lazy(() => import("./pages/student/Share"));
+const StudentCurrentLessons = lazy(() => import("./pages/student/CurrentLessons"));
+const StudentActivities = lazy(() => import("./pages/student/Activities"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
 const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
 const ScratchCodeEditor = lazy(() => import("./pages/student/ScratchCodeEditor"));
+
 
 // Settings pages - lazy loaded
 const SchoolAdminSettings = lazy(() => import("./pages/SchoolAdminSettings"));
@@ -615,6 +618,7 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+
                 <Route path="/dashboard/student/ebooks" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -643,6 +647,23 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+
+
+                <Route path="/dashboard/student/current-lessons" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentCurrentLessons />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/activities" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentActivities />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+
                 {/* Scratch Editor Route */}
                 <Route path="/editor" element={
                   <Suspense fallback={<LoadingSpinner />}>
