@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -23,12 +23,24 @@ import {
   ExternalLink,
   Download,
   Star,
-  BarChart3
+  BarChart3,
+  Filter,
+  RefreshCw
 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Progress } from '../../components/ui/progress';
+import { Input } from '../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Skeleton } from '../../components/ui/skeleton';
+import { getCacheKey, getCachedData, setCachedData, CACHE_KEYS } from '../../utils/cache';
 
 interface Course {
   id: string;
   title: string;
+  fullname: string;
+  shortname: string;
   description: string;
   instructor: string;
   progress: number;
@@ -47,6 +59,7 @@ interface Lesson {
   title: string;
   courseId: string;
   courseTitle: string;
+  courseShortName: string;
   duration: string;
   type: 'video' | 'quiz' | 'assignment' | 'practice';
   status: 'completed' | 'in-progress' | 'not-started';
@@ -62,15 +75,185 @@ const CurrentLessons: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(false); // Start with false for instant render
   const [filter, setFilter] = useState<'all' | 'in-progress' | 'completed' | 'not-started'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'in-progress' | 'completed' | 'not-started'>('all');
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('all');
+  
+  // Individual loading states for progressive loading
+  const [loadingStates, setLoadingStates] = useState({
+    courses: false,
+    lessons: false,
+    activities: false
+  });
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+
+  // Skeleton loader components for fast loading
+  const SkeletonLessonCard = () => (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+      <div className="relative">
+        <Skeleton className="w-full h-40" />
+        <div className="absolute top-4 right-4">
+          <Skeleton className="w-8 h-8 rounded-full" />
+        </div>
+        <div className="absolute bottom-4 left-4">
+          <Skeleton className="w-20 h-6 rounded-full" />
+        </div>
+      </div>
+      <div className="p-6">
+        <Skeleton className="h-6 w-3/4 mb-2" />
+        <Skeleton className="h-4 w-1/2 mb-4" />
+        <div className="flex items-center space-x-2 mb-4">
+          <Skeleton className="w-4 h-4" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        <div className="mb-4">
+          <div className="flex justify-between mb-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-12" />
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
+        </div>
+        <Skeleton className="w-full h-12 rounded-xl" />
+      </div>
+    </div>
+  );
+
+  const SkeletonStatsCard = () => (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <Skeleton className="h-4 w-20 mb-2" />
+          <Skeleton className="h-8 w-12" />
+        </div>
+        <Skeleton className="w-12 h-12 rounded-xl" />
+      </div>
+    </div>
+  );
+
+  // Fast loading with caching and progressive loading
+  const loadLessonsWithCache = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      console.log('🚀 Loading lessons with fast loading optimizations...');
+      
+      // 1. Try to load cached data first for instant display
+      const lessonsCacheKey = getCacheKey(CACHE_KEYS.CURRENT_LESSONS, currentUser.id);
+      const coursesCacheKey = getCacheKey(CACHE_KEYS.USER_COURSES, currentUser.id);
+      
+      const cachedLessons = getCachedData(lessonsCacheKey);
+      const cachedCourses = getCachedData(coursesCacheKey);
+      
+      if (cachedLessons && cachedCourses) {
+        console.log('✅ Loading lessons from cache for instant display...');
+        setLessons(cachedLessons);
+        setCourses(cachedCourses);
+        setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+      } else {
+        setLoadingStates(prev => ({ ...prev, lessons: true, courses: true }));
+      }
+      
+      // 2. Load fresh data in background
+      const loadFreshData = async () => {
+        try {
+          console.log('🔄 Loading fresh lessons data in background...');
+          
+          // Fetch all user courses
+          const userCourses = await moodleService.getUserCourses(currentUser.id);
+          const enrolledCourses = userCourses.filter(course => 
+            course.visible !== 0 && course.categoryid && course.categoryid > 0
+          );
+          
+          // Transform courses
+          const transformedCourses: Course[] = enrolledCourses.map(course => ({
+            id: course.id,
+            title: course.fullname,
+            fullname: course.fullname,
+            shortname: course.shortname,
+            description: course.summary || '',
+            instructor: 'Instructor',
+            progress: course.progress || 0,
+            totalLessons: 0,
+            completedLessons: 0,
+            duration: '4 weeks',
+            category: course.categoryname || 'General',
+            image: course.courseimage || '/card1.webp',
+            isActive: course.progress > 0,
+            lastAccessed: course.startdate ? new Date(course.startdate * 1000).toISOString() : '',
+            difficulty: 'Beginner' as const
+          }));
+          
+          setCourses(transformedCourses);
+          setCachedData(coursesCacheKey, transformedCourses);
+          setLoadingStates(prev => ({ ...prev, courses: false }));
+          
+          // Fetch lessons from all courses in parallel for faster loading
+          const courseActivityPromises = enrolledCourses.map(async (course) => {
+            try {
+              console.log(`🔍 Fetching activities for course: ${course.fullname}`);
+              const courseActivities = await moodleService.getCourseActivities(course.id);
+              
+              return courseActivities.map((activity: any) => ({
+                id: activity.id.toString(),
+                title: activity.name,
+                courseId: course.id,
+                courseTitle: course.fullname,
+                courseShortName: course.shortname,
+                duration: getActivityDuration(activity.type),
+                type: mapActivityType(activity.type),
+                status: getActivityStatus(activity.completion),
+                progress: getActivityProgress(activity.completion),
+                dueDate: getActivityDueDate(activity.dates),
+                isNew: isNewActivity(activity.dates),
+                prerequisites: activity.availabilityinfo,
+                image: getActivityImage(activity.type, course.courseimage)
+              }));
+            } catch (courseError) {
+              console.warn(`Failed to fetch activities for course ${course.fullname}:`, courseError);
+              return [];
+            }
+          });
+          
+          // Wait for all course activities to load in parallel
+          const allCourseLessons = await Promise.all(courseActivityPromises);
+          const allLessons = allCourseLessons.flat();
+          
+          setLessons(allLessons);
+          setCachedData(lessonsCacheKey, allLessons);
+          setLoadingStates(prev => ({ ...prev, lessons: false }));
+          
+          console.log(`✅ Fresh lessons loaded and cached: ${allLessons.length} lessons`);
+          
+        } catch (error) {
+          console.error('❌ Error loading fresh lessons data:', error);
+          setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+          
+          // If no cached data and API fails, show empty state
+          if (!cachedLessons && !cachedCourses) {
+            setLessons([]);
+            setCourses([]);
+          }
+        }
+      };
+      
+      // Start background loading
+      loadFreshData();
+      
+    } catch (error) {
+      console.error('❌ Error in loadLessonsWithCache:', error);
+      setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    loadLessonsWithCache();
+  }, [loadLessonsWithCache]);
 
   // Top navigation items
   const topNavItems = [
@@ -97,7 +280,12 @@ const CurrentLessons: React.FC = () => {
     
     // Store selected lesson in localStorage
     localStorage.setItem('selectedLesson', JSON.stringify(lesson));
-    localStorage.setItem('selectedCourse', JSON.stringify(selectedCourse));
+    
+    // Find the course for this lesson
+    const course = courses.find(c => c.id === lesson.courseId);
+    if (course) {
+      localStorage.setItem('selectedCourse', JSON.stringify(course));
+    }
     
     // Open modal with lesson details
     setSelectedLesson(lesson);
@@ -109,68 +297,6 @@ const CurrentLessons: React.FC = () => {
     setIsModalOpen(false);
     setSelectedLesson(null);
   };
-
-  useEffect(() => {
-    const loadLessons = async () => {
-      setLoading(true);
-      
-      try {
-        // Get selected course from localStorage or route state
-        let course: Course | null = null;
-        
-        // Try to get from route state first
-        if (location.state?.selectedCourse) {
-          course = location.state.selectedCourse;
-        } else {
-          // Try to get from localStorage
-          const storedCourse = localStorage.getItem('selectedCourse');
-          if (storedCourse) {
-            course = JSON.parse(storedCourse);
-          }
-        }
-        
-        if (!course) {
-          console.warn('No course selected, redirecting to dashboard');
-          navigate('/dashboard/student');
-          return;
-        }
-        
-        setSelectedCourse(course);
-        console.log('📚 Loading lessons for course:', course.title);
-        
-        // Fetch lessons for the specific course from Moodle API
-        const courseActivities = await moodleService.getCourseActivities(course.id);
-        
-        // Transform Moodle activities to lessons
-        const courseLessons = courseActivities.map((activity: any) => ({
-          id: activity.id.toString(),
-          title: activity.name,
-          courseId: course.id,
-          courseTitle: course.title,
-          duration: getActivityDuration(activity.type),
-          type: mapActivityType(activity.type),
-          status: getActivityStatus(activity.completion),
-          progress: getActivityProgress(activity.completion),
-          dueDate: getActivityDueDate(activity.dates),
-          isNew: isNewActivity(activity.dates),
-          prerequisites: activity.availabilityinfo,
-          image: getActivityImage(activity.type, course.image)
-        }));
-        
-        console.log(`✅ Loaded ${courseLessons.length} lessons for course: ${course.title}`);
-        setLessons(courseLessons);
-        
-      } catch (error) {
-        console.error('Error loading lessons:', error);
-        // Fallback to empty lessons array
-        setLessons([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadLessons();
-  }, [location.state, navigate]);
 
   // Helper functions for Moodle activity processing
   const getActivityDuration = (activityType: string): string => {
@@ -273,7 +399,8 @@ const CurrentLessons: React.FC = () => {
     const matchesSearchTerm = lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                               lesson.courseTitle.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = activeFilter === 'all' || lesson.status === activeFilter;
-    return matchesSearchTerm && matchesFilter;
+    const matchesCourse = selectedCourseFilter === 'all' || lesson.courseId === selectedCourseFilter;
+    return matchesSearchTerm && matchesFilter && matchesCourse;
   });
 
   return (
@@ -308,11 +435,9 @@ const CurrentLessons: React.FC = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Current Lessons</h1>
-              {selectedCourse && (
-                <p className="text-gray-600 text-lg">
-                  Lessons for: <span className="font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{selectedCourse.title}</span>
-                </p>
-              )}
+              <p className="text-gray-600 text-lg">
+                Lessons from all your enrolled courses
+              </p>
               <p className="text-gray-600 mt-2">Track your learning progress and upcoming lessons</p>
             </div>
             <div className="flex items-center space-x-4">
@@ -332,50 +457,61 @@ const CurrentLessons: React.FC = () => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Lessons</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.length}</p>
+            {loadingStates.lessons ? (
+              <>
+                <SkeletonStatsCard />
+                <SkeletonStatsCard />
+                <SkeletonStatsCard />
+                <SkeletonStatsCard />
+              </>
+            ) : (
+              <>
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Lessons</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <BookOpen className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <BookOpen className="w-6 h-6 text-white" />
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Completed</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'completed').length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Completed</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'completed').length}</p>
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">In Progress</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'in-progress').length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                      <Clock className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <CheckCircle className="w-6 h-6 text-white" />
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Not Started</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'not-started').length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <Play className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">In Progress</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'in-progress').length}</p>
-                </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <Clock className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Not Started</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'not-started').length}</p>
-                </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <Play className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* Filter and Search */}
@@ -399,24 +535,40 @@ const CurrentLessons: React.FC = () => {
                   ))}
                 </div>
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search lessons..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full md:w-80 px-4 py-2 pl-10 bg-white/60 backdrop-blur-sm border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+              <div className="flex items-center space-x-4">
+                <Select value={selectedCourseFilter} onValueChange={setSelectedCourseFilter}>
+                  <SelectTrigger className="w-48 bg-white/60 backdrop-blur-sm border border-white/20">
+                    <SelectValue placeholder="Select Course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Courses</SelectItem>
+                    {courses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.shortname || course.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search lessons..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full md:w-80 px-4 py-2 pl-10 bg-white/60 backdrop-blur-sm border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Lessons Grid */}
-          {loading ? (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading lessons...</p>
+          {loadingStates.lessons ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <SkeletonLessonCard key={i} />
+              ))}
             </div>
           ) : filteredLessons.length === 0 ? (
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
