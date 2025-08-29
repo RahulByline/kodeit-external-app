@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   BookOpen, 
   FileText, 
@@ -19,7 +20,8 @@ import {
   Users,
   Activity,
   Circle,
-  Link
+  Link,
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { Skeleton } from '../../../components/ui/skeleton';
@@ -110,6 +112,30 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
   loadingStates
 }) => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
+
+  // Function to handle image loading state
+  const handleImageLoad = (courseId: string) => {
+    setImageLoadingStates(prev => ({ ...prev, [courseId]: false }));
+  };
+
+  const handleImageError = (courseId: string) => {
+    setImageLoadingStates(prev => ({ ...prev, [courseId]: false }));
+  };
+
+  // Initialize image loading states when courses are loaded
+  useEffect(() => {
+    if (userCourses.length > 0) {
+      const initialStates: { [key: string]: boolean } = {};
+      userCourses.forEach(course => {
+        if (course.courseimage) {
+          initialStates[course.id] = true;
+        }
+      });
+      setImageLoadingStates(initialStates);
+    }
+  }, [userCourses]);
 
   // Skeleton loader components
   const SkeletonCard = () => (
@@ -126,24 +152,27 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
   );
 
   const SkeletonCourseCard = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <div className="flex items-start space-x-4 mb-4">
-        <Skeleton className="w-16 h-16 rounded-2xl" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-5 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <Skeleton className="w-full h-48" />
+      <div className="p-4">
+        <div className="flex items-start space-x-4 mb-4">
+          <Skeleton className="w-16 h-16 rounded-2xl" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
         </div>
-      </div>
-      <div className="space-y-2 mb-4">
-        <div className="flex justify-between">
-          <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-4 w-12" />
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-12" />
+          </div>
+          <Skeleton className="h-3 w-full rounded-full" />
         </div>
-        <Skeleton className="h-3 w-full rounded-full" />
-      </div>
-      <div className="flex justify-between items-center">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-8 w-20 rounded-lg" />
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-8 w-20 rounded-lg" />
+        </div>
       </div>
     </div>
   );
@@ -183,27 +212,27 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Student Dashboard</h1>
-          <p className="text-gray-600 mt-1">Real-time data from IOMAD Moodle API - Welcome back, {currentUser?.firstname || "Student"}!</p>
-        </div>
-        
-        {/* Dashboard Controls */}
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2 bg-white border border-gray-300 rounded-lg px-3 py-2">
-            <span className="text-sm font-medium text-gray-700">Q2 2025 (Apr-Jun)</span>
-            <ChevronDown className="w-4 h-4 text-gray-500" />
+        {/* Header */}
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Student Dashboard</h1>
+            <p className="text-gray-600 mt-1">Real-time data from IOMAD Moodle API - Welcome back, {currentUser?.firstname || "Student"}!</p>
           </div>
-          <button className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-            <Download className="w-4 h-4 text-gray-600" />
-          </button>
-          <button className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-            <Share2 className="w-4 h-4 text-gray-600" />
-          </button>
+          
+          {/* Dashboard Controls */}
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 bg-white border border-gray-300 rounded-lg px-3 py-2">
+              <span className="text-sm font-medium text-gray-700">Q2 2025 (Apr-Jun)</span>
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            </div>
+            <button className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+              <Download className="w-4 h-4 text-gray-600" />
+            </button>
+            <button className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+              <Share2 className="w-4 h-4 text-gray-600" />
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -303,13 +332,20 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
             <h2 className="text-lg font-semibold text-gray-900">My Enrolled Courses</h2>
             <p className="text-gray-600 mt-1">All your available courses from IOMAD Moodle</p>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             {loadingStates.userCourses && (
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-xs text-gray-500">Loading courses...</span>
               </div>
             )}
+            <button
+              onClick={() => navigate('/dashboard/student/courses')}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm font-medium"
+            >
+              <span>View All</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
         
@@ -325,23 +361,28 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
               <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
                 {/* Course Image */}
                 <div className="relative h-48 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
+                  {/* Loading skeleton for image */}
+                  {imageLoadingStates[course.id] && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Skeleton className="w-full h-full" />
+                    </div>
+                  )}
+                  
                   {course.courseimage ? (
                     <img 
                       src={course.courseimage} 
                       alt={course.fullname}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.currentTarget as HTMLImageElement;
-                        target.style.display = 'none';
-                        const nextElement = target.nextElementSibling as HTMLElement;
-                        if (nextElement) {
-                          nextElement.style.display = 'flex';
-                        }
-                      }}
+                      onLoad={() => handleImageLoad(course.id)}
+                      onError={() => handleImageError(course.id)}
+                      style={{ display: imageLoadingStates[course.id] ? 'none' : 'block' }}
                     />
                   ) : null}
+                  
                   {/* Fallback placeholder when no image or image fails to load */}
-                  <div className={`absolute inset-0 flex items-center justify-center ${course.courseimage ? 'hidden' : 'flex'}`}>
+                  <div className={`absolute inset-0 flex items-center justify-center ${
+                    course.courseimage && !imageLoadingStates[course.id] ? 'hidden' : 'flex'
+                  }`}>
                     <div className="text-center">
                       <BookOpen className="w-16 h-16 text-blue-500 mx-auto mb-2" />
                       <div className="text-sm text-gray-600">{course.shortname}</div>
@@ -607,61 +648,8 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
         </div>
       </div>
       
-      {/* Programming Tools Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Programming Tools</h2>
-            <p className="text-gray-600 mt-1">Access interactive programming environments</p>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link to="/dashboard/student/code-editor" className="block">
-            <div className="bg-green-50 rounded-lg p-4 border border-green-200 cursor-pointer hover:bg-green-100 transition-colors">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Code className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-green-900">Code Editor</h3>
-                  <p className="text-sm text-green-700">Write and run code in multiple programming languages</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-          
-          <Link to="/dashboard/student/compiler" className="block">
-            <div className="bg-purple-50 rounded-lg p-4 border border-purple-200 cursor-pointer hover:bg-purple-100 transition-colors">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Settings className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-purple-900">Compiler</h3>
-                  <p className="text-sm text-purple-700">Advanced code compilation with Piston API</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-         
-          <Link to="/dashboard/student/scratch-editor" className="block">
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Play className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-blue-900">Scratch Programming</h3>
-                  <p className="text-sm text-blue-700">Create interactive stories, games, and animations with visual blocks</p>
-                </div>
-              </div>
-            </div>
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-};
+           </div>
+   );
+ };
 
-export default G8PlusDashboard;
+  export default G8PlusDashboard;

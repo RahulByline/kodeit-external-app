@@ -32,7 +32,13 @@ import {
   Timer,
   Bookmark,
   Share2,
-  X
+  X,
+  Monitor,
+  Smartphone,
+  Laptop,
+  FolderOpen,
+  List,
+  Grid
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -103,6 +109,10 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
   // Course sections and activities
   const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [popularCourses, setPopularCourses] = useState<PopularCourse[]>([]);
+  
+  // New state for lesson/activity navigation
+  const [selectedLesson, setSelectedLesson] = useState<CourseSection | null>(null);
+  const [viewMode, setViewMode] = useState<'lessons' | 'activities'>('lessons');
 
   useEffect(() => {
     fetchCourseDetails();
@@ -195,7 +205,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
           
           return {
             id: section.id.toString(),
-            name: section.name || `Section ${index + 1}`,
+            name: section.name || `Lesson ${index + 1}`,
             activities: sectionActivities,
             completedActivities,
             totalActivities: sectionActivities.length,
@@ -253,14 +263,14 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
     }
   };
 
-  const getActivityIcon = (type: CourseActivity['type']) => {
+  const getActivityIcon = (type: CourseActivity['type'], className: string = "w-4 h-4") => {
     switch (type) {
-      case 'video': return <Play className="w-4 h-4" />;
-      case 'reading': return <FileText className="w-4 h-4" />;
-      case 'quiz': return <BarChart3 className="w-4 h-4" />;
-      case 'interactive': return <Target className="w-4 h-4" />;
-      case 'assignment': return <Edit className="w-4 h-4" />;
-      default: return <FileText className="w-4 h-4" />;
+      case 'video': return <Play className={className} />;
+      case 'reading': return <FileText className={className} />;
+      case 'quiz': return <BarChart3 className={className} />;
+      case 'interactive': return <Target className={className} />;
+      case 'assignment': return <Edit className={className} />;
+      default: return <FileText className={className} />;
     }
   };
 
@@ -290,6 +300,16 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
       newExpanded.add(sectionId);
     }
     setExpandedSections(newExpanded);
+  };
+
+  const handleLessonClick = (lesson: CourseSection) => {
+    setSelectedLesson(lesson);
+    setViewMode('activities');
+  };
+
+  const handleBackToLessons = () => {
+    setSelectedLesson(null);
+    setViewMode('lessons');
   };
 
   const handleActivityClick = async (activity: CourseActivity) => {
@@ -464,44 +484,91 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
             </div>
           </div>
         {/* Course Banner */}
-        <div className="relative h-64 bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 rounded-lg overflow-hidden">
-          {/* Background Image */}
-          <img 
-            src={courseImage} 
-            alt={course.fullname}
-            className="w-full h-full object-cover opacity-20"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
-          />
+        <div className="relative h-80 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-xl overflow-hidden">
+          {/* Background Image - Bookshelf style */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 to-purple-900/40">
+            <div className="absolute inset-0 opacity-20" style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Crect width='4' height='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+            }}></div>
+          </div>
           
-          {/* Overlay Text */}
-          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center">
-            <div className="container mx-auto px-6">
-              <div className="text-white">
-                <h1 className="text-4xl font-bold mb-4">{course.fullname}</h1>
-                <div className="flex items-center space-x-6 text-sm">
-                                     <div className="flex items-center space-x-2">
-                     <User className="w-4 h-4" />
-                     <span>Instructor: {course.instructor || 'Instructor'}</span>
-                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Star className="w-4 h-4 text-yellow-400" />
-                    <span>4.8</span>
-                  </div>
-                                     <div className="flex items-center space-x-2">
-                     <Clock className="w-4 h-4" />
-                     <span>{course.totalModules || totalActivities} Lessons</span>
-                   </div>
-                  <div className="flex items-center space-x-2">
-                    <BookOpen className="w-4 h-4" />
-                    <span>{totalActivities} Lessons</span>
-                  </div>
-                                     <div className="flex items-center space-x-2">
-                     <span className="text-green-400 font-semibold">{course.progress || 0}% Complete</span>
-                   </div>
+          {/* Back to Courses Link */}
+          <div className="absolute top-6 left-6">
+            <button
+              onClick={onBack}
+              className="flex items-center space-x-2 text-white hover:text-blue-200 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="font-medium">Back to Courses</span>
+            </button>
+          </div>
+
+          {/* Course Info */}
+          <div className="absolute bottom-0 left-0 right-0 p-8">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                {/* Difficulty Badge */}
+                <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-medium mb-4">
+                  Beginner
                 </div>
+                
+                {/* Course Title */}
+                <h1 className="text-4xl font-bold text-white mb-3">{course.fullname}</h1>
+                
+                {/* Course Description */}
+                <p className="text-white/90 text-lg max-w-2xl">
+                  {course.summary || course.description || 'Learn fundamental computer skills and digital citizenship'}
+                </p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Course Statistics Bar */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 -mt-8 relative z-10 mx-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Lessons</p>
+                <p className="text-lg font-semibold text-gray-900">{courseSections.length}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Clock className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Duration</p>
+                <p className="text-lg font-semibold text-gray-900">4 weeks</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <BarChart3 className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Progress</p>
+                <p className="text-lg font-semibold text-gray-900">{progress}%</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-700">Course Progress</span>
+              <span className="text-sm text-gray-500">{progress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
             </div>
           </div>
         </div>
@@ -537,80 +604,183 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
               {/* Tab Content */}
               <div className="p-6">
                 {activeTab === 'curriculum' && (
-                  <div className="space-y-4">
-                    {courseSections.map((section, index) => (
-                      <div key={section.id} className="border border-gray-200 rounded-lg">
-                        {/* Section Header */}
-                        <div 
-                          className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-                          onClick={() => toggleSectionExpansion(section.id)}
+                  <div className="space-y-6">
+                    {/* Breadcrumb Navigation */}
+                    {viewMode === 'activities' && selectedLesson && (
+                      <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4">
+                        <button
+                          onClick={handleBackToLessons}
+                          className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 transition-colors"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <h3 className="font-semibold text-gray-900">{section.name}</h3>
-                              <span className="text-sm text-gray-600">
-                                {section.completedActivities}/{section.totalActivities} Activities Completed
-                              </span>
+                          <ArrowLeft className="w-4 h-4" />
+                          <span>Back to Lessons</span>
+                        </button>
+                        <span>/</span>
+                        <span className="text-gray-900 font-medium">{selectedLesson.name}</span>
+                      </div>
+                    )}
+
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {viewMode === 'lessons' ? 'Course Lessons' : `${selectedLesson?.name} - Activities`}
+                      </h2>
+                      
+                      {viewMode === 'activities' && selectedLesson && (
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="outline" className="text-sm">
+                            {selectedLesson.completedActivities}/{selectedLesson.totalActivities} Completed
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Lessons View */}
+                    {viewMode === 'lessons' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {courseSections.map((section, sectionIndex) => (
+                          <div key={section.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
+                            {/* Lesson Thumbnail */}
+                            <div className="relative h-48 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
+                              {/* Lesson Progress Badge */}
+                              <div className="absolute top-3 right-3">
+                                <Badge className={`${
+                                  section.completedActivities === section.totalActivities 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {section.completedActivities}/{section.totalActivities}
+                                </Badge>
+                              </div>
+                              
+                              {/* Lesson Icon */}
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="text-center">
+                                  <FolderOpen className="w-16 h-16 text-blue-500 mx-auto mb-2" />
+                                  <div className="text-sm text-gray-600">Lesson {sectionIndex + 1}</div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <Progress 
-                                value={(section.completedActivities / section.totalActivities) * 100} 
-                                className="w-20 h-2"
-                              />
-                              {expandedSections.has(section.id) ? (
-                                <ChevronDown className="w-4 h-4 text-gray-500" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-gray-500" />
-                              )}
+                            
+                            {/* Lesson Details */}
+                            <div className="p-4">
+                              {/* Lesson Title */}
+                              <h3 className="font-bold text-gray-900 text-lg mb-2 line-clamp-2">
+                                {section.name}
+                              </h3>
+                              
+                              {/* Lesson Description */}
+                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                                {section.totalActivities} activities • {section.completedActivities} completed
+                              </p>
+                              
+                              {/* Progress Bar */}
+                              <div className="mb-3">
+                                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                  <span>Progress</span>
+                                  <span>{section.totalActivities > 0 ? Math.round((section.completedActivities / section.totalActivities) * 100) : 0}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ 
+                                      width: `${section.totalActivities > 0 ? (section.completedActivities / section.totalActivities) * 100 : 0}%` 
+                                    }}
+                                  ></div>
+                                </div>
+                              </div>
+                              
+                              {/* Action Button */}
+                              <button
+                                onClick={() => handleLessonClick(section)}
+                                className={`w-full py-2 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center ${
+                                  section.completedActivities === section.totalActivities
+                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
+                              >
+                                {section.completedActivities === section.totalActivities ? (
+                                  <>
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Review Lesson
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="w-4 h-4 mr-2" />
+                                    Open Lesson
+                                  </>
+                                )}
+                              </button>
                             </div>
                           </div>
-                        </div>
+                        ))}
+                      </div>
+                    )}
 
-                        {/* Section Activities */}
-                        {expandedSections.has(section.id) && (
-                          <div className="p-4 space-y-3">
-                            {section.activities.map((activity) => (
-                              <div key={activity.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
-                                <div className="flex items-center space-x-3 flex-1">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                    activity.status === 'completed' ? 'bg-green-100' :
-                                    activity.status === 'in_progress' ? 'bg-yellow-100' : 'bg-gray-100'
-                                  }`}>
-                                    {getActivityIcon(activity.type)}
-                                  </div>
-                                  <div className="flex-1">
-                                    <h4 className="font-medium text-gray-900">{activity.name}</h4>
-                                    <div className="flex items-center space-x-2 text-sm text-gray-500">
-                                      <span className="capitalize">{activity.type}</span>
-                                      {activity.duration && (
-                                        <>
-                                          <span>•</span>
-                                          <span>{activity.duration}</span>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className={`flex items-center space-x-1 ${getStatusColor(activity.status)}`}>
-                                    {getStatusIcon(activity.status)}
-                                    <span className="text-sm capitalize">
-                                      {activity.status === 'completed' ? 'Completed' :
-                                       activity.status === 'in_progress' ? 'In Progress' : 'Not Started'}
-                                    </span>
-                                  </div>
+                    {/* Activities View */}
+                    {viewMode === 'activities' && selectedLesson && (
+                      <div className="space-y-4">
+                        {/* Activities List */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {selectedLesson.activities.map((activity, activityIndex) => (
+                            <div key={activity.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                              {/* Activity Header */}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center space-x-2">
+                                  {getActivityIcon(activity.type, "w-5 h-5 text-blue-600")}
+                                  <Badge variant="outline" className="text-xs">
+                                    {activity.type}
+                                  </Badge>
                                 </div>
-                                <Button
-                                  variant={getActivityButtonVariant(activity)}
-                                  size="sm"
-                                  onClick={() => handleActivityClick(activity)}
-                                >
-                                  {getActivityButtonText(activity)}
-                                </Button>
+                                {getStatusIcon(activity.status)}
                               </div>
-                            ))}
+                              
+                              {/* Activity Title */}
+                              <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">
+                                {activity.name}
+                              </h4>
+                              
+                              {/* Activity Description */}
+                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                                {activity.description || `Activity ${activityIndex + 1}`}
+                              </p>
+                              
+                              {/* Activity Details */}
+                              <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                                <div className="flex items-center space-x-1">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{activity.duration || '5-10 min'}</span>
+                                </div>
+                                <span>#{activityIndex + 1}</span>
+                              </div>
+                              
+                              {/* Action Button */}
+                              <button
+                                onClick={() => handleActivityClick(activity)}
+                                className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
+                                  activity.status === 'completed'
+                                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                    : activity.status === 'in_progress'
+                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                              >
+                                {getActivityButtonText(activity)}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Empty State */}
+                        {selectedLesson.activities.length === 0 && (
+                          <div className="text-center py-12">
+                            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">No Activities</h3>
+                            <p className="text-gray-500">This lesson doesn't have any activities yet.</p>
                           </div>
                         )}
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
 
@@ -639,6 +809,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                       <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                         <h4>Course Statistics:</h4>
                         <ul className="list-none space-y-2">
+                          <li>• Total Lessons: {courseSections.length}</li>
                           <li>• Total Activities: {totalActivities}</li>
                           <li>• Completed Activities: {completedActivities}</li>
                           <li>• Progress: {progress}%</li>
@@ -697,7 +868,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                    <Clock className="w-4 h-4 text-gray-500" />
                    <div>
                      <p className="text-sm text-gray-600">Duration</p>
-                     <p className="font-medium">{course.totalModules || totalActivities} Lessons</p>
+                     <p className="font-medium">{courseSections.length} Lessons</p>
                    </div>
                  </div>
                 
@@ -728,7 +899,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                 <div className="flex items-center space-x-3">
                   <FileText className="w-4 h-4 text-gray-500" />
                   <div>
-                    <p className="text-sm text-gray-600">Lectures</p>
+                    <p className="text-sm text-gray-600">Activities</p>
                     <p className="font-medium">{totalActivities}+</p>
                   </div>
                 </div>
