@@ -91,6 +91,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   });
   const [isLoadingCohortSettings, setIsLoadingCohortSettings] = useState(false);
   const [isLoadingSidebar, setIsLoadingSidebar] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false); // State for navigation loading
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debug logging
@@ -583,14 +584,43 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                       <li key={itemIndex}>
                         <button
                           onClick={() => {
-                            console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
-                            navigate(item.path);
+                            console.log('🚀 DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                            console.log('📍 DashboardLayout - Current location:', location.pathname);
+                            console.log('🎯 DashboardLayout - Navigating to:', item.path);
+                            console.log('👤 DashboardLayout - User role:', userRole);
+                            console.log('🔧 DashboardLayout - isNavigating state:', isNavigating);
+                            
+                            // Prevent multiple clicks
+                            if (isNavigating) {
+                              console.log('⚠️ DashboardLayout - Navigation already in progress, ignoring click');
+                              return;
+                            }
+                            
+                            setIsNavigating(true);
+                            console.log('⏳ DashboardLayout - Set isNavigating to true');
+                            
+                            try {
+                              // Use replace: true to replace the current history entry
+                              // This prevents the course detail page from being in the back stack
+                              console.log('🔄 DashboardLayout - Calling navigate with replace: true');
+                              navigate(item.path, { replace: true });
+                              console.log('✅ DashboardLayout - Navigation call completed');
+                            } catch (error) {
+                              console.error('❌ DashboardLayout - Navigation error:', error);
+                            }
+                            
+                            // Reset navigation state after a short delay
+                            setTimeout(() => {
+                              console.log('🔄 DashboardLayout - Resetting isNavigating to false');
+                              setIsNavigating(false);
+                            }, 1000);
                           }}
+                          disabled={isNavigating}
                           className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                             isActive
                               ? 'bg-blue-50 text-blue-700 border border-blue-200'
                               : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                          }`}
+                          } ${isNavigating ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <Icon className="w-4 h-4" />
                           <span>{item.name}</span>

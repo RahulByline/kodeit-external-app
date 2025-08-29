@@ -56,6 +56,7 @@ import { Progress } from '../../components/ui/progress';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface Course {
   id: string;
@@ -337,6 +338,15 @@ const getBestCourseImage = (courses: Course[]): string => {
 
 const Courses: React.FC = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  
+  // Debug logging to verify component mounting
+  useEffect(() => {
+    console.log('🎓 Courses component mounted');
+    console.log('📍 Current location:', window.location.pathname);
+    console.log('👤 Current user:', currentUser);
+  }, [currentUser]);
+
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
