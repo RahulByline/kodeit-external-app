@@ -742,9 +742,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                             isActive
                               ? 'bg-blue-50 text-blue-700 border border-blue-200'
                               : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                          } ${isNavigating ? 'opacity-50 cursor-not-allowed' : ''}`}
-
-                          className={`w-full p-3 rounded-lg transition-all duration-200 hover:shadow-md ${
+                          } ${isNavigating ? 'opacity-50 cursor-not-allowed' : ''} p-3 rounded-lg transition-all duration-200 hover:shadow-md ${
                             isActive
                               ? 'bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 shadow-sm'
                               : isCodeEditor
