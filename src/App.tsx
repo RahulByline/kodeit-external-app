@@ -115,6 +115,7 @@ const Compiler = lazy(() => import("./pages/student/Compiler"));
 const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
 const ScratchCodeEditor = lazy(() => import("./pages/student/ScratchCodeEditor"));
 
+
 // Settings pages - lazy loaded
 const SchoolAdminSettings = lazy(() => import("./pages/SchoolAdminSettings"));
 const TeacherSettings = lazy(() => import("./pages/TeacherSettings"));
@@ -613,6 +614,7 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+
                 <Route path="/dashboard/student/current-lessons" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -627,6 +629,7 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+
                 {/* Scratch Editor Route */}
                 <Route path="/editor" element={
                   <Suspense fallback={<LoadingSpinner />}>
