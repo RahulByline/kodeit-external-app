@@ -41,13 +41,6 @@ const ScratchCodeEditor: React.FC = () => {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <button 
-              onClick={handleBackToEmulators}
-              className="text-blue-600 hover:text-blue-800 mb-2 flex items-center"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Emulators
-            </button>
           </div>
         </div>
 

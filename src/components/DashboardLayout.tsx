@@ -25,6 +25,10 @@ import {
   Play,
   Code,
   Map,
+  Monitor,
+  Zap,
+  Share2,
+  Gamepad2
   Activity
 } from 'lucide-react';
 import logo from '../assets/logo.png';
@@ -69,9 +73,10 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   userRole: 'admin' | 'school_admin' | 'teacher' | 'student';
   userName: string;
+  dashboardType?: 'G1_G3' | 'G4_G7' | 'G8_PLUS';
 }
 
-const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, userName }) => {
+const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, userName, dashboardType }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
@@ -425,6 +430,160 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
     }
 
     if (userRole === 'student') {
+
+      // Define different navigation configurations for each dashboard type
+      const getStudentNavigationByType = () => {
+        // G1-G3 Dashboard Navigation (Simplified, focused on basics)
+        if (dashboardType === 'G1_G3') {
+          return [
+            {
+              title: 'DASHBOARD',
+              items: [
+                { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
+                { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+              ]
+            },
+            {
+              title: 'LEARNING',
+              items: [
+                { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
+                { name: 'My Grades', icon: BarChart3, path: '/dashboard/student/grades' },
+              ]
+            },
+            {
+              title: 'SETTINGS',
+              items: [
+                { name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' },
+              ]
+            },
+            {
+              title: 'QUICK ACTIONS',
+              items: [
+                { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+                { name: 'E-books', icon: BookOpen, path: '/dashboard/student/ebooks' },
+                { name: 'Ask Teacher', icon: MessageSquare, path: '/dashboard/student/ask-teacher' },
+              ]
+            }
+          ];
+        }
+
+        // G4-G7 Dashboard Navigation (Intermediate, more features)
+        if (dashboardType === 'G4_G7') {
+          return [
+            {
+              title: 'DASHBOARD',
+              items: [
+                { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
+                { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+                { name: 'Community', icon: Users, path: `/dashboard/${userRole}/community` },
+              ]
+            },
+            {
+              title: 'LEARNING',
+              items: [
+                { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
+                { name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' },
+                { name: 'My Grades', icon: BarChart3, path: '/dashboard/student/grades' },
+                { name: 'Progress Tracking', icon: TrendingUp, path: '/dashboard/student/progress' },
+              ]
+            },
+            {
+              title: 'RESOURCES',
+              items: [
+                { name: 'Calendar', icon: Calendar, path: '/dashboard/student/calendar' },
+                { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
+              ]
+            },
+            {
+              title: 'SETTINGS',
+              items: [
+                { name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' },
+              ]
+            },
+            {
+              title: 'QUICK ACTIONS',
+              items: [
+                { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
+                { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+                { name: 'E-books', icon: BookOpen, path: '/dashboard/student/ebooks' },
+                { name: 'Ask Teacher', icon: MessageSquare, path: '/dashboard/student/ask-teacher' },
+                { name: 'KODEIT AI Buddy', icon: Zap, path: '/dashboard/student/ai-buddy' },
+              ]
+            }
+          ];
+        }
+
+        // G8+ Dashboard Navigation (Full featured, all options)
+        if (dashboardType === 'G8_PLUS') {
+          return [
+            {
+              title: 'DASHBOARD',
+              items: [
+                { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
+                { name: 'Community', icon: Users, path: `/dashboard/${userRole}/community` },
+                { name: 'Enrollments', icon: GraduationCap, path: `/dashboard/${userRole}/enrollments` },
+              ]
+            },
+            {
+              title: 'COURSES',
+              items: [
+                { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+                { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
+                { name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' },
+              ]
+            },
+            {
+              title: 'PROGRESS',
+              items: [
+                { name: 'My Grades', icon: BarChart3, path: '/dashboard/student/grades' },
+                { name: 'Progress Tracking', icon: TrendingUp, path: '/dashboard/student/progress' },
+              ]
+            },
+            {
+              title: 'RESOURCES',
+              items: [
+                { name: 'Calendar', icon: Calendar, path: '/dashboard/student/calendar' },
+                { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
+              ]
+            },
+            {
+              title: 'SETTINGS',
+              items: [
+                { name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' },
+              ]
+            },
+            {
+              title: 'QUICK ACTIONS',
+              items: [
+                { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
+                { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+                { name: 'E-books', icon: BookOpen, path: '/dashboard/student/ebooks' },
+                { name: 'Ask Teacher', icon: MessageSquare, path: '/dashboard/student/ask-teacher' },
+                { name: 'KODEIT AI Buddy', icon: Zap, path: '/dashboard/student/ai-buddy' },
+                { name: 'Share with Class', icon: Share2, path: '/dashboard/student/share' },
+              ]
+            }
+          ];
+        }
+
+        // Default navigation (fallback)
+        return [
+          {
+            title: 'DASHBOARD',
+            items: [
+              { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
+              { name: 'Community', icon: Users, path: `/dashboard/${userRole}/community` },
+              { name: 'Enrollments', icon: GraduationCap, path: `/dashboard/${userRole}/enrollments` },
+            ]
+          },
+          {
+            title: 'COURSES',
+            items: [
+              { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+              { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
+              { name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' },
+            ]
+          },
              // Show skeleton navigation while loading cohort settings
        if (isLoadingCohortSettings && !cohortNavigationSettings) {
          const skeletonItems = [
@@ -463,25 +622,48 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
               { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
             ]
           },
+
+          {
+            title: 'SETTINGS',
+
           // Only show EMULATORS section for G4G7 students when grade is determined
           ...(dashboardType === 'G4_G7' ? [{
             title: 'EMULATORS',
-            items: [
-              { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
-              { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
-            ]
-          }] : []),
-          {
-            title: 'SETTINGS',
+
             items: [
               { name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' },
             ]
+          }] : []),
+          {
+            title: 'QUICK ACTIONS',
+            items: [
+              { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
+              { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+              { name: 'E-books', icon: BookOpen, path: '/dashboard/student/ebooks' },
+              { name: 'Ask Teacher', icon: MessageSquare, path: '/dashboard/student/ask-teacher' },
+              { name: 'KODEIT AI Buddy', icon: Zap, path: '/dashboard/student/ai-buddy' },
+              { name: 'Share with Class', icon: Share2, path: '/dashboard/student/share' },
+            ]
           }
         ];
+      };
+
+      // Show skeleton navigation while loading cohort settings
+      if (isLoadingCohortSettings && !cohortNavigationSettings) {
+        return getStudentNavigationByType();
       }
       
       // Use cohort-based navigation settings if available
       if (cohortNavigationSettings) {
+
+        // For now, use the dashboard type-based navigation
+        // In the future, this could be enhanced to merge cohort settings with dashboard type
+        return getStudentNavigationByType();
+      }
+
+      // Fallback to dashboard type-based navigation
+      return getStudentNavigationByType();
+
         const studentItems = [
           ...baseItems
         ];
@@ -626,10 +808,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const navigationItems = getNavigationItems();
   console.log('🧭 Generated navigation items:', navigationItems);
   console.log('⚙️ Current cohort navigation settings:', cohortNavigationSettings);
+  console.log('📊 Dashboard type:', dashboardType);
   console.log('🎓 Student grade:', studentGrade);
   console.log('🎓 Dashboard type:', dashboardType);
   console.log('🎓 Is G4G7 student:', dashboardType === 'G4_G7');
   console.log('🎓 Grade detection status:', studentGrade ? 'Detected' : 'Not yet detected');
+
 
   const handleLogout = async () => {
     try {
@@ -682,6 +866,119 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           ) : (
             navigationItems.map((section, sectionIndex) => (
               <div key={sectionIndex}>
+
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  {section.title}
+                </h3>
+                <ul className="space-y-1">
+                  {section.items.map((item, itemIndex) => {
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.path;
+                    
+                    // Special styling for Quick Actions section
+                    if (section.title === 'QUICK ACTIONS') {
+                      const getQuickActionStyles = (itemName: string) => {
+                        switch (itemName) {
+                          case 'Code Editor':
+                            return {
+                              bg: 'bg-gradient-to-br from-purple-50 to-pink-50',
+                              border: 'border-purple-200',
+                              text: 'text-purple-900',
+                              hover: 'hover:from-purple-100 hover:to-pink-100',
+                              iconBg: 'bg-purple-100',
+                              iconColor: 'text-purple-600'
+                            };
+                          case 'Scratch Editor':
+                            return {
+                              bg: 'bg-gradient-to-br from-purple-50 to-pink-50',
+                              border: 'border-purple-200',
+                              text: 'text-purple-900',
+                              hover: 'hover:from-purple-100 hover:to-pink-100',
+                              iconBg: 'bg-purple-100',
+                              iconColor: 'text-purple-600'
+                            };
+                          case 'E-books':
+                            return {
+                              bg: 'bg-gradient-to-br from-blue-50 to-blue-100',
+                              border: 'border-blue-200',
+                              text: 'text-blue-900',
+                              hover: 'hover:from-blue-100 hover:to-blue-200',
+                              iconBg: 'bg-blue-100',
+                              iconColor: 'text-blue-600'
+                            };
+                          case 'Ask Teacher':
+                            return {
+                              bg: 'bg-gradient-to-br from-green-50 to-green-100',
+                              border: 'border-green-200',
+                              text: 'text-green-900',
+                              hover: 'hover:from-green-100 hover:to-green-200',
+                              iconBg: 'bg-green-100',
+                              iconColor: 'text-green-600'
+                            };
+                          case 'KODEIT AI Buddy':
+                            return {
+                              bg: 'bg-gradient-to-br from-orange-50 to-orange-100',
+                              border: 'border-orange-200',
+                              text: 'text-orange-900',
+                              hover: 'hover:from-orange-100 hover:to-orange-200',
+                              iconBg: 'bg-orange-100',
+                              iconColor: 'text-orange-600'
+                            };
+                          case 'Share with Class':
+                            return {
+                              bg: 'bg-gradient-to-br from-purple-50 to-purple-100',
+                              border: 'border-purple-200',
+                              text: 'text-purple-900',
+                              hover: 'hover:from-purple-100 hover:to-purple-200',
+                              iconBg: 'bg-purple-100',
+                              iconColor: 'text-purple-600'
+                            };
+                          default:
+                            return {
+                              bg: 'bg-gray-50',
+                              border: 'border-gray-200',
+                              text: 'text-gray-900',
+                              hover: 'hover:bg-gray-100',
+                              iconBg: 'bg-gray-100',
+                              iconColor: 'text-gray-600'
+                            };
+                        }
+                      };
+
+                      const styles = getQuickActionStyles(item.name);
+                      
+                      return (
+                        <li key={itemIndex}>
+                          <button
+                            onClick={() => {
+                              console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                              navigate(item.path);
+                            }}
+                            className={`w-full flex items-center space-x-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 border ${styles.bg} ${styles.border} ${styles.text} ${styles.hover}`}
+                          >
+                            <div className={`p-2 rounded-lg ${styles.iconBg}`}>
+                              <Icon className={`w-4 h-4 ${styles.iconColor}`} />
+                            </div>
+                            <div className="flex-1 text-left">
+                              <div className="font-medium">{item.name}</div>
+                              <div className="text-xs opacity-75 mt-0.5">
+                                {item.name === 'Code Editor' && 'Practice coding in virtual environments'}
+                                {item.name === 'Scratch Editor' && 'Create interactive projects'}
+                                {item.name === 'E-books' && 'Access digital learning materials'}
+                                {item.name === 'Ask Teacher' && 'Get help from your instructor'}
+                                {item.name === 'KODEIT AI Buddy' && 'Get instant coding help'}
+                                {item.name === 'Share with Class' && 'Collaborate with classmates'}
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    }
+
+                    // Default styling for other sections
+                    return (
+                      <li key={itemIndex}>
+
                                  <h3 className={`text-xs font-semibold uppercase tracking-wider mb-3 flex items-center space-x-2 ${
                    section.title === 'EMULATORS' && dashboardType === 'G4_G7'
                      ? 'text-purple-600' 
@@ -702,6 +999,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                       const isActive = location.pathname === item.path;
                       const isCodeEditor = item.name === 'Code Editor';
                       return (
+
                         <button
                           key={itemIndex}
                           onClick={() => {
@@ -831,16 +1129,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
               </div>
 
               <div className="flex items-center space-x-2 lg:space-x-4">
-                <button className="relative p-2 text-gray-600 hover:text-gray-900">
+                <button 
+                  onClick={() => navigate('/dashboard/student/messages')}
+                  className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+                >
                   <Bell className="w-5 h-5" />
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                     3
                   </span>
-                </button>
-
-                <button className="bg-blue-600 text-white px-3 lg:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">New Report</span>
                 </button>
 
                 <div className="relative" ref={profileDropdownRef}>
