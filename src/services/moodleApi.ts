@@ -146,71 +146,9 @@ const moodleApi = axios.create({
 
   baseURL: API_BASE_URL,
 
-  timeout: 30000, // Increased timeout to 30 seconds
+  timeout: 10000,
 
 });
-
-
-
-// Request deduplication cache
-
-const pendingRequests = new Map<string, Promise<any>>();
-
-
-
-// Helper function to create request key
-
-const createRequestKey = (wsfunction: string, params: any) => {
-
-  return `${wsfunction}_${JSON.stringify(params)}`;
-
-};
-
-
-
-// Enhanced API call function with deduplication
-
-const makeDeduplicatedRequest = async (wsfunction: string, params: any) => {
-
-  const requestKey = createRequestKey(wsfunction, params);
-
-  
-
-  // Check if there's already a pending request for this data
-
-  if (pendingRequests.has(requestKey)) {
-
-    console.log(`🔄 Reusing pending request for: ${wsfunction}`);
-
-    return pendingRequests.get(requestKey);
-
-  }
-
-  
-
-  // Create new request
-
-  const requestPromise = moodleApi.get('', { params: { wsfunction, ...params } });
-
-  pendingRequests.set(requestKey, requestPromise);
-
-  
-
-  try {
-
-    const result = await requestPromise;
-
-    return result;
-
-  } finally {
-
-    // Clean up the pending request
-
-    pendingRequests.delete(requestKey);
-
-  }
-
-};
 
 
 
@@ -15038,9 +14976,15 @@ export const moodleService = {
 
       
 
-      const response = await makeDeduplicatedRequest('core_course_get_contents', {
+      const response = await moodleApi.get('', {
 
-        courseid: courseId,
+        params: {
+
+          wsfunction: 'core_course_get_contents',
+
+          courseid: courseId,
+
+        },
 
       });
 
@@ -15082,11 +15026,17 @@ export const moodleService = {
 
       
 
-      const response = await makeDeduplicatedRequest('core_completion_get_course_completion_status', {
+      const response = await moodleApi.get('', {
 
-        courseid: courseId,
+        params: {
 
-        userid: userId || await this.getCurrentUserId(),
+          wsfunction: 'core_completion_get_course_completion_status',
+
+          courseid: courseId,
+
+          userid: userId || await this.getCurrentUserId(),
+
+        },
 
       });
 
@@ -15188,36 +15138,6 @@ export const moodleService = {
 
 
 
-      // Get all completion statuses in one API call
-
-      let allCompletions = null;
-
-      try {
-
-        const completionResponse = await makeDeduplicatedRequest('core_completion_get_activities_completion_status', {
-
-          courseid: courseId,
-
-          userid: userId || await this.getCurrentUserId(),
-
-        });
-
-        
-
-        if (completionResponse.data && completionResponse.data.statuses) {
-
-          allCompletions = completionResponse.data.statuses;
-
-        }
-
-      } catch (completionError: any) {
-
-        console.warn('Could not fetch completion statuses for course:', courseId, completionError.message);
-
-      }
-
-
-
       // Extract activities from course sections
 
       for (const section of contents) {
@@ -15226,11 +15146,43 @@ export const moodleService = {
 
           for (const module of section.modules) {
 
-            // Find completion status for this module
+            // Try to get completion status for this module
 
-            const completion = allCompletions ? 
+            let completion = null;
 
-              allCompletions.find((status: any) => status.cmid === module.id) : null;
+            try {
+
+              const completionResponse = await moodleApi.get('', {
+
+                params: {
+
+                  wsfunction: 'core_completion_get_activities_completion_status',
+
+                  courseid: courseId,
+
+                  userid: userId || await this.getCurrentUserId(),
+
+                },
+
+              });
+
+              
+
+              if (completionResponse.data && completionResponse.data.statuses) {
+
+                completion = completionResponse.data.statuses.find((status: any) => 
+
+                  status.cmid === module.id
+
+                );
+
+              }
+
+            } catch (completionError) {
+
+              console.warn('Could not fetch completion for module:', module.id);
+
+            }
 
 
 

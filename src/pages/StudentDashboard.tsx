@@ -405,9 +405,12 @@ const StudentDashboard: React.FC = () => {
       // Load real course data in background (non-blocking)
       const loadRealCourseData = async () => {
         try {
+
+          console.log('🔄 Loading real course data with enhanced images...');
           console.log('🔄 Loading fresh course data in background...');
+
           
-          // Fetch real course data
+          // Fetch real course data with enhanced image support
           const userCourses = await moodleService.getUserCourses(currentUser.id);
           
           // Process and display real courses
@@ -415,6 +418,27 @@ const StudentDashboard: React.FC = () => {
             course.visible !== 0 && course.categoryid && course.categoryid > 0
           );
           
+
+          // Enhance course data with better image handling
+          const enhancedCourses = enrolledCourses.map(course => {
+            let courseImage = course.courseimage;
+            
+            // If no courseimage, try to construct a proper Moodle course image URL
+            if (!courseImage) {
+              const moodleBaseUrl = process.env.VITE_MOODLE_URL || 'https://kodeit.legatoserver.com';
+              courseImage = `${moodleBaseUrl}/pluginfile.php/${course.id}/course/overviewfiles/0/course_image.jpg`;
+            }
+            
+            return {
+              ...course,
+              courseimage: courseImage
+            };
+          });
+          
+          setUserCourses(enhancedCourses);
+          setLoadingStates(prev => ({ ...prev, userCourses: false }));
+          
+          console.log('✅ Real courses with enhanced images loaded:', enhancedCourses.length);
           // Cache the courses
           setCachedData(coursesCacheKey, enrolledCourses);
           
@@ -843,7 +867,7 @@ const StudentDashboard: React.FC = () => {
   // Show skeleton dashboard if any critical data is still loading
   if (loadingStates.profile || loadingStates.stats) {
     return (
-      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"} dashboardType={dashboardType}>
         {renderSkeletonDashboard()}
       </DashboardLayout>
     );
@@ -851,7 +875,7 @@ const StudentDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"} dashboardType={dashboardType}>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 text-red-800 mb-2">
             <AlertCircle className="w-5 h-5" />
@@ -902,7 +926,7 @@ const StudentDashboard: React.FC = () => {
   }
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"} dashboardType={dashboardType}>
       {renderGradeBasedDashboard()}
     </DashboardLayout>
   );

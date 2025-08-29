@@ -35,7 +35,22 @@ import {
   ArrowLeft,
   Lock,
   Square,
-  Video
+  Video,
+  Star,
+  Sparkles,
+  Flame,
+  Heart,
+  Gift,
+  Medal,
+  Crown,
+  Rocket,
+  Lightbulb,
+  Brain,
+  Eye,
+  MousePointer,
+  MousePointer2,
+  MousePointerClick,
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { moodleService } from '../../../services/moodleApi';
@@ -393,6 +408,155 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
   const isCourseExpanded = (courseId: string) => expandedCourses.has(courseId);
   const isLessonExpanded = (lessonId: string) => expandedLessons.has(lessonId);
 
+  // Helper functions for fetching real IOMAD Moodle activities
+  const fetchRealMoodleActivities = async (userId: string, courses: RealCourse[]): Promise<RealActivity[]> => {
+    try {
+      console.log('🎯 Fetching real activities from IOMAD Moodle API...');
+      const allActivities: RealActivity[] = [];
+      
+      // Fetch activities from each course (limit to first 3 for performance)
+      for (const course of courses.slice(0, 3)) {
+        try {
+          console.log(`🔍 Fetching activities for course: ${course.fullname}`);
+          
+          // Get course activities from Moodle API
+          const courseActivities = await moodleService.getCourseActivities(course.id);
+          
+          // Transform Moodle activities to our format
+          const courseActivitiesList = courseActivities.map((activity: any, index: number) => ({
+            id: activity.id.toString(),
+            name: activity.name,
+            type: mapActivityType(activity.type),
+            description: activity.description || 'No description available',
+            duration: getActivityDuration(activity.type),
+            points: getActivityPoints(activity.type),
+            difficulty: getActivityDifficulty(activity.type),
+            status: getActivityStatus(activity.completion),
+            dueDate: getActivityDueDate(activity.dates),
+            lessonId: `${course.id}_lesson_${activity.type}`,
+            courseId: course.id,
+            progress: getActivityProgress(activity.completion),
+            order: index + 1
+          }));
+          
+          allActivities.push(...courseActivitiesList);
+          
+        } catch (courseError) {
+          console.warn(`Failed to fetch activities for course ${course.fullname}:`, courseError);
+        }
+      }
+      
+      console.log(`✅ Fetched ${allActivities.length} real activities from IOMAD Moodle API`);
+      return allActivities;
+      
+    } catch (error) {
+      console.error('Error fetching activities from Moodle:', error);
+      return [];
+    }
+  };
+
+  const groupActivitiesByCourse = (activities: RealActivity[]): { [courseId: string]: RealActivity[] } => {
+    return activities.reduce((groups, activity) => {
+      const courseId = activity.courseId;
+      if (!groups[courseId]) {
+        groups[courseId] = [];
+      }
+      groups[courseId].push(activity);
+      return groups;
+    }, {} as { [courseId: string]: RealActivity[] });
+  };
+
+  const groupActivitiesByType = (activities: RealActivity[]): { [type: string]: RealActivity[] } => {
+    return activities.reduce((groups, activity) => {
+      const type = activity.type;
+      if (!groups[type]) {
+        groups[type] = [];
+      }
+      groups[type].push(activity);
+      return groups;
+    }, {} as { [type: string]: RealActivity[] });
+  };
+
+  // Helper functions for activity processing
+  const mapActivityType = (moodleType: string): RealActivity['type'] => {
+    const typeMap: { [key: string]: RealActivity['type'] } = {
+      'assign': 'assignment',
+      'quiz': 'quiz',
+      'forum': 'reading',
+      'workshop': 'project',
+      'url': 'video',
+      'resource': 'reading'
+    };
+    return typeMap[moodleType] || 'assignment';
+  };
+
+  const getActivityDuration = (activityType: string): string => {
+    const durations: { [key: string]: string } = {
+      'assign': '2 hours',
+      'quiz': '30 min',
+      'forum': '1 hour',
+      'workshop': '3 hours',
+      'url': '15 min',
+      'resource': '20 min'
+    };
+    return durations[activityType] || '1 hour';
+  };
+
+  const getActivityPoints = (activityType: string): number => {
+    const points: { [key: string]: number } = {
+      'assign': 150,
+      'quiz': 100,
+      'forum': 50,
+      'workshop': 200,
+      'url': 25,
+      'resource': 30
+    };
+    return points[activityType] || 100;
+  };
+
+  const getActivityDifficulty = (activityType: string): string => {
+    const difficulties: { [key: string]: string } = {
+      'assign': 'Medium',
+      'quiz': 'Easy',
+      'forum': 'Easy',
+      'workshop': 'Hard',
+      'url': 'Easy',
+      'resource': 'Easy'
+    };
+    return difficulties[activityType] || 'Medium';
+  };
+
+  const getActivityStatus = (completion: any): RealActivity['status'] => {
+    if (!completion) return 'pending';
+    
+    if (completion.state === 1) return 'completed';
+    if (completion.state === 0) return 'in_progress';
+    return 'pending';
+  };
+
+  const getActivityProgress = (completion: any): number => {
+    if (!completion) return 0;
+    
+    if (completion.state === 1) return 100;
+    if (completion.state === 0) return 50;
+    return 0;
+  };
+
+  const getActivityDueDate = (dates: any[]): string => {
+    if (!dates || dates.length === 0) return new Date().toISOString().split('T')[0];
+    
+    // Find the latest due date
+    const dueDates = dates.filter(date => date.label === 'Due date' || date.label === 'Close date');
+    if (dueDates.length > 0) {
+      const latestDueDate = dueDates.reduce((latest, current) => 
+        new Date(current.timestamp * 1000) > new Date(latest.timestamp * 1000) ? current : latest
+      );
+      return new Date(latestDueDate.timestamp * 1000).toISOString().split('T')[0];
+    }
+    
+    return new Date().toISOString().split('T')[0];
+  };
+
 
 
   // Optimized data fetching with caching and lazy loading
@@ -466,7 +630,56 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
       const basicLessons: RealLesson[] = [];
       const basicActivities: RealActivity[] = [];
       
-      // Create sample lessons for first 3 courses only
+      // Try to fetch real activities from IOMAD Moodle first
+      try {
+        console.log('🎯 Fetching real activities from IOMAD Moodle...');
+        const realMoodleActivities = await fetchRealMoodleActivities(currentUser.id.toString(), transformedCourses.slice(0, 3));
+        
+        if (realMoodleActivities.length > 0) {
+          console.log(`✅ Found ${realMoodleActivities.length} real activities from IOMAD Moodle`);
+          setRealActivities(realMoodleActivities);
+          
+          // Create lessons from real activities
+          const activityGroups = groupActivitiesByCourse(realMoodleActivities);
+          const realLessons: RealLesson[] = [];
+          
+          Object.entries(activityGroups).forEach(([courseId, activities]) => {
+            const course = transformedCourses.find(c => c.id === courseId);
+            if (course && activities) {
+              // Group activities by type to create lessons
+              const lessonGroups = groupActivitiesByType(activities);
+              
+              Object.entries(lessonGroups).forEach(([type, typeActivities], lessonIndex) => {
+                if (typeActivities && typeActivities.length > 0) {
+                  const lesson: RealLesson = {
+                    id: `${courseId}_lesson_${type}_${lessonIndex}`,
+                    name: `${type.charAt(0).toUpperCase() + type.slice(1)} Activities`,
+                    description: `Complete ${type} activities for ${course.fullname}`,
+                    duration: `${typeActivities.length * 15} min`,
+                    progress: Math.floor(Math.random() * 100),
+                    status: Math.random() > 0.7 ? 'completed' : Math.random() > 0.5 ? 'continue' : 'locked',
+                    prerequisites: lessonIndex > 0 ? [`Previous ${type} lesson`] : undefined,
+                    activities: typeActivities,
+                    courseId: course.id,
+                    courseName: course.fullname,
+                    dueDate: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    points: typeActivities.reduce((sum, act) => sum + act.points, 0),
+                    difficulty: course.difficulty
+                  };
+                  realLessons.push(lesson);
+                }
+              });
+            }
+          });
+          
+          setRealLessons(realLessons);
+          return; // Skip fallback data generation
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to fetch real activities from IOMAD Moodle, using fallback:', error);
+      }
+      
+      // Create sample lessons for first 3 courses only (fallback)
       transformedCourses.slice(0, 3).forEach((course, courseIndex) => {
         // Create 2-3 lessons per course
         for (let i = 0; i < Math.floor(Math.random() * 2) + 2; i++) {
@@ -1295,7 +1508,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     }
   ];
 
-  // Generate activities data from real data or fallback
+  // Generate activities data from real IOMAD Moodle data or fallback
   const activityData: Activity[] = realActivities.length > 0 ? realActivities.slice(0, 6).map(activity => ({
     title: activity.name,
     difficulty: activity.difficulty,
@@ -1375,29 +1588,35 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Fixed Sidebar - Hidden on mobile */}
-      <div className="fixed top-0 left-0 z-30 w-64 h-full bg-white shadow-lg overflow-y-auto hidden lg:block scrollbar-hide">
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-200">
+      {/* Enhanced Fixed Sidebar - Hidden on mobile */}
+      <div className="fixed top-0 left-0 z-30 w-64 h-full bg-gradient-to-b from-white to-gray-50 shadow-xl border-r border-gray-200 overflow-y-auto hidden lg:block scrollbar-hide">
+        {/* Enhanced Logo */}
+        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-purple-600">
           <div className="flex items-center space-x-3">
-            <img src={logo} alt="kodeit" className="w-8 h-8" />
-            <span className="text-lg font-semibold text-gray-800">kodeit</span>
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <img src={logo} alt="kodeit" className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-lg font-bold text-white">KodeIt</span>
+              <p className="text-xs text-blue-100">Learning Platform</p>
+            </div>
+          </div>
         </div>
-      </div>
 
-        {/* Navigation */}
+        {/* Enhanced Navigation */}
         <nav className="p-4 space-y-6 pb-20">
           <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
               DASHBOARD
             </h3>
-            <ul className="space-y-1">
+            <ul className="space-y-2">
               {canAccessFeature('dashboard') && (
                 <li>
                 <button 
                   onClick={() => setActiveTab('dashboard')}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                      activeTab === 'dashboard' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
                     <LayoutDashboard className="w-4 h-4" />
@@ -1409,8 +1628,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <li>
                 <button 
                   onClick={() => setActiveTab('courses')}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === 'courses' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                      activeTab === 'courses' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
                   <BookOpen className="w-4 h-4" />
@@ -1422,8 +1641,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <li>
                 <button 
                   onClick={() => setActiveTab('lessons')}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === 'lessons' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                      activeTab === 'lessons' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
                   <Play className="w-4 h-4" />
@@ -1435,8 +1654,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <li>
                 <button 
                   onClick={() => setActiveTab('activities')}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === 'activities' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                      activeTab === 'activities' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
                   <FileText className="w-4 h-4" />
@@ -1450,8 +1669,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <li>
                   <button 
                     onClick={() => setActiveTab('tree-view')}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeTab === 'tree-view' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                      activeTab === 'tree-view' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                     }`}
                   >
                     <Target className="w-4 h-4" />
@@ -1691,40 +1910,44 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {/* Content when not loading */}
               {!isLoading && (
                 <>
-            {/* Top Navigation Tabs */}
+            {/* Enhanced Top Navigation Tabs */}
             <div className="flex items-center justify-between mb-8">
-              <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+              <div className="flex space-x-2 bg-white rounded-2xl p-2 shadow-lg border border-gray-100">
                 <button 
                   onClick={() => setActiveTab('dashboard')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center space-x-2 ${
+                    activeTab === 'dashboard' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  Dashboard
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>Dashboard</span>
                 </button>
                 <button 
                   onClick={() => setActiveTab('courses')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'courses' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center space-x-2 ${
+                    activeTab === 'courses' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  My Courses
+                  <BookOpen className="w-4 h-4" />
+                  <span>My Courses</span>
                 </button>
                 <button 
                   onClick={() => setActiveTab('lessons')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'lessons' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center space-x-2 ${
+                    activeTab === 'lessons' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  Current Lessons
+                  <Play className="w-4 h-4" />
+                  <span>Current Lessons</span>
                 </button>
                 <button 
                   onClick={() => setActiveTab('activities')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'activities' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                  className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center space-x-2 ${
+                    activeTab === 'activities' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  Activities
+                  <FileText className="w-4 h-4" />
+                  <span>Activities</span>
                 </button>
               </div>
             </div>
@@ -1732,231 +1955,627 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {/* Content based on active tab - Only show when no course detail is active */}
               {activeTab === 'dashboard' && !showCourseDetailView && (
               <>
-                {/* Summary Cards with Real Data */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Courses</p>
-                        <p className="text-2xl font-bold text-gray-900">{totalCourses}</p>
+                {/* Enhanced Summary Cards with Modern Design */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  {/* Courses Card - Inspired by Courses.png */}
+                  <div className="group relative overflow-hidden bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-indigo-600/20"></div>
+                    <div className="relative p-6 text-white">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                            <BookOpen className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-blue-100">Active Courses</p>
+                            <p className="text-3xl font-bold">{totalCourses}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                            <TrendingUp className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Target className="w-5 h-5 text-blue-600" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-blue-100 text-sm">This semester</span>
+                        <div className="flex items-center space-x-1">
+                          <Star className="w-4 h-4 text-yellow-300 fill-current" />
+                          <span className="text-sm font-medium">4.8/5</span>
+                        </div>
                       </div>
                     </div>
+                    {/* Decorative elements */}
+                    <div className="absolute top-2 right-2 w-16 h-16 bg-white/10 rounded-full"></div>
+                    <div className="absolute bottom-2 left-2 w-8 h-8 bg-white/10 rounded-full"></div>
                   </div>
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Lessons Done</p>
-                        <p className="text-2xl font-bold text-gray-900">{completedLessons}</p>
+
+                  {/* Activities Card - Inspired by Activities.png */}
+                  <div className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-teal-600/20"></div>
+                    <div className="relative p-6 text-white">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                            <Activity className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-emerald-100">Lessons Completed</p>
+                            <p className="text-3xl font-bold">{completedLessons}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                            <CheckCircle className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-green-600" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-emerald-100 text-sm">This week</span>
+                        <div className="flex items-center space-x-1">
+                          <Flame className="w-4 h-4 text-orange-300 fill-current" />
+                          <span className="text-sm font-medium">On fire!</span>
+                        </div>
                       </div>
                     </div>
+                    {/* Decorative elements */}
+                    <div className="absolute top-4 right-4 w-12 h-12 bg-white/10 rounded-full"></div>
+                    <div className="absolute bottom-4 left-4 w-6 h-6 bg-white/10 rounded-full"></div>
                   </div>
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Total Points</p>
-                        <p className="text-2xl font-bold text-gray-900">{totalPoints}</p>
+
+                  {/* Points Card - Inspired by Points.png */}
+                  <div className="group relative overflow-hidden bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 to-red-600/20"></div>
+                    <div className="relative p-6 text-white">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                            <Trophy className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-amber-100">Total Points</p>
+                            <p className="text-3xl font-bold">{totalPoints}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                            <Sparkles className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                        <Award className="w-5 h-5 text-yellow-600" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-100 text-sm">Earned this month</span>
+                        <div className="flex items-center space-x-1">
+                          <Crown className="w-4 h-4 text-yellow-300 fill-current" />
+                          <span className="text-sm font-medium">Top 10%</span>
+                        </div>
                       </div>
                     </div>
+                    {/* Decorative elements */}
+                    <div className="absolute top-2 right-2 w-16 h-16 bg-white/10 rounded-full"></div>
+                    <div className="absolute bottom-2 left-2 w-8 h-8 bg-white/10 rounded-full"></div>
                   </div>
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Weekly Goal</p>
-                        <p className="text-2xl font-bold text-gray-900">{weeklyGoal}/5</p>
+
+                  {/* Goal Card - Inspired by Goal.png */}
+                  <div className="group relative overflow-hidden bg-gradient-to-br from-purple-500 via-purple-600 to-pink-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-pink-600/20"></div>
+                    <div className="relative p-6 text-white">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                            <Target className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-purple-100">Weekly Goal</p>
+                            <p className="text-3xl font-bold">{weeklyGoal}/5</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                            <Rocket className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-purple-600" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-purple-100 text-sm">Target: 5 lessons</span>
+                        <div className="flex items-center space-x-1">
+                          <Heart className="w-4 h-4 text-pink-300 fill-current" />
+                          <span className="text-sm font-medium">80%</span>
+                        </div>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="mt-3">
+                        <div className="w-full bg-white/20 rounded-full h-2">
+                          <div 
+                            className="bg-white h-2 rounded-full transition-all duration-500"
+                            style={{ width: `${(weeklyGoal / 5) * 100}%` }}
+                          ></div>
+                        </div>
                       </div>
                     </div>
+                    {/* Decorative elements */}
+                    <div className="absolute top-4 right-4 w-12 h-12 bg-white/10 rounded-full"></div>
+                    <div className="absolute bottom-4 left-4 w-6 h-6 bg-white/10 rounded-full"></div>
                   </div>
                 </div>
 
-                {/* My Courses Section */}
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6">My Courses</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Enhanced My Courses Section */}
+                <div className="mb-12">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h2 className="text-3xl font-bold text-gray-900 mb-2">My Learning Journey</h2>
+                      <p className="text-gray-600">Continue where you left off and discover new skills</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-sm text-green-600 font-medium">Live Learning</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {displayCourses.map((course, index) => (
-                      <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="h-40 bg-gradient-to-br from-blue-400 to-blue-600 relative">
-                            {course.courseimage ? (
-                              <div className="absolute inset-0">
-                                <img 
-                                  src={course.courseimage} 
-                                  alt={course.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                  }}
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center hidden">
-                                  <BookOpen className="w-12 h-12 text-white opacity-80" />
-                                </div>
-                              </div>
-                            ) : (
-                          <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
-                            <BookOpen className="w-12 h-12 text-white opacity-80" />
-                          </div>
-                            )}
-                          <div className="absolute top-3 right-3">
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                              course.difficulty === 'Beginner' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                      <div key={course.id} className="group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden border border-gray-100">
+                        {/* Course Header with Enhanced Design */}
+                        <div className="relative h-48 overflow-hidden">
+                          {course.courseimage ? (
+                            <div className="absolute inset-0">
+                              <img 
+                                src={course.courseimage} 
+                                alt={course.name}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                            </div>
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-purple-600 to-indigo-700 flex items-center justify-center">
+                              <BookOpen className="w-16 h-16 text-white opacity-80" />
+                            </div>
+                          )}
+                          
+                          {/* Floating Elements */}
+                          <div className="absolute top-4 left-4">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              course.difficulty === 'Beginner' ? 'bg-green-500 text-white shadow-lg' : 
+                              course.difficulty === 'Intermediate' ? 'bg-yellow-500 text-white shadow-lg' : 
+                              'bg-red-500 text-white shadow-lg'
                             }`}>
+                              <div className="w-2 h-2 bg-white rounded-full mr-2"></div>
                               {course.difficulty}
                             </span>
                           </div>
+                          
+                          <div className="absolute top-4 right-4">
+                            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                              <Heart className="w-5 h-5 text-white" />
+                            </div>
+                          </div>
+                          
+                          {/* Progress Overlay */}
+                          <div className="absolute bottom-4 left-4 right-4">
+                            <div className="bg-white/90 backdrop-blur-sm rounded-lg p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-gray-700">Progress</span>
+                                <span className="text-sm font-bold text-gray-900">{course.progress}%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div 
+                                  className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-500"
+                                  style={{ width: `${course.progress}%` }}
+                                ></div>
+                              </div>
+                              <p className="text-xs text-gray-600 mt-1">{course.completedAssignments}/{course.totalAssignments} lessons completed</p>
+                            </div>
+                          </div>
                         </div>
+                        
+                        {/* Course Content */}
                         <div className="p-6">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{course.name}</h3>
-                          <p className="text-gray-600 text-sm mb-4">{course.shortname}</p>
                           <div className="mb-4">
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-600">Progress</span>
-                              <span className="text-gray-900 font-medium">{course.progress}%</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${course.progress}%` }}></div>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">{course.completedAssignments}/{course.totalAssignments} lessons</p>
+                            <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">{course.name}</h3>
+                            <p className="text-gray-600 text-sm leading-relaxed">{course.shortname}</p>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">{course.weeks} weeks</span>
-                                                          <button 
-                              onClick={() => fetchCourseDetails(course.id)}
-                              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
-                            >
-                              <Play className="w-4 h-4" />
-                              <span>Continue Learning</span>
-                            </button>
+                          
+                          {/* Course Stats */}
+                          <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center space-x-4">
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-600">{course.weeks} weeks</span>
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                <Users className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-600">24 students</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                              <span className="text-sm font-medium text-gray-700">4.8</span>
+                            </div>
                           </div>
+                          
+                          {/* Action Button */}
+                          <button 
+                            onClick={() => fetchCourseDetails(course.id)}
+                            className="group/btn w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105"
+                          >
+                            <Play className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+                            <span>Continue Learning</span>
+                            <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                          </button>
                         </div>
+                        
+                        {/* Hover Effect Border */}
+                        <div className="absolute inset-0 rounded-2xl border-2 border-transparent group-hover:border-blue-500/20 transition-colors pointer-events-none"></div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Current Lessons Section */}
+                {/* Enhanced Current Lessons Section */}
                 <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Current Lessons</h2>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-1">Current Lessons</h2>
+                      <p className="text-gray-600 text-sm">Track your progress and stay on top of your learning</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                      <span className="text-sm text-blue-500 font-medium">In Progress</span>
+                    </div>
+                  </div>
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {lessonData.map((lesson, index) => (
-                      <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="h-32 bg-gradient-to-br from-blue-400 to-blue-600 relative">
-                          <div className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center">
+                    {lessonData.map((lesson, index) => (
+                      <div key={index} className="group relative bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-100">
+                        {/* Lesson Header */}
+                        <div className="relative h-28 overflow-hidden">
+                          <div className={`absolute inset-0 ${
+                            lesson.status === 'completed' ? 'bg-gradient-to-br from-emerald-50 to-green-100' :
+                            lesson.status === 'locked' ? 'bg-gradient-to-br from-slate-50 to-gray-100' :
+                            'bg-gradient-to-br from-sky-50 to-blue-100'
+                          }`}>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent"></div>
+                          </div>
+                          
+                          {/* Status Badge */}
+                          <div className="absolute top-3 right-3">
                             {lesson.status === 'completed' ? (
-                              <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                                <CheckCircle className="w-3 h-3 text-green-600" />
+                              <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shadow-sm">
+                                <CheckCircle className="w-4 h-4 text-white" />
                               </div>
                             ) : lesson.status === 'locked' ? (
-                              <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
-                                <Circle className="w-3 h-3 text-gray-600" />
+                              <div className="w-8 h-8 bg-slate-400 rounded-full flex items-center justify-center shadow-sm">
+                                <Lock className="w-4 h-4 text-white" />
                               </div>
                             ) : (
-                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                                <Info className="w-3 h-3 text-blue-600" />
+                              <div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center shadow-sm">
+                                <Play className="w-4 h-4 text-white" />
                               </div>
                             )}
                           </div>
+                          
+                          {/* Lesson Icon */}
+                          <div className="absolute bottom-3 left-3">
+                            <div className="w-10 h-10 bg-white/30 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                              <BookOpen className="w-5 h-5 text-gray-700" />
+                            </div>
+                          </div>
+                          
+                          {/* Progress Overlay */}
+                          <div className="absolute bottom-3 right-3 left-16">
+                            <div className="bg-white/80 backdrop-blur-sm rounded-lg p-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-medium text-gray-600">Progress</span>
+                                <span className="text-xs font-bold text-gray-800">{lesson.progress}%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                <div 
+                                  className={`h-1.5 rounded-full transition-all duration-500 ${
+                                    lesson.status === 'completed' ? 'bg-green-400' : 
+                                    lesson.status === 'locked' ? 'bg-gray-300' : 'bg-blue-400'
+                                  }`}
+                                  style={{ width: `${lesson.progress}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div className="p-6">
-                          <div className="mb-4">
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-600">Progress</span>
-                              <span className="text-gray-900 font-medium">{lesson.progress}%</span>
+                        
+                        {/* Lesson Content */}
+                        <div className="p-4">
+                          <div className="mb-3">
+                            <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">{lesson.title}</h3>
+                            <p className="text-gray-600 text-xs leading-relaxed line-clamp-2">{lesson.description}</p>
+                          </div>
+                          
+                          {/* Lesson Stats */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3 text-gray-400" />
+                              <span className="text-xs text-gray-600">{lesson.duration}</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div className={`h-2 rounded-full ${
-                                lesson.status === 'completed' ? 'bg-green-600' : 
-                                lesson.status === 'locked' ? 'bg-gray-400' : 'bg-blue-600'
-                              }`} style={{ width: `${lesson.progress}%` }}></div>
+                            <div className="flex items-center space-x-1">
+                              <Target className="w-3 h-3 text-gray-400" />
+                              <span className="text-xs text-gray-600">3 activities</span>
                             </div>
                           </div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
-                          <p className="text-gray-600 text-sm mb-3">{lesson.description}</p>
-                          <div className="flex items-center space-x-2 mb-3">
-                            <Clock className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm text-gray-600">{lesson.duration}</span>
-                          </div>
+                          
+                          {/* Prerequisites */}
                           {lesson.prerequisites && (
-                            <p className="text-xs text-gray-500 mb-4">Prerequisites: {lesson.prerequisites}</p>
+                            <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                              <div className="flex items-center space-x-1">
+                                <Info className="w-3 h-3 text-blue-500" />
+                                <span className="text-xs text-blue-700 font-medium">Prerequisites</span>
+                              </div>
+                              <p className="text-xs text-blue-600 mt-1 line-clamp-1">{lesson.prerequisites}</p>
+                            </div>
                           )}
-                          <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            lesson.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
-                            lesson.status === 'continue' ? 'bg-blue-600 text-white hover:bg-blue-700' : 
-                            lesson.status === 'locked' ? 'bg-gray-100 text-gray-700 cursor-not-allowed' :
-                            'bg-blue-600 text-white hover:bg-blue-700'
+                          
+                          {/* Action Button */}
+                          <button className={`group/btn w-full px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-sm hover:shadow-md transform hover:scale-102 ${
+                            lesson.status === 'completed' ? 'bg-green-100 text-green-700 hover:bg-green-200' :
+                            lesson.status === 'continue' ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 
+                            lesson.status === 'locked' ? 'bg-gray-50 text-gray-400 cursor-not-allowed' :
+                            'bg-blue-100 text-blue-700 hover:bg-blue-200'
                           }`}>
-                            {lesson.status === 'completed' ? 'Review Lesson' : 
-                             lesson.status === 'continue' ? 'Continue Lesson' : 
-                             lesson.status === 'locked' ? 'Locked' : 'Start Lesson'}
+                            {lesson.status === 'completed' ? (
+                              <>
+                                <CheckCircle className="w-3 h-3" />
+                                <span>Review Lesson</span>
+                              </>
+                            ) : lesson.status === 'continue' ? (
+                              <>
+                                <Play className="w-3 h-3 group-hover/btn:scale-110 transition-transform" />
+                                <span>Continue Lesson</span>
+                                <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
+                              </>
+                            ) : lesson.status === 'locked' ? (
+                              <>
+                                <Lock className="w-3 h-3" />
+                                <span>Locked</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3 h-3 group-hover/btn:scale-110 transition-transform" />
+                                <span>Start Lesson</span>
+                                <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
+                              </>
+                            )}
                           </button>
                         </div>
+                        
+                        {/* Hover Effect Border */}
+                        <div className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-blue-300 transition-colors pointer-events-none"></div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Upcoming Activities Section */}
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Upcoming Activities</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {activityData.map((activity, index) => (
-                      <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <div className="flex items-start space-x-4 mb-4">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <activity.icon className="w-5 h-5 text-blue-600" />
+                {/* Enhanced Upcoming Activities Section */}
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-1">Upcoming Activities</h2>
+                      <p className="text-gray-600 text-sm">Stay organized and never miss a deadline</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
+                      <span className="text-sm text-orange-500 font-medium">Due Soon</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {activityData.map((activity, index) => (
+                      <div key={index} className="group relative bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-100">
+                                                  {/* Activity Header */}
+                        <div className="relative h-24 overflow-hidden">
+                          <div className={`absolute inset-0 ${
+                            activity.status === 'completed' ? 'bg-gradient-to-br from-emerald-50 to-green-100' :
+                            activity.status === 'overdue' ? 'bg-gradient-to-br from-red-50 to-pink-100' :
+                            'bg-gradient-to-br from-amber-50 to-orange-100'
+                          }`}>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent"></div>
                           </div>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">{activity.title}</h3>
-                            <div className="flex items-center space-x-2 mb-2">
-                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                                activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {activity.difficulty}
-                              </span>
-                              <span className="text-sm font-medium text-blue-600">{activity.points}</span>
+                          
+                          {/* Activity Icon */}
+                          <div className="absolute top-3 left-3">
+                            <div className="w-8 h-8 bg-white/30 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                              <activity.icon className="w-4 h-4 text-gray-700" />
                             </div>
-                            <div className="flex items-center space-x-2 mb-3">
-                              <Clock className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm text-gray-600">{activity.duration}</span>
+                          </div>
+                          
+                          {/* Status Badge */}
+                          <div className="absolute top-3 right-3">
+                            {activity.status === 'completed' ? (
+                              <div className="w-7 h-7 bg-emerald-500 rounded-full flex items-center justify-center shadow-sm">
+                                <CheckCircle className="w-3.5 h-3.5 text-white" />
+                              </div>
+                            ) : activity.status === 'overdue' ? (
+                              <div className="w-7 h-7 bg-red-500 rounded-full flex items-center justify-center shadow-sm">
+                                <AlertCircle className="w-3.5 h-3.5 text-white" />
+                              </div>
+                            ) : (
+                              <div className="w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center shadow-sm">
+                                <Clock className="w-3.5 h-3.5 text-white" />
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Points Badge */}
+                          <div className="absolute bottom-3 left-3">
+                            <div className="bg-white/80 backdrop-blur-sm rounded-lg px-2 py-1">
+                              <div className="flex items-center space-x-1">
+                                <Trophy className="w-3 h-3 text-orange-500" />
+                                <span className="text-xs font-bold text-gray-800">{activity.points} pts</span>
+                              </div>
                             </div>
-                            <div className="flex items-center space-x-2 mb-4">
+                          </div>
+                          
+                          {/* Difficulty Badge */}
+                          <div className="absolute bottom-3 right-3">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              activity.difficulty === 'Easy' ? 'bg-green-100 text-green-700' : 
+                              activity.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              <div className="w-1.5 h-1.5 bg-current rounded-full mr-1"></div>
+                              {activity.difficulty}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Activity Content */}
+                        <div className="p-4">
+                          <div className="mb-3">
+                            <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">{activity.title}</h3>
+                          </div>
+                          
+                          {/* Activity Stats */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3 text-gray-400" />
+                              <span className="text-xs text-gray-600">{activity.duration}</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              <span className="text-xs text-gray-600">Due soon</span>
+                            </div>
+                          </div>
+                          
+                          {/* Status Indicator */}
+                          <div className="mb-4">
+                            <div className="flex items-center space-x-2">
                               {activity.status === 'completed' ? (
-                                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
-                                  <CheckCircle className="w-3 h-3 text-green-600" />
+                                <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center">
+                                  <CheckCircle className="w-2.5 h-2.5 text-green-600" />
+                                </div>
+                              ) : activity.status === 'overdue' ? (
+                                <div className="w-4 h-4 bg-red-100 rounded-full flex items-center justify-center">
+                                  <AlertCircle className="w-2.5 h-2.5 text-red-600" />
                                 </div>
                               ) : (
-                                <Calendar className="w-4 h-4 text-red-400" />
+                                <div className="w-4 h-4 bg-orange-100 rounded-full flex items-center justify-center">
+                                  <Clock className="w-2.5 h-2.5 text-orange-600" />
+                                </div>
                               )}
-                              <span className={`text-sm font-medium ${
+                              <span className={`text-xs font-medium ${
                                 activity.status === 'overdue' ? 'text-red-600' : 
-                                activity.status === 'completed' ? 'text-green-600' : 'text-gray-600'
+                                activity.status === 'completed' ? 'text-green-600' : 'text-orange-600'
                               }`}>
                                 {activity.status === 'overdue' ? 'Overdue' : 
                                  activity.status === 'completed' ? 'Completed' : 'Pending'}
                               </span>
                             </div>
                           </div>
+                          
+                          {/* Action Button */}
+                          <button className={`group/btn w-full px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-sm hover:shadow-md transform hover:scale-102 ${
+                            activity.status === 'overdue' ? 'bg-red-100 text-red-700 hover:bg-red-200' : 
+                            activity.status === 'completed' ? 'bg-green-100 text-green-700 hover:bg-green-200' :
+                            'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                          }`}>
+                            {activity.status === 'overdue' ? (
+                              <>
+                                <AlertCircle className="w-3 h-3" />
+                                <span>Continue Now</span>
+                                <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
+                              </>
+                            ) : activity.status === 'completed' ? (
+                              <>
+                                <CheckCircle className="w-3 h-3" />
+                                <span>Review</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3 h-3 group-hover/btn:scale-110 transition-transform" />
+                                <span>Start Activity</span>
+                                <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
+                              </>
+                            )}
+                          </button>
                         </div>
-                        <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          activity.status === 'overdue' ? 'bg-orange-500 text-white hover:bg-orange-600' : 
-                          activity.status === 'completed' ? 'bg-green-600 text-white hover:bg-green-700' :
-                          'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}>
-                          {activity.status === 'overdue' ? 'Continue' : 
-                           activity.status === 'completed' ? 'Review' : 'Start'}
-                        </button>
+                        
+                        {/* Hover Effect Border */}
+                        <div className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-orange-300 transition-colors pointer-events-none"></div>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Achievement Section - Inspired by Goal.png medal */}
+                <div className="mb-12">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h2 className="text-3xl font-bold text-gray-900 mb-2">Your Achievements</h2>
+                      <p className="text-gray-600">Celebrate your learning milestones and accomplishments</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                      <span className="text-sm text-yellow-600 font-medium">New Badge!</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* Achievement Cards */}
+                    <div className="group relative bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+                      <div className="absolute inset-0 bg-gradient-to-br from-yellow-400/20 to-orange-600/20 rounded-2xl"></div>
+                      <div className="relative">
+                        <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Medal className="w-8 h-8 text-white" />
+                        </div>
+                        <h3 className="text-lg font-bold text-center mb-2">First Course</h3>
+                        <p className="text-yellow-100 text-sm text-center">Completed your first course</p>
+                        <div className="mt-4 text-center">
+                          <span className="text-2xl font-bold">🏆</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="group relative bg-gradient-to-br from-blue-400 via-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-purple-600/20 rounded-2xl"></div>
+                      <div className="relative">
+                        <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Trophy className="w-8 h-8 text-white" />
+                        </div>
+                        <h3 className="text-lg font-bold text-center mb-2">Perfect Score</h3>
+                        <p className="text-blue-100 text-sm text-center">Achieved 100% on a quiz</p>
+                        <div className="mt-4 text-center">
+                          <span className="text-2xl font-bold">⭐</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="group relative bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+                      <div className="absolute inset-0 bg-gradient-to-br from-green-400/20 to-teal-600/20 rounded-2xl"></div>
+                      <div className="relative">
+                        <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Crown className="w-8 h-8 text-white" />
+                        </div>
+                        <h3 className="text-lg font-bold text-center mb-2">Streak Master</h3>
+                        <p className="text-green-100 text-sm text-center">7 days learning streak</p>
+                        <div className="mt-4 text-center">
+                          <span className="text-2xl font-bold">🔥</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="group relative bg-gradient-to-br from-pink-400 via-rose-500 to-red-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+                      <div className="absolute inset-0 bg-gradient-to-br from-pink-400/20 to-red-600/20 rounded-2xl"></div>
+                      <div className="relative">
+                        <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Sparkles className="w-8 h-8 text-white" />
+                        </div>
+                        <h3 className="text-lg font-bold text-center mb-2">Quick Learner</h3>
+                        <p className="text-pink-100 text-sm text-center">Completed 5 lessons in a day</p>
+                        <div className="mt-4 text-center">
+                          <span className="text-2xl font-bold">⚡</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </>

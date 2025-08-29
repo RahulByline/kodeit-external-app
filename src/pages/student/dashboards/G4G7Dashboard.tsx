@@ -212,11 +212,11 @@ interface Lesson {
 interface Activity {
   id: string;
   title: string;
-  type: 'quiz' | 'assignment' | 'project' | 'discussion';
+  type: 'quiz' | 'assignment' | 'project' | 'discussion' | 'workshop' | 'url' | 'resource';
   courseId: string;
   courseTitle: string;
   dueDate: string;
-  status: 'pending' | 'submitted' | 'graded';
+  status: 'pending' | 'submitted' | 'graded' | 'completed' | 'in-progress';
   points: number;
   difficulty: 'easy' | 'medium' | 'hard';
   timeRemaining: string;
@@ -362,53 +362,142 @@ const dashboardService = {
     }
   },
 
-  // Fetch student's activities (optimized - mock data for performance)
+  // Fetch student's activities (real data from IOMAD Moodle)
   async fetchStudentActivities(studentId: string): Promise<Activity[]> {
     try {
-      // Return mock activity data for better performance
-      // This avoids additional API calls that slow down the dashboard
-      return [
-    {
-      id: '1',
-          title: 'HTML Structure Quiz',
-          type: 'quiz',
-          courseId: '1',
-          courseTitle: 'Web Development Fundamentals',
-          dueDate: '2024-01-25',
-          status: 'pending',
-          points: 50,
-          difficulty: 'easy',
-          timeRemaining: '2 days'
-        },
-        {
-          id: '2',
-          title: 'CSS Layout Assignment',
-          type: 'assignment',
-          courseId: '1',
-          courseTitle: 'Web Development Fundamentals',
-          dueDate: '2024-01-28',
-          status: 'submitted',
-          points: 100,
-          difficulty: 'medium',
-          timeRemaining: '5 days'
-        },
-        {
-          id: '3',
-          title: 'JavaScript Functions Project',
-          type: 'project',
-          courseId: '2',
-          courseTitle: 'Advanced JavaScript Concepts',
-          dueDate: '2024-01-30',
-          status: 'pending',
-          points: 150,
-          difficulty: 'hard',
-          timeRemaining: '7 days'
+      console.log('🎯 Fetching real activities from IOMAD Moodle API for student:', studentId);
+      
+      // Get user courses first
+      const userCourses = await moodleService.getUserCourses(studentId);
+      const allActivities: Activity[] = [];
+      
+      // Fetch activities from each course (limit to first 5 courses for performance)
+      const limitedCourses = userCourses.slice(0, 5);
+      
+      for (const course of limitedCourses) {
+        try {
+          console.log(`🔍 Fetching activities for course: ${course.fullname}`);
+          
+          // Get course activities from Moodle API
+          const courseActivities = await moodleService.getCourseActivities(course.id);
+          
+          // Transform Moodle activities to our format
+          const courseActivitiesList = courseActivities.map((activity: any) => ({
+            id: activity.id.toString(),
+            title: activity.name,
+            type: this.mapActivityType(activity.type),
+            courseId: course.id,
+            courseTitle: course.fullname,
+            dueDate: this.getActivityDueDate(activity.dates),
+            status: this.getActivityStatus(activity.completion),
+            points: this.getActivityPoints(activity.type),
+            difficulty: this.getActivityDifficulty(activity.type),
+            timeRemaining: this.getTimeRemaining(activity.dates),
+            description: activity.description || 'No description available',
+            url: activity.url,
+            isRequired: activity.availabilityinfo ? true : false,
+            image: course.courseimage // Use course image as fallback
+          }));
+          
+          allActivities.push(...courseActivitiesList);
+          
+        } catch (courseError) {
+          console.warn(`Failed to fetch activities for course ${course.fullname}:`, courseError);
         }
-      ];
+      }
+      
+      console.log(`✅ Fetched ${allActivities.length} real activities from IOMAD Moodle API`);
+      return allActivities;
+      
     } catch (error) {
-      console.error('Error fetching activities:', error);
+      console.error('Error fetching activities from Moodle:', error);
       return [];
     }
+  },
+
+  // Helper functions for activity processing
+  mapActivityType(moodleType: string): Activity['type'] {
+    const typeMap: { [key: string]: Activity['type'] } = {
+      'assign': 'assignment',
+      'quiz': 'quiz',
+      'forum': 'discussion',
+      'workshop': 'workshop',
+      'url': 'url',
+      'resource': 'resource',
+      'video': 'resource',
+      'practice': 'discussion'
+    };
+    return typeMap[moodleType] || 'assignment';
+  },
+
+  getActivityDueDate(dates: any[]): string {
+    if (!dates || dates.length === 0) return 'No due date';
+    
+    // Find the latest due date
+    const dueDates = dates.filter(date => date.label === 'Due date' || date.label === 'Close date');
+    if (dueDates.length > 0) {
+      const latestDueDate = dueDates.reduce((latest, current) => 
+        new Date(current.timestamp * 1000) > new Date(latest.timestamp * 1000) ? current : latest
+      );
+      return new Date(latestDueDate.timestamp * 1000).toLocaleDateString();
+    }
+    
+    return 'No due date';
+  },
+
+  getActivityStatus(completion: any): Activity['status'] {
+    if (!completion) return 'pending';
+    
+    if (completion.state === 1) return 'completed';
+    if (completion.state === 0) return 'in-progress';
+    return 'pending';
+  },
+
+  getActivityPoints(activityType: string): number {
+    const points: { [key: string]: number } = {
+      'assign': 150,
+      'quiz': 100,
+      'forum': 50,
+      'workshop': 200,
+      'url': 25,
+      'resource': 30
+    };
+    return points[activityType] || 100;
+  },
+
+  getActivityDifficulty(activityType: string): Activity['difficulty'] {
+    const difficulties: { [key: string]: Activity['difficulty'] } = {
+      'assign': 'medium',
+      'quiz': 'easy',
+      'forum': 'easy',
+      'workshop': 'hard',
+      'url': 'easy',
+      'resource': 'easy'
+    };
+    return difficulties[activityType] || 'medium';
+  },
+
+  getTimeRemaining(dates: any[]): string {
+    if (!dates || dates.length === 0) return 'No deadline';
+    
+    const dueDates = dates.filter(date => date.label === 'Due date' || date.label === 'Close date');
+    if (dueDates.length > 0) {
+      const latestDueDate = dueDates.reduce((latest, current) => 
+        new Date(current.timestamp * 1000) > new Date(latest.timestamp * 1000) ? current : latest
+      );
+      
+      const now = new Date();
+      const dueDate = new Date(latestDueDate.timestamp * 1000);
+      const diffTime = dueDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) return 'Overdue';
+      if (diffDays === 0) return 'Due today';
+      if (diffDays === 1) return 'Due tomorrow';
+      return `${diffDays} days`;
+    }
+    
+    return 'No deadline';
   },
 
   // Fetch student's exams (mock data for now)
@@ -1182,17 +1271,17 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                          onClick={() => handleActivityClick(activity)}
                        >
                         <div className="flex items-center space-x-4">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            activity.type === 'quiz' ? 'bg-purple-100' :
-                            activity.type === 'assignment' ? 'bg-orange-100' :
-                            activity.type === 'project' ? 'bg-green-100' :
-                            'bg-blue-100'
-                          }`}>
-                            {activity.type === 'quiz' ? <FileText className="w-5 h-5 text-purple-600" /> :
-                             activity.type === 'assignment' ? <Code className="w-5 h-5 text-orange-600" /> :
-                             activity.type === 'project' ? <Target className="w-5 h-5 text-green-600" /> :
-                             <Users className="w-5 h-5 text-blue-600" />}
-                          </div>
+                                                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                             activity.type === 'quiz' ? 'bg-violet-50' :
+                             activity.type === 'assignment' ? 'bg-amber-50' :
+                             activity.type === 'project' ? 'bg-emerald-50' :
+                             'bg-sky-50'
+                           }`}>
+                             {activity.type === 'quiz' ? <FileText className="w-5 h-5 text-violet-600" /> :
+                              activity.type === 'assignment' ? <Code className="w-5 h-5 text-amber-600" /> :
+                              activity.type === 'project' ? <Target className="w-5 h-5 text-emerald-600" /> :
+                              <Users className="w-5 h-5 text-sky-600" />}
+                           </div>
                           <div className="flex-1">
                             <h3 className="font-medium text-gray-900 mb-1">{activity.title}</h3>
                             <p className="text-sm text-gray-500 mb-2">{activity.courseTitle}</p>
@@ -1209,15 +1298,15 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         </div>
                                                  <div className="text-right">
                            <div className="text-sm text-gray-500 mb-1">Due in {activity.timeRemaining}</div>
-                           <button 
-                             className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               handleActivityClick(activity);
-                             }}
-                           >
-                             {activity.status === 'submitted' ? 'View' : 'Start'}
-                           </button>
+                                                        <button 
+                               className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 handleActivityClick(activity);
+                               }}
+                             >
+                               {activity.status === 'submitted' ? 'View' : 'Start'}
+                             </button>
                          </div>
                       </div>
                     ))}
