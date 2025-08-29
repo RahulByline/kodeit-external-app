@@ -342,6 +342,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
   const [selectedModuleForActivities, setSelectedModuleForActivities] = useState<CourseModule | null>(null);
   const [lessonActivities, setLessonActivities] = useState<ModuleActivity[]>([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [isLoadingCourseDetail, setIsLoadingCourseDetail] = useState(false);
   const [showCourseDetailView, setShowCourseDetailView] = useState(false);
   const [lastLoadedModuleId, setLastLoadedModuleId] = useState<string | null>(null);
   
@@ -399,6 +400,12 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     if (!currentUser?.id) {
       console.log('⚠️ No current user, skipping data fetch');
       setIsLoading(false);
+      return;
+    }
+    
+    // Check if data is already loaded
+    if (realCourses.length > 0 && !isLoading) {
+      console.log('📦 Data already loaded, skipping fetch');
       return;
     }
     
@@ -543,7 +550,9 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
       
       // Load detailed data in background (non-blocking)
       setTimeout(() => {
-        loadDetailedData(transformedCourses);
+        loadDetailedData(transformedCourses).catch(error => {
+          console.warn('⚠️ Background data loading failed:', error);
+        });
       }, 100);
       
     } catch (error) {
@@ -570,6 +579,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
             courseContents = await moodleService.getCourseContents(course.id);
           } catch (error) {
             console.warn(`⚠️ Failed to fetch contents for course ${course.id}:`, error);
+            continue; // Skip this course if API fails
           }
           
           if (courseContents && Array.isArray(courseContents)) {
@@ -683,14 +693,18 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
         const parsed = JSON.parse(cachedCourseData);
         const cacheAge = Date.now() - parsed.timestamp;
         
-        // Use cache if less than 10 minutes old
-        if (cacheAge < 10 * 60 * 1000) {
+        // Use cache if less than 15 minutes old (increased from 10)
+        if (cacheAge < 15 * 60 * 1000) {
           console.log('📦 Using cached course data');
           setSelectedCourseForDetail(parsed.course);
           setShowCourseDetailView(true);
+          setIsLoadingCourseDetail(false);
           return;
         }
       }
+
+      // Set loading state immediately
+      setIsLoadingCourseDetail(true);
 
       // Fetch course basic info first (fast)
       const userCourses = await moodleService.getUserCourses(currentUser.id.toString());
@@ -724,14 +738,18 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
       // Set basic course data immediately for fast display
       setSelectedCourseForDetail(basicCourse);
       setShowCourseDetailView(true);
+      setIsLoadingCourseDetail(false);
 
-      // Load detailed contents in background
+      // Load detailed contents in background only if not already loaded
+      if (!basicCourse.sections || basicCourse.sections.length === 0) {
       setTimeout(() => {
         loadDetailedCourseContents(courseId, basicCourse);
       }, 100);
+      }
 
     } catch (error) {
       console.error('❌ Error in fast course loading:', error);
+      setIsLoadingCourseDetail(false);
     }
   };
 
@@ -893,6 +911,12 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
   const loadDetailedCourseContents = async (courseId: string, basicCourse: CourseDetail) => {
     console.log('🔄 Loading detailed course contents in background...');
     
+    // Check if we already have detailed contents loaded
+    if (selectedCourseForDetail?.sections && selectedCourseForDetail.sections.length > 0) {
+      console.log('📦 Detailed contents already loaded, skipping background fetch');
+      return;
+    }
+    
     try {
       // Fetch course contents
       let courseContents = [];
@@ -903,6 +927,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
         console.log('🔍 Raw course contents:', courseContents);
       } catch (error) {
         console.warn('Failed to fetch course contents:', error);
+        return; // Exit early if we can't fetch contents
       }
 
       // Transform sections and modules
@@ -1108,6 +1133,22 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     if (currentUser?.id) {
       localStorage.removeItem(`module_activities_${moduleId}_${currentUser.id}`);
       console.log('🗑️ Cleared cache for module:', moduleId);
+    }
+  };
+
+  // Helper function to clear all caches (for debugging)
+  const clearAllCaches = () => {
+    if (currentUser?.id) {
+      localStorage.removeItem(`dashboard_data_${currentUser.id}`);
+      localStorage.removeItem(`course_detail_${selectedCourseForDetail?.id}_${currentUser.id}`);
+      // Clear all module activity caches
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith(`module_activities_`) && key.includes(`_${currentUser.id}`)) {
+          localStorage.removeItem(key);
+        }
+      });
+      console.log('🗑️ Cleared all caches');
     }
   };
 
@@ -1968,6 +2009,16 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {/* Integrated Course Detail View */}
               {showCourseDetailView && selectedCourseForDetail && (
                 <div className="space-y-6">
+                  {/* Loading indicator for course details */}
+                  {isLoadingCourseDetail && (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="flex items-center space-x-3">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <span className="text-gray-600">Loading course details...</span>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Show Course Sections, Modules View, Module Activities View, or Lesson View */}
                   {!selectedLessonForDetail && !selectedSectionForModules && !selectedModuleForActivities ? (
                     <>
