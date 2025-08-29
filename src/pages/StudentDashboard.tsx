@@ -7,6 +7,90 @@ import { getDashboardTypeByGrade, extractGradeFromCohortName, getGradeCohortInfo
 import { Skeleton } from '../components/ui/skeleton';
 import { G1G3Dashboard, G4G7Dashboard, G8PlusDashboard } from './student/dashboards';
 
+// Caching utilities
+const CACHE_KEYS = {
+  DASHBOARD_COURSES: 'dashboard_courses',
+  DASHBOARD_LESSONS: 'dashboard_lessons', 
+  DASHBOARD_ACTIVITIES: 'dashboard_activities',
+  SELECTED_COURSE: 'selectedCourse',
+  SELECTED_LESSON: 'selectedLesson',
+  SELECTED_ACTIVITY: 'selectedActivity'
+};
+
+const CACHE_DURATION = {
+  COURSES: 5 * 60 * 1000, // 5 minutes
+  LESSONS: 3 * 60 * 1000, // 3 minutes
+  ACTIVITIES: 3 * 60 * 1000, // 3 minutes
+  PROFILE: 10 * 60 * 1000, // 10 minutes
+  STATS: 2 * 60 * 1000 // 2 minutes
+};
+
+// Cache management functions
+const getCacheKey = (baseKey: string, userId: string) => `${baseKey}_${userId}`;
+
+const getCachedData = (key: string) => {
+  try {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    
+    const { data, timestamp } = JSON.parse(cached);
+    const now = Date.now();
+    
+    // Check if cache is still valid
+    if (now - timestamp < CACHE_DURATION.COURSES) {
+      console.log(`✅ Using cached data for ${key}`);
+      return data;
+    } else {
+      console.log(`⏰ Cache expired for ${key}`);
+      localStorage.removeItem(key);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Error reading cache for ${key}:`, error);
+    return null;
+  }
+};
+
+const setCachedData = (key: string, data: any) => {
+  try {
+    const cacheData = {
+      data,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(key, JSON.stringify(cacheData));
+    console.log(`💾 Cached data for ${key}`);
+  } catch (error) {
+    console.error(`❌ Error caching data for ${key}:`, error);
+  }
+};
+
+const clearExpiredCache = () => {
+  try {
+    const keys = Object.keys(localStorage);
+    const now = Date.now();
+    
+    keys.forEach(key => {
+      if (key.includes('dashboard_') || key.includes('selected')) {
+        try {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            const { timestamp } = JSON.parse(cached);
+            if (now - timestamp > CACHE_DURATION.COURSES) {
+              localStorage.removeItem(key);
+              console.log(`🗑️ Cleared expired cache: ${key}`);
+            }
+          }
+        } catch (error) {
+          // Remove invalid cache entries
+          localStorage.removeItem(key);
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error clearing expired cache:', error);
+  }
+};
+
 interface Stats {
   enrolledCourses: number;
   completedAssignments: number;
@@ -88,9 +172,30 @@ const StudentDashboard: React.FC = () => {
   const [error, setError] = useState('');
   
   // Grade-based dashboard state
-  const [studentGrade, setStudentGrade] = useState<number>(6);
-  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G4_G7');
+  const [studentGrade, setStudentGrade] = useState<number>(() => {
+    // Try to get grade from localStorage first
+    const storedGrade = localStorage.getItem(`student_grade_${currentUser?.id}`);
+    if (storedGrade) {
+      const grade = parseInt(storedGrade);
+      console.log('🎓 Retrieved grade from localStorage:', grade);
+      return grade;
+    }
+    return 8; // Default fallback
+  });
+  
+  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>(() => {
+    // Try to get dashboard type from localStorage first
+    const storedGrade = localStorage.getItem(`student_grade_${currentUser?.id}`);
+    if (storedGrade) {
+      const grade = parseInt(storedGrade);
+      const dashboardType = getDashboardTypeByGrade(grade);
+      console.log('🎓 Retrieved dashboard type from localStorage:', dashboardType);
+      return dashboardType;
+    }
+    return 'G8_PLUS'; // Default fallback
+  });
   const [studentCohort, setStudentCohort] = useState<any>(null);
+  const [gradeLoading, setGradeLoading] = useState(false);
   
   // Real data states with individual loading states
   const [courseProgress, setCourseProgress] = useState<CourseProgress[]>([]);
@@ -205,6 +310,7 @@ const StudentDashboard: React.FC = () => {
 
   const determineStudentGradeAndDashboard = useCallback(async () => {
     try {
+      setGradeLoading(true);
       console.log('🎓 Determining student grade and dashboard type...');
       
       // Get student's cohort
@@ -228,6 +334,10 @@ const StudentDashboard: React.FC = () => {
         console.log('🎓 No cohort found, using default grade 6 (G4-G7)');
       }
       
+      // Store grade in localStorage for future use
+      localStorage.setItem(`student_grade_${currentUser?.id}`, grade.toString());
+      console.log('🎓 Grade stored in localStorage:', grade);
+      
       setStudentGrade(grade);
       
       // Determine dashboard type based on grade
@@ -244,30 +354,58 @@ const StudentDashboard: React.FC = () => {
     } catch (error) {
       console.error('❌ Error determining student grade:', error);
       // Use default values
-      setStudentGrade(6);
-      setDashboardType('G4_G7');
+      const defaultGrade = 6;
+      const defaultDashboardType = 'G4_G7';
+      
+      // Store default values in localStorage
+      localStorage.setItem(`student_grade_${currentUser?.id}`, defaultGrade.toString());
+      
+      setStudentGrade(defaultGrade);
+      setDashboardType(defaultDashboardType);
+    } finally {
+      setGradeLoading(false);
     }
   }, [currentUser?.id]);
 
-  // Enhanced data fetching with progressive loading
+  // Enhanced data fetching with progressive loading and caching
   const fetchStudentData = useCallback(async () => {
     if (!currentUser?.id) return;
 
     try {
       setError('');
       
-      console.log('🔄 Fetching real student data from IOMAD API...');
+      console.log('🔄 Fetching student data with caching...');
       
       // Determine student's grade and dashboard type first (non-blocking)
       determineStudentGradeAndDashboard();
 
-      // ULTRA-FAST COURSE LOADING: Show courses immediately
-      setLoadingStates(prev => ({ ...prev, userCourses: true }));
+      // ULTRA-FAST COURSE LOADING: Show cached courses immediately
+      const coursesCacheKey = getCacheKey(CACHE_KEYS.DASHBOARD_COURSES, currentUser.id);
+      const cachedCourses = getCachedData(coursesCacheKey);
+      
+      if (cachedCourses) {
+        console.log('🚀 Loading courses from cache...');
+        setUserCourses(cachedCourses);
+        setLoadingStates(prev => ({ ...prev, userCourses: false }));
+        
+        // Also set course progress from cache
+        const realCourseProgress: CourseProgress[] = cachedCourses.map((course: Course) => ({
+          subject: course.shortname,
+          progress: course.progress || Math.floor(Math.random() * 100),
+          courseId: course.id,
+          courseName: course.fullname,
+          instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
+          lastAccess: course.lastaccess || course.startdate || Date.now() / 1000
+        }));
+        setCourseProgress(realCourseProgress);
+      } else {
+        setLoadingStates(prev => ({ ...prev, userCourses: true }));
+      }
       
       // Load real course data in background (non-blocking)
       const loadRealCourseData = async () => {
         try {
-          console.log('🔄 Loading real course data in background...');
+          console.log('🔄 Loading fresh course data in background...');
           
           // Fetch real course data
           const userCourses = await moodleService.getUserCourses(currentUser.id);
@@ -277,10 +415,13 @@ const StudentDashboard: React.FC = () => {
             course.visible !== 0 && course.categoryid && course.categoryid > 0
           );
           
+          // Cache the courses
+          setCachedData(coursesCacheKey, enrolledCourses);
+          
           setUserCourses(enrolledCourses);
           setLoadingStates(prev => ({ ...prev, userCourses: false }));
           
-          console.log('✅ Real courses loaded:', enrolledCourses.length);
+          console.log('✅ Fresh courses loaded and cached:', enrolledCourses.length);
           
           // Show real course progress
           const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => ({
@@ -298,8 +439,8 @@ const StudentDashboard: React.FC = () => {
           console.error('❌ Error loading real course data:', error);
           setLoadingStates(prev => ({ ...prev, userCourses: false }));
           
-          // If API fails, show mock courses for better UX
-          if (userCourses.length === 0) {
+          // If API fails and no cached data, show mock courses for better UX
+          if (!cachedCourses && userCourses.length === 0) {
             const mockCourses = [
               {
                 id: '1',
@@ -331,12 +472,22 @@ const StudentDashboard: React.FC = () => {
       // Start background course loading
       loadRealCourseData();
 
-      // Load user profile in parallel (non-blocking)
+      // Load user profile with caching (non-blocking)
       const loadUserProfile = async () => {
         try {
-          setLoadingStates(prev => ({ ...prev, profile: true }));
-          const userProfile = await moodleService.getProfile();
-          setLoadingStates(prev => ({ ...prev, profile: false }));
+          const profileCacheKey = getCacheKey('user_profile', currentUser.id);
+          const cachedProfile = getCachedData(profileCacheKey);
+          
+          if (cachedProfile) {
+            console.log('🚀 Loading profile from cache...');
+            setLoadingStates(prev => ({ ...prev, profile: false }));
+          } else {
+            setLoadingStates(prev => ({ ...prev, profile: true }));
+            const userProfile = await moodleService.getProfile();
+            setCachedData(profileCacheKey, userProfile);
+            setLoadingStates(prev => ({ ...prev, profile: false }));
+            console.log('✅ Fresh profile loaded and cached');
+          }
         } catch (error) {
           console.error('❌ Error loading user profile:', error);
           setLoadingStates(prev => ({ ...prev, profile: false }));
@@ -345,43 +496,55 @@ const StudentDashboard: React.FC = () => {
       
       loadUserProfile();
 
-      // Load detailed course data in background (non-blocking)
+      // Load detailed course data with caching (non-blocking)
       const loadDetailedCourseData = async () => {
         try {
-          console.log('🔄 Loading detailed course data in background...');
+          const detailedDataCacheKey = getCacheKey('detailed_course_data', currentUser.id);
+          const cachedDetailedData = getCachedData(detailedDataCacheKey);
           
-          const [
-            courseEnrollments,
-            courseCompletion,
-            teacherAssignments
-          ] = await Promise.all([
-            moodleService.getCourseEnrollments(),
-            moodleService.getCourseCompletionStats(),
-            moodleService.getTeacherAssignments()
-          ]);
-
-          // Update course progress with real data
-          setLoadingStates(prev => ({ ...prev, courseProgress: true }));
-          
-          const enrolledCourses = userCourses;
-          const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => {
-            const enrollment = courseEnrollments.find(e => e.courseId === course.id);
-            const completion = courseCompletion.find(c => c.courseId === course.id);
+          if (cachedDetailedData) {
+            console.log('🚀 Loading detailed course data from cache...');
+            setCourseProgress(cachedDetailedData.courseProgress);
+            setLoadingStates(prev => ({ ...prev, courseProgress: false }));
+          } else {
+            console.log('🔄 Loading fresh detailed course data in background...');
             
-            return {
-              subject: course.shortname,
-              progress: completion?.completionRate || course.progress || Math.floor(Math.random() * 100),
-              courseId: course.id,
-              courseName: course.fullname,
-              instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
-              lastAccess: course.lastaccess || course.startdate || Date.now() / 1000
-            };
-          });
-          
-          setCourseProgress(realCourseProgress);
-          setLoadingStates(prev => ({ ...prev, courseProgress: false }));
-          
-          console.log('✅ Detailed course data loaded');
+            const [
+              courseEnrollments,
+              courseCompletion,
+              teacherAssignments
+            ] = await Promise.all([
+              moodleService.getCourseEnrollments(),
+              moodleService.getCourseCompletionStats(),
+              moodleService.getTeacherAssignments()
+            ]);
+
+            // Update course progress with real data
+            setLoadingStates(prev => ({ ...prev, courseProgress: true }));
+            
+            const enrolledCourses = userCourses;
+            const realCourseProgress: CourseProgress[] = enrolledCourses.map((course: Course) => {
+              const enrollment = courseEnrollments.find(e => e.courseId === course.id);
+              const completion = courseCompletion.find(c => c.courseId === course.id);
+              
+              return {
+                subject: course.shortname,
+                progress: completion?.completionRate || course.progress || Math.floor(Math.random() * 100),
+                courseId: course.id,
+                courseName: course.fullname,
+                instructor: ['Dr. Smith', 'Prof. Johnson', 'Dr. Williams', 'Prof. Brown'][Math.floor(Math.random() * 4)],
+                lastAccess: course.lastaccess || course.startdate || Date.now() / 1000
+              };
+            });
+            
+            // Cache the detailed data
+            setCachedData(detailedDataCacheKey, { courseProgress: realCourseProgress });
+            
+            setCourseProgress(realCourseProgress);
+            setLoadingStates(prev => ({ ...prev, courseProgress: false }));
+            
+            console.log('✅ Fresh detailed course data loaded and cached');
+          }
           
         } catch (error) {
           console.error('❌ Error loading detailed course data:', error);
@@ -389,20 +552,38 @@ const StudentDashboard: React.FC = () => {
         }
       };
 
-      // Load stats and activities in background (non-blocking)
+      // Load stats and activities with caching (non-blocking)
       const loadStatsAndActivities = async () => {
         try {
-          console.log('🔄 Loading stats and activities in background...');
+          const statsCacheKey = getCacheKey('dashboard_stats', currentUser.id);
+          const activitiesCacheKey = getCacheKey('dashboard_activities', currentUser.id);
+          const cachedStats = getCachedData(statsCacheKey);
+          const cachedActivities = getCachedData(activitiesCacheKey);
           
-          const [
-            userActivity,
-            userAssignments
-          ] = await Promise.all([
-            moodleService.getUserActivityData(currentUser.id),
-            moodleService.getAssignmentSubmissions('1')
-          ]);
+          if (cachedStats && cachedActivities) {
+            console.log('🚀 Loading stats and activities from cache...');
+            setStats(cachedStats);
+            setStudentActivities(cachedActivities.studentActivities);
+            setRecentActivities(cachedActivities.recentActivities);
+            setLoadingStates(prev => ({ 
+              ...prev, 
+              stats: false, 
+              studentActivities: false, 
+              recentActivities: false 
+            }));
+          } else {
+            console.log('🔄 Loading fresh stats and activities in background...');
+            
+            try {
+              const [
+                userActivity,
+                userAssignments
+              ] = await Promise.all([
+                moodleService.getUserActivityData(currentUser.id),
+                moodleService.getAssignmentSubmissions('1')
+              ]);
 
-          // Process stats
+              // Process stats
           setLoadingStates(prev => ({ ...prev, stats: true }));
           
           const enrolledCourses = userCourses;
@@ -499,18 +680,37 @@ const StudentDashboard: React.FC = () => {
 
           realRecentActivities.sort((a, b) => b.timestamp - a.timestamp);
 
+          // Cache the stats and activities
+          setCachedData(statsCacheKey, newStats);
+          setCachedData(activitiesCacheKey, { 
+            studentActivities: realStudentActivities, 
+            recentActivities: realRecentActivities.slice(0, 10) 
+          });
+          
+          setStats(newStats);
           setStudentActivities(realStudentActivities);
           setRecentActivities(realRecentActivities.slice(0, 10));
           setUserAssignments(userAssignments);
           
           setLoadingStates(prev => ({ 
             ...prev, 
+            stats: false,
             studentActivities: false, 
             recentActivities: false 
           }));
           
-          console.log('✅ Stats and activities loaded');
+          console.log('✅ Fresh stats and activities loaded and cached');
           
+            } catch (error) {
+              console.error('❌ Error loading stats and activities:', error);
+              setLoadingStates(prev => ({ 
+                ...prev, 
+                stats: false,
+                studentActivities: false, 
+                recentActivities: false 
+              }));
+            }
+          }
         } catch (error) {
           console.error('❌ Error loading stats and activities:', error);
           setLoadingStates(prev => ({ 
@@ -531,6 +731,27 @@ const StudentDashboard: React.FC = () => {
       setError('Failed to load dashboard data. Please check your connection and try again.');
     }
   }, [currentUser, determineStudentGradeAndDashboard]);
+
+  // Handle grade determination when user changes
+  useEffect(() => {
+    if (currentUser?.id) {
+      // Check if we have a stored grade for this user
+      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
+      
+      if (!storedGrade) {
+        // No stored grade for this user, determine it
+        determineStudentGradeAndDashboard();
+      } else {
+        // We have a stored grade, but verify it's still valid by checking cohort
+        determineStudentGradeAndDashboard();
+      }
+    }
+  }, [currentUser?.id, determineStudentGradeAndDashboard]);
+
+  // Clear expired cache on component mount
+  useEffect(() => {
+    clearExpiredCache();
+  }, []);
 
   useEffect(() => {
     fetchStudentData();

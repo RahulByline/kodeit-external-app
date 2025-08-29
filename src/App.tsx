@@ -109,7 +109,6 @@ const StudentCommunity = lazy(() => import("./pages/student/Community"));
 const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
 const StudentCurrentLessons = lazy(() => import("./pages/student/CurrentLessons"));
 const StudentActivities = lazy(() => import("./pages/student/Activities"));
-const LessonDetail = lazy(() => import("./pages/student/LessonDetail"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
@@ -618,13 +617,6 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentCurrentLessons />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/lesson/:lessonId" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <LessonDetail />
                     </Suspense>
                   </ProtectedRoute>
                 } />

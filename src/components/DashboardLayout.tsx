@@ -93,8 +93,32 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   });
   const [isLoadingCohortSettings, setIsLoadingCohortSettings] = useState(false);
   const [isLoadingSidebar, setIsLoadingSidebar] = useState(false);
-  const [studentGrade, setStudentGrade] = useState<number | null>(null);
-  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS' | null>(null);
+  const [studentGrade, setStudentGrade] = useState<number | null>(() => {
+    // Try to get grade from localStorage first
+    if (currentUser?.id) {
+      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
+      if (storedGrade) {
+        const grade = parseInt(storedGrade);
+        console.log('🎓 DashboardLayout: Retrieved grade from localStorage:', grade);
+        return grade;
+      }
+    }
+    return null;
+  });
+  
+  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS' | null>(() => {
+    // Try to get dashboard type from localStorage first
+    if (currentUser?.id) {
+      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
+      if (storedGrade) {
+        const grade = parseInt(storedGrade);
+        const dashboardType = getDashboardTypeByGrade(grade);
+        console.log('🎓 DashboardLayout: Retrieved dashboard type from localStorage:', dashboardType);
+        return dashboardType;
+      }
+    }
+    return null;
+  });
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debug logging
@@ -149,6 +173,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
               console.log('🎓 No cohort name, using default grade 6 (G4-G7)');
             }
             
+            // Store grade in localStorage for future use
+            localStorage.setItem(`student_grade_${currentUser.id}`, grade.toString());
+            console.log('🎓 DashboardLayout: Grade stored in localStorage:', grade);
+            
             setStudentGrade(grade);
             
             // Determine dashboard type based on grade
@@ -184,8 +212,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
              setSidebarCachedData('cohortNavigationSettings', defaultSettings);
              
              // Set default grade to G8+ when no cohort is found (most restrictive)
-             setStudentGrade(8);
-             setDashboardType('G8_PLUS');
+             const defaultGrade = 8;
+             const defaultDashboardType = 'G8_PLUS';
+             
+             // Store default values in localStorage
+             localStorage.setItem(`student_grade_${currentUser.id}`, defaultGrade.toString());
+             console.log('🎓 DashboardLayout: Default grade stored in localStorage:', defaultGrade);
+             
+             setStudentGrade(defaultGrade);
+             setDashboardType(defaultDashboardType);
              console.log('🎓 No cohort found, defaulting to G8+ (most restrictive)');
            }
                  } catch (error) {
@@ -197,8 +232,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
            setSidebarCachedData('cohortNavigationSettings', defaultSettings);
            
            // Set default grade to G8+ on error (most restrictive)
-           setStudentGrade(8);
-           setDashboardType('G8_PLUS');
+           const defaultGrade = 8;
+           const defaultDashboardType = 'G8_PLUS';
+           
+           // Store default values in localStorage
+           localStorage.setItem(`student_grade_${currentUser.id}`, defaultGrade.toString());
+           console.log('🎓 DashboardLayout: Error fallback grade stored in localStorage:', defaultGrade);
+           
+           setStudentGrade(defaultGrade);
+           setDashboardType(defaultDashboardType);
            console.log('🎓 Error occurred, defaulting to G8+ (most restrictive)');
          } finally {
           setIsLoadingCohortSettings(false);

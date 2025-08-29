@@ -1037,6 +1037,8 @@ export const moodleService = {
 
   async getUserCourses(userId: string) {
     try {
+      console.log('📚 Fetching user courses with real progress data for user:', userId);
+      
       const response = await moodleApi.get('', {
         params: {
           wsfunction: 'core_enrol_get_users_courses',
@@ -1045,26 +1047,91 @@ export const moodleService = {
       });
 
       if (response.data && Array.isArray(response.data)) {
-        return response.data.map((course: MoodleCourse) => ({
+        console.log(`✅ Found ${response.data.length} courses for user ${userId}`);
+        
+        // Fetch real progress data for each course
+        const coursesWithProgress = await Promise.all(
+          response.data.map(async (course: MoodleCourse) => {
+            try {
+              // Get course completion data
+              const completionData = await this.getCourseCompletionData(userId, course.id.toString());
+              
+              // Get course activities count and completion
+              const activitiesData = await this.getCourseActivitiesData(userId, course.id.toString());
+              
+              // Calculate real progress
+              const progress = this.calculateRealProgress(completionData, activitiesData);
+              
+              // Get course statistics
+              const courseStats = await this.getCourseStatistics(course.id.toString());
+              
+              return {
           id: course.id.toString(),
           fullname: course.fullname,
           shortname: course.shortname,
           summary: course.summary,
           categoryid: course.categoryid || course.category,
           courseimage: course.courseimage || course.overviewfiles?.[0]?.fileurl,
-          progress: Math.floor(Math.random() * 100), // Mock progress
+                progress: progress.percentage,
+                completedLessons: progress.completedLessons,
+                totalLessons: progress.totalLessons,
           categoryname: course.categoryname,
           format: course.format,
           startdate: course.startdate,
           enddate: course.enddate,
           visible: course.visible,
-          type: ['ILT', 'VILT', 'Self-paced'][Math.floor(Math.random() * 3)],
-          tags: ['Professional Development', 'Teaching Skills', 'Assessment'],
-        }));
+                type: this.determineCourseType(course.format),
+                tags: this.generateCourseTags(course.fullname, course.categoryname),
+                duration: this.calculateDuration(course.startdate, course.enddate),
+                lastAccess: completionData.lastAccess,
+                completionStatus: progress.status,
+                // Real statistics
+                enrollmentCount: courseStats.enrollmentCount || 0,
+                averageGrade: courseStats.averageGrade || 0,
+                timeSpent: completionData.timeSpent || 0,
+                certificates: completionData.certificates || 0,
+                // Additional completion data
+                completionData,
+                activitiesData
+              };
+            } catch (error) {
+              console.warn(`⚠️ Error fetching progress for course ${course.id}:`, error);
+              // Return course with fallback data
+              return {
+                id: course.id.toString(),
+                fullname: course.fullname,
+                shortname: course.shortname,
+                summary: course.summary,
+                categoryid: course.categoryid || course.category,
+                courseimage: course.courseimage || course.overviewfiles?.[0]?.fileurl,
+                progress: 0,
+                completedLessons: 0,
+                totalLessons: 0,
+                categoryname: course.categoryname,
+                format: course.format,
+                startdate: course.startdate,
+                enddate: course.enddate,
+                visible: course.visible,
+                type: this.determineCourseType(course.format),
+                tags: this.generateCourseTags(course.fullname, course.categoryname),
+                duration: this.calculateDuration(course.startdate, course.enddate),
+                lastAccess: null,
+                completionStatus: 'not_started',
+                enrollmentCount: 0,
+                averageGrade: 0,
+                timeSpent: 0,
+                certificates: 0
+              };
+            }
+          })
+        );
+
+        console.log(`✅ Processed ${coursesWithProgress.length} courses with real progress data`);
+        return coursesWithProgress;
       }
       return [];
     } catch (error) {
-      console.error('Error fetching courses:', error);
+      console.error('❌ Error fetching courses:', error);
       throw new Error('Failed to fetch courses');
     }
   },
@@ -1162,6 +1229,304 @@ export const moodleService = {
     const diffWeeks = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7));
     
     return `${diffWeeks} weeks`;
+  },
+
+  // New function to get course completion data
+  async getCourseCompletionData(userId: string, courseId: string) {
+    try {
+      console.log(`📊 Fetching completion data for course ${courseId}, user ${userId}`);
+      
+      // Get course completion status
+      const completionResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_completion_get_activities_completion_status',
+          courseid: courseId,
+          userid: userId,
+        },
+      });
+
+      // Get user's course completion
+      const userCompletionResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_completion_get_course_completion_status',
+          courseid: courseId,
+          userid: userId,
+        },
+      });
+
+      let completionData = {
+        completedActivities: 0,
+        totalActivities: 0,
+        completionRate: 0,
+        lastAccess: null,
+        timeSpent: 0,
+        certificates: 0,
+        completionDate: null,
+        grade: 0
+      };
+
+      if (completionResponse.data && completionResponse.data.statuses) {
+        const statuses = completionResponse.data.statuses;
+        completionData.totalActivities = statuses.length;
+        completionData.completedActivities = statuses.filter((status: any) => 
+          status.state === 1 || status.completionstate === 1
+        ).length;
+        completionData.completionRate = completionData.totalActivities > 0 
+          ? (completionData.completedActivities / completionData.totalActivities) * 100 
+          : 0;
+      }
+
+      if (userCompletionResponse.data && userCompletionResponse.data.completionstatus) {
+        const status = userCompletionResponse.data.completionstatus;
+        completionData.lastAccess = status.lastaccess;
+        completionData.timeSpent = status.timespent || 0;
+        completionData.completionDate = status.completiondate;
+        completionData.grade = status.grade || 0;
+      }
+
+      // Check for certificates
+      try {
+        const certificateResponse = await moodleApi.get('', {
+          params: {
+            wsfunction: 'mod_certificate_get_certificates_by_courses',
+            courseids: [courseId],
+          },
+        });
+
+        if (certificateResponse.data && certificateResponse.data.certificates) {
+          completionData.certificates = certificateResponse.data.certificates.length;
+        }
+      } catch (certError) {
+        // Certificates might not be available, that's okay
+        console.log('No certificates found for course:', courseId);
+      }
+
+      console.log(`✅ Completion data for course ${courseId}:`, completionData);
+      return completionData;
+    } catch (error) {
+      console.warn(`⚠️ Error fetching completion data for course ${courseId}:`, error);
+      return {
+        completedActivities: 0,
+        totalActivities: 0,
+        completionRate: 0,
+        lastAccess: null,
+        timeSpent: 0,
+        certificates: 0,
+        completionDate: null,
+        grade: 0
+      };
+    }
+  },
+
+  // New function to get course activities data
+  async getCourseActivitiesData(userId: string, courseId: string) {
+    try {
+      console.log(`📋 Fetching activities data for course ${courseId}, user ${userId}`);
+      
+      const activities = await this.getCourseActivities(courseId, userId);
+      
+      const activitiesData = {
+        totalActivities: activities.length,
+        completedActivities: activities.filter(activity => 
+          activity.completion && activity.completion.state === 1
+        ).length,
+        assignments: activities.filter(activity => activity.type === 'assign').length,
+        quizzes: activities.filter(activity => activity.type === 'quiz').length,
+        resources: activities.filter(activity => activity.type === 'resource').length,
+        forums: activities.filter(activity => activity.type === 'forum').length,
+        workshops: activities.filter(activity => activity.type === 'workshop').length,
+        scorms: activities.filter(activity => activity.type === 'scorm').length,
+        urls: activities.filter(activity => activity.type === 'url').length,
+        completedAssignments: activities.filter(activity => 
+          activity.type === 'assign' && activity.completion && activity.completion.state === 1
+        ).length,
+        completedQuizzes: activities.filter(activity => 
+          activity.type === 'quiz' && activity.completion && activity.completion.state === 1
+        ).length,
+        averageGrade: 0
+      };
+
+      // Calculate average grade from completed activities
+      const completedActivities = activities.filter(activity => 
+        activity.completion && activity.completion.state === 1
+      );
+      
+      if (completedActivities.length > 0) {
+        const totalGrade = completedActivities.reduce((sum, activity) => {
+          if (activity.completion && activity.completion.grade) {
+            return sum + activity.completion.grade;
+          }
+          return sum;
+        }, 0);
+        activitiesData.averageGrade = totalGrade / completedActivities.length;
+      }
+
+      console.log(`✅ Activities data for course ${courseId}:`, activitiesData);
+      return activitiesData;
+    } catch (error) {
+      console.warn(`⚠️ Error fetching activities data for course ${courseId}:`, error);
+      return {
+        totalActivities: 0,
+        completedActivities: 0,
+        assignments: 0,
+        quizzes: 0,
+        resources: 0,
+        forums: 0,
+        workshops: 0,
+        scorms: 0,
+        urls: 0,
+        completedAssignments: 0,
+        completedQuizzes: 0,
+        averageGrade: 0
+      };
+    }
+  },
+
+  // New function to get course statistics
+  async getCourseStatistics(courseId: string) {
+    try {
+      console.log(`📈 Fetching statistics for course ${courseId}`);
+      
+      // Get course enrollment count
+      const enrollmentResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_enrol_get_enrolled_users',
+          courseid: courseId,
+        },
+      });
+
+      const enrollmentCount = enrollmentResponse.data ? enrollmentResponse.data.length : 0;
+
+      // Get course grades (if available)
+      let averageGrade = 0;
+      try {
+        const gradesResponse = await moodleApi.get('', {
+          params: {
+            wsfunction: 'gradereport_user_get_grade_items',
+            courseid: courseId,
+          },
+        });
+
+        if (gradesResponse.data && gradesResponse.data.usergrades) {
+          const grades = gradesResponse.data.usergrades
+            .map((user: any) => user.gradeitems)
+            .flat()
+            .filter((item: any) => item.grade !== null && item.grade !== undefined)
+            .map((item: any) => parseFloat(item.grade));
+
+          if (grades.length > 0) {
+            averageGrade = grades.reduce((sum, grade) => sum + grade, 0) / grades.length;
+          }
+        }
+      } catch (gradeError) {
+        console.log('Grade data not available for course:', courseId);
+      }
+
+      const stats = {
+        enrollmentCount,
+        averageGrade: Math.round(averageGrade * 100) / 100,
+        totalActivities: 0,
+        totalResources: 0
+      };
+
+      console.log(`✅ Statistics for course ${courseId}:`, stats);
+      return stats;
+    } catch (error) {
+      console.warn(`⚠️ Error fetching statistics for course ${courseId}:`, error);
+      return {
+        enrollmentCount: 0,
+        averageGrade: 0,
+        totalActivities: 0,
+        totalResources: 0
+      };
+    }
+  },
+
+  // Helper function to calculate real progress
+  calculateRealProgress(completionData: any, activitiesData: any) {
+    const totalActivities = activitiesData.totalActivities || completionData.totalActivities || 0;
+    const completedActivities = activitiesData.completedActivities || completionData.completedActivities || 0;
+    
+    let percentage = 0;
+    let status = 'not_started';
+    
+    if (totalActivities > 0) {
+      percentage = Math.round((completedActivities / totalActivities) * 100);
+    }
+
+    // Determine status based on completion rate
+    if (percentage === 0) {
+      status = 'not_started';
+    } else if (percentage < 25) {
+      status = 'just_started';
+    } else if (percentage < 75) {
+      status = 'in_progress';
+    } else if (percentage < 100) {
+      status = 'almost_complete';
+    } else {
+      status = 'completed';
+    }
+
+    return {
+      percentage,
+      status,
+      completedLessons: completedActivities,
+      totalLessons: totalActivities
+    };
+  },
+
+  // Helper function to determine course type
+  determineCourseType(format?: string): string {
+    if (!format) return 'Self-paced';
+    
+    const formatLower = format.toLowerCase();
+    if (formatLower.includes('topics') || formatLower.includes('weekly')) {
+      return 'Self-paced';
+    } else if (formatLower.includes('social')) {
+      return 'Social Learning';
+    } else if (formatLower.includes('singleactivity')) {
+      return 'Single Activity';
+    } else {
+      return 'Structured';
+    }
+  },
+
+  // Helper function to generate course tags
+  generateCourseTags(courseName: string, categoryName?: string): string[] {
+    const tags: string[] = [];
+    const nameLower = courseName.toLowerCase();
+    const categoryLower = (categoryName || '').toLowerCase();
+
+    // Add category-based tags
+    if (categoryLower.includes('programming') || categoryLower.includes('coding')) {
+      tags.push('Programming', 'Technical');
+    } else if (categoryLower.includes('design') || categoryLower.includes('creative')) {
+      tags.push('Design', 'Creative');
+    } else if (categoryLower.includes('business') || categoryLower.includes('management')) {
+      tags.push('Business', 'Management');
+    } else if (categoryLower.includes('science') || categoryLower.includes('math')) {
+      tags.push('Science', 'Mathematics');
+    } else if (categoryLower.includes('language') || categoryLower.includes('english')) {
+      tags.push('Language', 'Communication');
+    }
+
+    // Add content-based tags
+    if (nameLower.includes('web') || nameLower.includes('development')) {
+      tags.push('Web Development');
+    } else if (nameLower.includes('python') || nameLower.includes('programming')) {
+      tags.push('Python', 'Programming');
+    } else if (nameLower.includes('javascript') || nameLower.includes('js')) {
+      tags.push('JavaScript', 'Frontend');
+    } else if (nameLower.includes('database') || nameLower.includes('sql')) {
+      tags.push('Database', 'Backend');
+    } else if (nameLower.includes('mobile') || nameLower.includes('app')) {
+      tags.push('Mobile Development');
+    }
+
+    // Add general tags
+    tags.push('Professional Development', 'Skills Enhancement');
+
+    return [...new Set(tags)]; // Remove duplicates
   },
 
   async getCompanies() {

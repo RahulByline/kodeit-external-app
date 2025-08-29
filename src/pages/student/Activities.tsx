@@ -20,7 +20,15 @@ import {
   Clock,
   Zap,
   Trophy,
-  LayoutDashboard
+  LayoutDashboard,
+  AlertCircle,
+  Search,
+  X,
+  ExternalLink,
+  Download,
+  BarChart3,
+  Bookmark,
+  Share2
 } from 'lucide-react';
 
 interface Course {
@@ -56,6 +64,7 @@ interface ActivityItem {
   url?: string;
   fileUrl?: string;
   isRequired: boolean;
+  image?: string; // Added for modal
 }
 
 const Activities: React.FC = () => {
@@ -66,6 +75,12 @@ const Activities: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'overdue'>('all');
   const [sortBy, setSortBy] = useState<'dueDate' | 'points' | 'difficulty'>('dueDate');
+  const [searchTerm, setSearchTerm] = useState(''); // Added for search
+  const [activeFilter, setActiveFilter] = useState<'all' | 'completed' | 'in-progress' | 'pending'>('all'); // Added for filter
+  
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null);
 
   // Top navigation items
   const topNavItems = [
@@ -122,7 +137,8 @@ const Activities: React.FC = () => {
               tags: getActivityTags(activity.type, course.fullname),
               url: activity.url,
               fileUrl: activity.contents?.[0]?.fileurl,
-              isRequired: activity.availabilityinfo ? true : false
+                              isRequired: activity.availabilityinfo ? true : false,
+                image: course.courseimage // Use course image as fallback
             }));
             
             allActivities.push(...courseActivitiesList);
@@ -246,25 +262,93 @@ const Activities: React.FC = () => {
     return tags;
   };
 
+  const getActivityStatusColor = (status: ActivityItem['status']) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'in-progress':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'not-started':
+        return 'bg-red-100 text-red-800';
+      case 'overdue':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getDifficultyColor = (difficulty: ActivityItem['difficulty']) => {
+    switch (difficulty) {
+      case 'easy':
+        return 'bg-green-100 text-green-800';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'hard':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const filteredActivities = activities
+    .filter(activity => {
+      const matchesSearchTerm = activity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                activity.courseTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                activity.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                activity.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'completed') return activity.status === 'completed';
+      if (activeFilter === 'in-progress') return activity.status === 'in-progress';
+      if (activeFilter === 'pending') return activity.status === 'not-started' || activity.status === 'overdue';
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'dueDate') {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+      if (sortBy === 'points') return b.points - a.points;
+      if (sortBy === 'difficulty') {
+        const difficultyOrder = { easy: 1, medium: 2, hard: 3 };
+        return difficultyOrder[a.difficulty] - difficultyOrder[b.difficulty];
+      }
+      return 0;
+    });
+
+  const handleActivityClick = (activity: ActivityItem) => {
+    // Open modal with activity details
+    setSelectedActivity(activity);
+    setIsModalOpen(true);
+  };
+
+  // Close modal
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedActivity(null);
+  };
+
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="p-6">
+      <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
         {/* Top Navigation Bar */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="flex space-x-1 p-1">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-8">
+          <div className="flex space-x-2 p-2">
             {topNavItems.map((item) => {
               const isActive = isActivePath(item.path);
               return (
                 <button
                   key={item.name}
                   onClick={() => handleTopNavClick(item.path)}
-                  className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
                     isActive
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md'
                   }`}
                 >
-                  <item.icon className="w-4 h-4" />
+                  <item.icon className="w-5 h-5" />
                   <span>{item.name}</span>
                 </button>
               );
@@ -273,15 +357,15 @@ const Activities: React.FC = () => {
         </div>
 
         {/* Rest of the component content */}
-        <div className="space-y-6">
+        <div className="max-w-7xl mx-auto space-y-8">
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Activities</h1>
-              <p className="text-gray-600 mt-1">Explore and participate in various learning activities</p>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">Activities</h1>
+              <p className="text-gray-600 text-lg">Explore and participate in various learning activities</p>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <div className="flex items-center space-x-2 text-sm text-gray-600 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-lg">
                 <Activity className="w-4 h-4" />
                 <span>Last updated: {new Date().toLocaleTimeString()}</span>
               </div>
@@ -289,246 +373,315 @@ const Activities: React.FC = () => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Activities</p>
-                  <p className="text-2xl font-bold text-gray-900">{activities.length}</p>
+                  <p className="text-3xl font-bold text-gray-900">{activities.length}</p>
                 </div>
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Activity className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Pending</p>
-                  <p className="text-2xl font-bold text-orange-600">
-                    {activities.filter(a => a.status === 'not-started' || a.status === 'in-progress').length}
-                  </p>
-                </div>
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Clock className="w-6 h-6 text-orange-600" />
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <Activity className="w-6 h-6 text-white" />
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Completed</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {activities.filter(a => a.status === 'completed').length}
-                  </p>
+                  <p className="text-3xl font-bold text-gray-900">{activities.filter(a => a.status === 'completed').length}</p>
                 </div>
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
+                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <CheckCircle className="w-6 h-6 text-white" />
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Points</p>
-                  <p className="text-2xl font-bold text-purple-600">
-                    {activities.reduce((sum, a) => sum + a.points, 0)}
-                  </p>
+                  <p className="text-sm font-medium text-gray-600">In Progress</p>
+                  <p className="text-3xl font-bold text-gray-900">{activities.filter(a => a.status === 'in-progress').length}</p>
                 </div>
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Trophy className="w-6 h-6 text-purple-600" />
+                <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                  <Clock className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Pending</p>
+                  <p className="text-3xl font-bold text-gray-900">{activities.filter(a => a.status === 'not-started').length}</p>
+                </div>
+                <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <AlertCircle className="w-6 h-6 text-white" />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Filters and Sorting */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-gray-700">Filter by:</span>
-                <select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value as any)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Activities</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                  <option value="overdue">Overdue</option>
-                </select>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-gray-700">Sort by:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="dueDate">Due Date</option>
-                  <option value="points">Points</option>
-                  <option value="difficulty">Difficulty</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Activities List */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Available Activities</h2>
-            </div>
-            <div className="p-6">
-              {loading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="animate-pulse">
-                      <div className="h-24 bg-gray-200 rounded-lg"></div>
-                    </div>
+          {/* Filter and Search */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-2xl font-bold text-gray-900">Filter Activities</h2>
+                <div className="flex space-x-2">
+                  {['all', 'completed', 'in-progress', 'pending'].map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setActiveFilter(filter as any)}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                        activeFilter === filter
+                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {activities
-                    .filter(activity => {
-                      if (filter === 'all') return true;
-                      if (filter === 'pending') return activity.status === 'not-started' || activity.status === 'in-progress';
-                      if (filter === 'completed') return activity.status === 'completed';
-                      if (filter === 'overdue') return activity.status === 'overdue';
-                      return true;
-                    })
-                    .sort((a, b) => {
-                      if (sortBy === 'dueDate') {
-                        if (!a.dueDate && !b.dueDate) return 0;
-                        if (!a.dueDate) return 1;
-                        if (!b.dueDate) return -1;
-                        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-                      }
-                      if (sortBy === 'points') return b.points - a.points;
-                      if (sortBy === 'difficulty') {
-                        const difficultyOrder = { easy: 1, medium: 2, hard: 3 };
-                        return difficultyOrder[a.difficulty] - difficultyOrder[b.difficulty];
-                      }
-                      return 0;
-                    })
-                    .map((activity) => (
-                      <div
-                        key={activity.id}
-                        className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md ${
-                          activity.status === 'completed'
-                            ? 'bg-green-50 border-green-200'
-                            : activity.status === 'overdue'
-                            ? 'bg-red-50 border-red-200'
-                            : 'bg-white border-gray-200'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <div className={`p-2 rounded-lg ${
-                                activity.type === 'assignment' ? 'bg-blue-100' :
-                                activity.type === 'quiz' ? 'bg-purple-100' :
-                                activity.type === 'project' ? 'bg-green-100' :
-                                activity.type === 'discussion' ? 'bg-orange-100' :
-                                activity.type === 'challenge' ? 'bg-red-100' :
-                                'bg-gray-100'
-                              }`}>
-                                {activity.type === 'assignment' && <FileText className="w-4 h-4 text-blue-600" />}
-                                {activity.type === 'quiz' && <Target className="w-4 h-4 text-purple-600" />}
-                                {activity.type === 'project' && <Code className="w-4 h-4 text-green-600" />}
-                                {activity.type === 'discussion' && <Users className="w-4 h-4 text-orange-600" />}
-                                {activity.type === 'challenge' && <Zap className="w-4 h-4 text-red-600" />}
-                                {activity.type === 'workshop' && <Video className="w-4 h-4 text-gray-600" />}
-                              </div>
-                              <div>
-                                <h3 className="font-semibold text-gray-900">{activity.title}</h3>
-                                <p className="text-sm text-gray-600">{activity.courseTitle}</p>
-                              </div>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-3">{activity.description}</p>
-                            <div className="flex items-center space-x-4 text-sm text-gray-500">
-                              <div className="flex items-center space-x-1">
-                                <Clock className="w-4 h-4" />
-                                <span>{activity.duration}</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <Trophy className="w-4 h-4" />
-                                <span>{activity.points} points</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <Users className="w-4 h-4" />
-                                <span>{activity.participants} participants</span>
-                              </div>
-                              {activity.dueDate && (
-                                <div className="flex items-center space-x-1">
-                                  <Calendar className="w-4 h-4" />
-                                  <span>Due: {new Date(activity.dueDate).toLocaleDateString()}</span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex items-center space-x-2 mt-3">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                activity.difficulty === 'easy' ? 'bg-green-100 text-green-600' :
-                                activity.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-600' :
-                                'bg-red-100 text-red-600'
-                              }`}>
-                                {activity.difficulty.charAt(0).toUpperCase() + activity.difficulty.slice(1)}
-                              </span>
-                              {activity.tags.map((tag, index) => (
-                                <span key={index} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <div className="text-right">
-                              <div className="flex items-center space-x-2 mb-1">
-                                <span className="text-sm font-medium text-gray-700">Status</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                {activity.status === 'completed' ? (
-                                  <div className="flex items-center space-x-1 text-green-600">
-                                    <CheckCircle className="w-4 h-4" />
-                                    <span className="text-sm">Completed</span>
-                                  </div>
-                                ) : activity.status === 'overdue' ? (
-                                  <div className="flex items-center space-x-1 text-red-600">
-                                    <Calendar className="w-4 h-4" />
-                                    <span className="text-sm">Overdue</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center space-x-1 text-blue-600">
-                                    <Clock className="w-4 h-4" />
-                                    <span className="text-sm">Pending</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              {activity.status === 'completed' ? (
-                                <div className="p-2 bg-green-100 rounded-lg">
-                                  <CheckCircle className="w-5 h-5 text-green-600" />
-                                </div>
-                              ) : activity.status === 'overdue' ? (
-                                <div className="p-2 bg-red-100 rounded-lg">
-                                  <Calendar className="w-5 h-5 text-red-600" />
-                                </div>
-                              ) : (
-                                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-                                  Start
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search activities..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full md:w-80 px-4 py-2 pl-10 bg-white/60 backdrop-blur-sm border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+              </div>
             </div>
           </div>
+
+          {/* Activities Grid */}
+          {loading ? (
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading activities...</p>
+            </div>
+          ) : filteredActivities.length === 0 ? (
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Activity className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">No Activities Found</h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                {searchTerm ? 'No activities match your search criteria.' : 'No activities available at the moment.'}
+              </p>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                  Clear Search
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredActivities.map((activity) => (
+                <div 
+                  key={activity.id} 
+                  className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden hover:shadow-2xl hover:scale-105 transition-all duration-300 cursor-pointer group"
+                  onClick={() => handleActivityClick(activity)}
+                >
+                  <div className="relative">
+                    <img 
+                      src={activity.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+                      alt={activity.title}
+                      className="w-full h-40 object-cover group-hover:scale-110 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="absolute top-4 right-4">
+                      <div className="bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg">
+                        <Activity className="w-4 h-4 text-orange-600" />
+                      </div>
+                    </div>
+                    <div className="absolute bottom-4 left-4">
+                      <span className={`${getActivityStatusColor(activity.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
+                        {activity.status}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <h3 className="font-bold text-gray-900 mb-2 text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">{activity.title}</h3>
+                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">{activity.courseTitle}</p>
+                    <div className="flex items-center space-x-2 mb-4">
+                      <Clock className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm text-gray-500">{activity.duration}</span>
+                    </div>
+                    <div className="flex items-center space-x-4 mb-4">
+                      <span className={`${getDifficultyColor(activity.difficulty)} px-2 py-1 rounded-full text-xs font-medium`}>
+                        {activity.difficulty}
+                      </span>
+                      <span className="text-sm text-gray-500">{activity.points} points</span>
+                    </div>
+                    {activity.dueDate && (
+                      <div className="mb-4">
+                        <div className="text-xs text-gray-500 mb-1">Due Date</div>
+                        <div className="text-sm font-medium text-gray-900">{activity.dueDate}</div>
+                      </div>
+                    )}
+                    <button 
+                      className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl group-hover:scale-105"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleActivityClick(activity);
+                      }}
+                    >
+                      {activity.status === 'completed' ? (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          <span>View Activity</span>
+                        </>
+                      ) : activity.status === 'in-progress' ? (
+                        <>
+                          <Play className="w-4 h-4" />
+                          <span>Continue Activity</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          <span>Start Activity</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Activity Details Modal */}
+        {isModalOpen && selectedActivity && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="relative">
+                <img 
+                  src={selectedActivity.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+                  alt={selectedActivity.title}
+                  className="w-full h-48 object-cover rounded-t-3xl"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent rounded-t-3xl"></div>
+                <button
+                  onClick={closeModal}
+                  className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-200"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+                <div className="absolute bottom-4 left-4">
+                  <span className={`${getActivityStatusColor(selectedActivity.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
+                    {selectedActivity.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-8">
+                <div className="mb-6">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedActivity.title}</h2>
+                  <p className="text-gray-600 text-lg">{selectedActivity.courseTitle}</p>
+                  <p className="text-gray-500 mt-2">{selectedActivity.description}</p>
+                </div>
+
+                {/* Activity Stats */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Duration</p>
+                        <p className="font-semibold text-gray-900">{selectedActivity.duration}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <Trophy className="w-5 h-5 text-yellow-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Points</p>
+                        <p className="font-semibold text-gray-900">{selectedActivity.points}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Activity Details */}
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Type</span>
+                    <span className="text-sm text-gray-900 capitalize">{selectedActivity.type}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Difficulty</span>
+                    <span className={`${getDifficultyColor(selectedActivity.difficulty)} px-2 py-1 rounded-full text-xs font-medium`}>
+                      {selectedActivity.difficulty}
+                    </span>
+                  </div>
+                  {selectedActivity.dueDate && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Due Date</span>
+                      <span className="text-sm text-gray-900">{selectedActivity.dueDate}</span>
+                    </div>
+                  )}
+                  {selectedActivity.participants && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">Participants</span>
+                      <span className="text-sm text-gray-900">{selectedActivity.participants}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tags */}
+                {selectedActivity.tags && selectedActivity.tags.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Tags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedActivity.tags.map((tag, index) => (
+                        <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-4">
+                  {selectedActivity.status === 'completed' ? (
+                    <button className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                      <CheckCircle className="w-5 h-5" />
+                      <span>View Activity</span>
+                    </button>
+                  ) : selectedActivity.status === 'in-progress' ? (
+                    <button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                      <Play className="w-5 h-5" />
+                      <span>Continue Activity</span>
+                    </button>
+                  ) : (
+                    <button className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                      <Play className="w-5 h-5" />
+                      <span>Start Activity</span>
+                    </button>
+                  )}
+                  <button 
+                    onClick={closeModal}
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-300"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

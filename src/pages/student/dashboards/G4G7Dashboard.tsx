@@ -29,7 +29,11 @@ import {
   Clock as ClockIcon,
   Users,
   BarChart3,
-  Plus
+  Plus,
+  X,
+  ExternalLink,
+  Download,
+  BarChart3 as BarChart3Icon
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import moodleService from '../../../services/moodleApi';
@@ -178,6 +182,16 @@ interface Course {
   isActive: boolean;
   lastAccessed: string;
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  // Real data fields
+  completionStatus: string;
+  enrollmentCount: number;
+  averageGrade: number;
+  timeSpent: number;
+  certificates: number;
+  type: string;
+  tags: string[];
+  completionData?: any;
+  activitiesData?: any;
 }
 
 interface Lesson {
@@ -251,34 +265,45 @@ interface G4G7DashboardProps {
 
 // API service functions
 const dashboardService = {
-  // Fetch student's courses from Moodle API
+  // Fetch student's courses from Moodle API with real progress data
   async fetchStudentCourses(studentId: string): Promise<Course[]> {
     try {
-      console.log('🎓 Fetching courses from Moodle API for student:', studentId);
+      console.log('🎓 Fetching courses from Moodle API with real progress data for student:', studentId);
       
-      // Use the same Moodle API as the Courses tab
+      // Use the enhanced Moodle API that includes real progress data
       const moodleCourses = await moodleService.getUserCourses(studentId);
       
-      console.log('📚 Moodle courses fetched:', moodleCourses);
+      console.log('📚 Moodle courses with real progress data fetched:', moodleCourses);
       
-      // Transform Moodle course data to match our Course interface
+      // Transform Moodle course data to match our Course interface with real data
       return moodleCourses.map((course: any) => ({
         id: course.id,
         title: course.fullname,
         description: course.summary || 'No description available',
         instructor: 'Instructor TBD', // Moodle doesn't provide instructor info in this API
-        progress: course.progress || Math.floor(Math.random() * 100), // Use provided progress or generate random
-        totalLessons: course.totalModules || Math.floor(Math.random() * 20) + 10,
-        completedLessons: course.completedModules || Math.floor(Math.random() * 10),
+        progress: course.progress || 0, // Use real progress from API
+        totalLessons: course.totalLessons || course.activitiesData?.totalActivities || 0,
+        completedLessons: course.completedLessons || course.activitiesData?.completedActivities || 0,
         duration: course.duration || `${Math.floor(Math.random() * 8) + 4} weeks`,
         category: course.categoryname || 'General',
         image: course.courseimage || getCourseImageFallback(course.categoryname, course.fullname),
         isActive: course.visible !== 0,
         lastAccessed: course.lastAccess ? new Date(course.lastAccess * 1000).toLocaleDateString() : 'Recently',
-        difficulty: getCourseDifficulty(course.categoryname, course.fullname)
+        difficulty: getCourseDifficulty(course.categoryname, course.fullname),
+        // Additional real data
+        completionStatus: course.completionStatus || 'not_started',
+        enrollmentCount: course.enrollmentCount || 0,
+        averageGrade: course.averageGrade || 0,
+        timeSpent: course.timeSpent || 0,
+        certificates: course.certificates || 0,
+        type: course.type || 'Self-paced',
+        tags: course.tags || [],
+        // Real completion data
+        completionData: course.completionData,
+        activitiesData: course.activitiesData
       }));
     } catch (error) {
-      console.error('Error fetching courses from Moodle:', error);
+      console.error('❌ Error fetching courses from Moodle:', error);
       return [];
     }
   },
@@ -343,8 +368,8 @@ const dashboardService = {
       // Return mock activity data for better performance
       // This avoids additional API calls that slow down the dashboard
       return [
-        {
-          id: '1',
+    {
+      id: '1',
           title: 'HTML Structure Quiz',
           type: 'quiz',
           courseId: '1',
@@ -526,6 +551,12 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const [error, setError] = useState<string | null>(null);
   const [hasInitialized, setHasInitialized] = useState(false);
 
+  // Modal state
+  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+
   // Memoized top navigation items to prevent re-creation
   const topNavItems = useMemo(() => [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
@@ -568,15 +599,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     // Store selected lesson in localStorage
     localStorage.setItem('selectedLesson', JSON.stringify(lesson));
     
-    // Navigate to lesson detail view or open lesson content
-    // For now, we'll navigate to a lesson detail page
-    navigate(`/dashboard/student/lesson/${lesson.id}`, { 
-      state: { 
-        selectedLesson: lesson,
-        courseTitle: lesson.courseTitle
-      }
-    });
-  }, [navigate]);
+    // Open modal with lesson details
+    setSelectedLesson(lesson);
+    setIsLessonModalOpen(true);
+  }, []);
 
   // Handle activity click to open activity
   const handleActivityClick = useCallback((activity: Activity) => {
@@ -585,14 +611,21 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     // Store selected activity in localStorage
     localStorage.setItem('selectedActivity', JSON.stringify(activity));
     
-    // Navigate to activity detail view or open activity
-    navigate(`/dashboard/student/activity/${activity.id}`, { 
-      state: { 
-        selectedActivity: activity,
-        courseTitle: activity.courseTitle
-      }
-    });
-  }, [navigate]);
+    // Open modal with activity details
+    setSelectedActivity(activity);
+    setIsActivityModalOpen(true);
+  }, []);
+
+  // Close modals
+  const closeLessonModal = () => {
+    setIsLessonModalOpen(false);
+    setSelectedLesson(null);
+  };
+
+  const closeActivityModal = () => {
+    setIsActivityModalOpen(false);
+    setSelectedActivity(null);
+  };
 
   // Cache data in localStorage
   const cacheData = useCallback((key: string, data: any) => {
@@ -776,13 +809,36 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     }
   }, []);
 
-  // Memoized computed values
+  // Memoized computed values with real data
   const activeCoursesCount = useMemo(() => courses.filter(c => c.isActive).length, [courses]);
-  const completedLessonsCount = useMemo(() => lessons.filter(l => l.status === 'completed').length, [lessons]);
+  const completedLessonsCount = useMemo(() => {
+    // Use real data from courses if available
+    const totalCompletedFromCourses = courses.reduce((sum, course) => sum + (course.completedLessons || 0), 0);
+    if (totalCompletedFromCourses > 0) {
+      return totalCompletedFromCourses;
+    }
+    // Fallback to lessons data
+    return lessons.filter(l => l.status === 'completed').length;
+  }, [courses, lessons]);
   const pendingActivitiesCount = useMemo(() => activities.filter(a => a.status === 'pending').length, [activities]);
+  
+  // Additional real data stats
+  const totalProgress = useMemo(() => {
+    if (courses.length === 0) return 0;
+    const totalProgress = courses.reduce((sum, course) => sum + (course.progress || 0), 0);
+    return Math.round(totalProgress / courses.length);
+  }, [courses]);
+  
+  const totalTimeSpent = useMemo(() => {
+    return courses.reduce((sum, course) => sum + (course.timeSpent || 0), 0);
+  }, [courses]);
+  
+  const totalCertificates = useMemo(() => {
+    return courses.reduce((sum, course) => sum + (course.certificates || 0), 0);
+  }, [courses]);
 
   if (isLoading && !hasInitialized) {
-    return (
+  return (
       <div className="bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100 min-h-screen">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
@@ -822,7 +878,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   }
 
   return (
-    <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100 min-h-screen'>
+    <div className='bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen'>
       {/* Top Navigation Bar */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
         <div className="flex space-x-1 p-1">
@@ -885,10 +941,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-5 h-5 text-green-600" />
               </div>
-              <div>
-                <div className="text-2xl font-bold text-gray-900">{studentStats.lessonsCompleted}</div>
-                <div className="text-sm text-gray-600">Lessons Done</div>
-              </div>
+                             <div>
+                 <div className="text-2xl font-bold text-gray-900">{completedLessonsCount}</div>
+                 <div className="text-sm text-gray-600">Lessons Done</div>
+               </div>
             </div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -896,10 +952,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
                 <Award className="w-5 h-5 text-yellow-600" />
               </div>
-              <div>
-                <div className="text-2xl font-bold text-gray-900">{studentStats.totalPoints}</div>
-                <div className="text-sm text-gray-600">Total Points</div>
-              </div>
+                             <div>
+                 <div className="text-2xl font-bold text-gray-900">{totalProgress}%</div>
+                 <div className="text-sm text-gray-600">Avg Progress</div>
+               </div>
             </div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -963,28 +1019,54 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                       <div className="p-4">
                         <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{course.title}</h3>
                         <p className="text-gray-600 text-sm mb-3 line-clamp-2">{course.description}</p>
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between text-sm mb-1">
-                            <span className="text-gray-600">Progress</span>
-                            <span className="font-medium">{course.progress}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${course.progress}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-1 text-sm text-gray-500">
-                            <BookOpen className="w-3 h-3" />
-                            <span>{course.completedLessons}/{course.totalLessons} lessons</span>
-                          </div>
-                          <div className="flex items-center space-x-1 text-sm text-gray-500">
-                            <Clock className="w-3 h-3" />
-                            <span>{course.duration}</span>
-                          </div>
-                        </div>
+                                                 <div className="mb-3">
+                           <div className="flex items-center justify-between text-sm mb-1">
+                             <span className="text-gray-600">Progress</span>
+                             <span className="font-medium">{course.progress}%</span>
+                           </div>
+                           <div className="w-full bg-gray-200 rounded-full h-2">
+                             <div 
+                               className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                               style={{ width: `${course.progress}%` }}
+                             ></div>
+                           </div>
+                         </div>
+                         <div className="flex items-center justify-between mb-3">
+                           <div className="flex items-center space-x-1 text-sm text-gray-500">
+                             <BookOpen className="w-3 h-3" />
+                             <span>{course.completedLessons}/{course.totalLessons} lessons</span>
+                           </div>
+                           <div className="flex items-center space-x-1 text-sm text-gray-500">
+                             <Clock className="w-3 h-3" />
+                             <span>{course.duration}</span>
+                           </div>
+                         </div>
+                         {/* Real data indicators */}
+                         {course.completionStatus && (
+                           <div className="flex items-center justify-between mb-2">
+                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                               course.completionStatus === 'completed' ? 'bg-green-100 text-green-600' :
+                               course.completionStatus === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                               course.completionStatus === 'almost_complete' ? 'bg-yellow-100 text-yellow-600' :
+                               'bg-gray-100 text-gray-600'
+                             }`}>
+                               {course.completionStatus.replace('_', ' ')}
+                             </span>
+                             {course.averageGrade > 0 && (
+                               <span className="text-xs text-gray-500">
+                                 Grade: {course.averageGrade}%
+                               </span>
+                             )}
+                           </div>
+                         )}
+                         {course.enrollmentCount > 0 && (
+                           <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                             <span>{course.enrollmentCount} students enrolled</span>
+                             {course.certificates > 0 && (
+                               <span>{course.certificates} certificates</span>
+                             )}
+                           </div>
+                         )}
                                                  <button 
                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center justify-center space-x-2"
                            onClick={(e) => {
@@ -1182,9 +1264,9 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 ))}
                 </div>
               )}
+              </div>
             </div>
-          </div>
-          
+
 
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
@@ -1194,10 +1276,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
                   <User className="w-6 h-6 text-white" />
                 </div>
-                <div>
+            <div>
                   <h3 className="font-semibold text-gray-900">{currentUser?.fullname || "Student"}</h3>
                   <p className="text-blue-600 text-sm">Daily Rank →</p>
-                </div>
+              </div>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1211,7 +1293,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
 
             {/* Quick Stats */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Quick Stats</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1297,10 +1379,226 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                     ))}
                 </div>
               </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+      {/* Lesson Details Modal */}
+      {isLessonModalOpen && selectedLesson && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="relative">
+              <img 
+                src={selectedLesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+                alt={selectedLesson.title}
+                className="w-full h-48 object-cover rounded-t-3xl"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent rounded-t-3xl"></div>
+              <button
+                onClick={closeLessonModal}
+                className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-200"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+              <div className="absolute bottom-4 left-4">
+                <span className={`${getStatusColor(selectedLesson.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
+                  {selectedLesson.status.replace('-', ' ')}
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-8">
+                <div className="mb-6">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedLesson.title}</h2>
+                <p className="text-gray-600 text-lg">{selectedLesson.courseTitle}</p>
+                </div>
+                
+              {/* Lesson Stats */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-gray-50 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-blue-600" />
+                            </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Duration</p>
+                      <p className="font-semibold text-gray-900">{selectedLesson.duration}</p>
+                          </div>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Progress</p>
+                      <p className="font-semibold text-gray-900">{selectedLesson.progress}%</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Learning Progress</span>
+                  <span className="text-sm text-gray-500">{selectedLesson.progress}% Complete</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div 
+                    className="bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full transition-all duration-300 shadow-sm"
+                    style={{ width: `${selectedLesson.progress}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Prerequisites */}
+              {selectedLesson.prerequisites && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Prerequisites</h3>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                    <p className="text-gray-700">{selectedLesson.prerequisites}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex space-x-4">
+                {selectedLesson.status === 'completed' ? (
+                  <button className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Review Lesson</span>
+                  </button>
+                ) : selectedLesson.status === 'in-progress' ? (
+                  <button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                    <Play className="w-5 h-5" />
+                    <span>Continue Lesson</span>
+                  </button>
+                ) : (
+                  <button className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                    <Play className="w-5 h-5" />
+                    <span>Start Lesson</span>
+                  </button>
+                )}
+                <button 
+                  onClick={closeLessonModal}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-300"
+                >
+                  Close
+                </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+      )}
+
+      {/* Activity Details Modal */}
+      {isActivityModalOpen && selectedActivity && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="relative">
+              <div className="w-full h-48 bg-gradient-to-br from-orange-500 to-red-500 rounded-t-3xl flex items-center justify-center">
+                <Activity className="w-16 h-16 text-white" />
+                </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent rounded-t-3xl"></div>
+              <button
+                onClick={closeActivityModal}
+                className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-200"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+              <div className="absolute bottom-4 left-4">
+                <span className={`${getActivityStatusColor(selectedActivity.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
+                  {selectedActivity.status}
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-8">
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedActivity.title}</h2>
+                <p className="text-gray-600 text-lg">{selectedActivity.courseTitle}</p>
+          </div>
+
+              {/* Activity Stats */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                      <p className="text-sm text-gray-600">Time Remaining</p>
+                      <p className="font-semibold text-gray-900">{selectedActivity.timeRemaining}</p>
+                </div>
+              </div>
+            </div>
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <Award className="w-5 h-5 text-yellow-600" />
+              </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Points</p>
+                      <p className="font-semibold text-gray-900">{selectedActivity.points}</p>
+                </div>
+                </div>
+                </div>
+              </div>
+
+              {/* Activity Details */}
+              <div className="space-y-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Type</span>
+                  <span className="text-sm text-gray-900 capitalize">{selectedActivity.type}</span>
+            </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Difficulty</span>
+                  <span className={`${getDifficultyColor(selectedActivity.difficulty)} px-2 py-1 rounded-full text-xs font-medium`}>
+                    {selectedActivity.difficulty}
+                  </span>
+          </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Due Date</span>
+                  <span className="text-sm text-gray-900">{selectedActivity.dueDate}</span>
+        </div>
+      </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-4">
+                {selectedActivity.status === 'submitted' ? (
+                  <button className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                    <CheckCircle className="w-5 h-5" />
+                    <span>View Submission</span>
+                  </button>
+                ) : selectedActivity.status === 'graded' ? (
+                  <button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                    <BarChart3Icon className="w-5 h-5" />
+                    <span>View Grade</span>
+                  </button>
+                ) : (
+                  <button className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                    <Play className="w-5 h-5" />
+                    <span>Start Activity</span>
+                  </button>
+                )}
+                <button 
+                  onClick={closeActivityModal}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-300"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 });
