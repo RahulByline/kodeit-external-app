@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import {  useLocation } from 'react-router-dom';
 import { 
   BookOpen, 
   Clock, 
@@ -51,7 +51,7 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import moodleService from '../../services/moodleApi';
-import CourseDetail from './CourseDetail';
+// import CourseDetail from './CourseDetail';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -60,6 +60,7 @@ import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getDashboardTypeByGrade, extractGradeFromCohortName } from '../../utils/gradeCohortMapping';
 
 interface Course {
   id: string;
@@ -359,12 +360,56 @@ const Courses: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Top navigation items
+  // Get student grade and dashboard type
+  const [studentGrade, setStudentGrade] = useState<number | null>(null);
+  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G8_PLUS');
+
+  // Get student grade from localStorage or determine from cohort
+  useEffect(() => {
+    if (currentUser?.id) {
+      // Try to get grade from localStorage first
+      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
+      if (storedGrade) {
+        const grade = parseInt(storedGrade);
+        setStudentGrade(grade);
+        setDashboardType(getDashboardTypeByGrade(grade));
+        console.log('🎓 Courses: Using stored grade:', grade, 'Dashboard type:', getDashboardTypeByGrade(grade));
+      } else {
+        // If no stored grade, try to get from cohort
+        const fetchStudentGrade = async () => {
+          try {
+            const userCohorts = await moodleService.getCohorts();
+            if (userCohorts && userCohorts.length > 0) {
+              const cohort = userCohorts[0]; // Use first cohort
+              const extractedGrade = extractGradeFromCohortName(cohort.name);
+              if (extractedGrade) {
+                setStudentGrade(extractedGrade);
+                setDashboardType(getDashboardTypeByGrade(extractedGrade));
+                localStorage.setItem(`student_grade_${currentUser.id}`, extractedGrade.toString());
+                console.log('🎓 Courses: Extracted grade from cohort:', extractedGrade, 'Dashboard type:', getDashboardTypeByGrade(extractedGrade));
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error fetching student grade:', error);
+            // Default to G8+ if error
+            setStudentGrade(8);
+            setDashboardType('G8_PLUS');
+          }
+        };
+        fetchStudentGrade();
+      }
+    }
+  }, [currentUser?.id]);
+
+  // Top navigation items - conditionally show based on dashboard type
   const topNavItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
     { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
-    { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' },
-    { name: 'Activities', icon: Activity, path: '/dashboard/student/activities' }
+    // Only show Current Lessons and Activities for G4G7 students
+    ...(dashboardType === 'G4_G7' ? [
+      { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' },
+      { name: 'Activities', icon: Activity, path: '/dashboard/student/activities' }
+    ] : [])
   ];
 
   const isActivePath = (path: string) => {
@@ -719,12 +764,12 @@ const Courses: React.FC = () => {
   }
 
   if (showCourseDetail && selectedCourseForDetail) {
-    return (
-      <CourseDetail 
-        courseId={selectedCourseForDetail.id} 
-        onBack={() => setShowCourseDetail(false)} 
-      />
-    );
+    // return (
+    //   // <CourseDetail 
+    //   //   courseId={selectedCourseForDetail.id} 
+    //   //   onBack={() => setShowCourseDetail(false)} 
+    //   // />
+    // );
   }
 
   return (

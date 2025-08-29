@@ -1,0 +1,451 @@
+[1mdiff --git a/src/pages/student/CourseDetail.tsx b/src/pages/student/CourseDetail.tsx[m
+[1mindex af52529..aea0112 100644[m
+[1m--- a/src/pages/student/CourseDetail.tsx[m
+[1m+++ b/src/pages/student/CourseDetail.tsx[m
+[36m@@ -1,5 +1,5 @@[m
+[31m-import React, { useState, useEffect, useCallback } from 'react';[m
+[31m-import { useParams, useNavigate, useLocation } from 'react-router-dom';[m
+[32m+[m[32mimport React, { useState, useEffect } from 'react';[m
+[32m+[m[32mimport { useParams, useNavigate } from 'react-router-dom';[m
+ import { [m
+   ArrowLeft, [m
+   BookOpen, [m
+[36m@@ -10,7 +10,6 @@[m [mimport {[m
+   Play,[m
+   CheckCircle,[m
+   AlertCircle,[m
+[31m-  Clock as ClockIcon,[m
+   FileText,[m
+   Video,[m
+   Download,[m
+[36m@@ -18,18 +17,16 @@[m [mimport {[m
+   Star,[m
+   BarChart3,[m
+   Target,[m
+[31m-  TrendingUp,[m
+   Bookmark,[m
+   Share2,[m
+   X[m
+ } from 'lucide-react';[m
+[31m-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';[m
+[32m+[m[32mimport { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';[m
+ import { Badge } from '../../components/ui/badge';[m
+ import { Button } from '../../components/ui/button';[m
+ import { Progress } from '../../components/ui/progress';[m
+[31m-import { Skeleton } from '../../components/ui/skeleton';[m
+ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';[m
+[31m-import { Separator } from '../../components/ui/separator';[m
+[32m+[m[32mimport DashboardLayout from '../../components/DashboardLayout';[m
+ import { moodleService } from '../../services/moodleApi';[m
+ import { useAuth } from '../../context/AuthContext';[m
+ [m
+[36m@@ -38,6 +35,7 @@[m [minterface Course {[m
+   fullname: string;[m
+   shortname: string;[m
+   summary?: string;[m
+[32m+[m[32m  description?: string;[m
+   categoryid: number;[m
+   courseimage?: string;[m
+   progress: number;[m
+[36m@@ -58,44 +56,6 @@[m [minterface Course {[m
+   totalLessons?: number;[m
+ }[m
+ [m
+[31m-interface Lesson {[m
+[31m-  id: string;[m
+[31m-  name: string;[m
+[31m-  description: string;[m
+[31m-  duration: number;[m
+[31m-  status: 'completed' | 'in_progress' | 'not_started';[m
+[31m-  type: 'video' | 'reading' | 'quiz' | 'assignment' | 'discussion';[m
+[31m-  prerequisites?: string[];[m
+[31m-  resources?: Array<{[m
+[31m-    name: string;[m
+[31m-    type: 'pdf' | 'video' | 'link' | 'file';[m
+[31m-    url: string;[m
+[31m-  }>;[m
+[31m-}[m
+[31m-[m
+[31m-interface Activity {[m
+[31m-  id: string;[m
+[31m-  name: string;[m
+[31m-  type: 'assignment' | 'quiz' | 'forum' | 'resource' | 'workshop';[m
+[31m-  status: 'completed' | 'in_progress' | 'not_started' | 'overdue';[m
+[31m-  dueDate?: number;[m
+[31m-  grade?: number;[m
+[31m-  maxGrade?: number;[m
+[31m-  description?: string;[m
+[31m-  submissionStatus?: string;[m
+[31m-}[m
+[31m-[m
+[31m-interface CourseStats {[m
+[31m-  totalLessons: number;[m
+[31m-  completedLessons: number;[m
+[31m-  totalActivities: number;[m
+[31m-  completedActivities: number;[m
+[31m-  averageGrade: number;[m
+[31m-  timeSpent: number;[m
+[31m-  certificates: number;[m
+[31m-  enrollmentCount: number;[m
+[31m-}[m
+[31m-[m
+ interface CourseDetailProps {[m
+   courseId?: string;[m
+   onBack?: () => void;[m
+[36m@@ -104,23 +64,15 @@[m [minterface CourseDetailProps {[m
+ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId: propCourseId, onBack }) => {[m
+   const { courseId: urlCourseId } = useParams<{ courseId: string }>();[m
+   const navigate = useNavigate();[m
+[31m-  const location = useLocation();[m
+   const { currentUser } = useAuth();[m
+   [m
+[31m-  // Use prop courseId if provided, otherwise use URL parameter[m
+   const courseId = propCourseId || urlCourseId;[m
+   [m
+   const [course, setCourse] = useState<Course | null>(null);[m
+[31m-  const [lessons, setLessons] = useState<Lesson[]>([]);[m
+[31m-  const [activities, setActivities] = useState<Activity[]>([]);[m
+[31m-  const [stats, setStats] = useState<CourseStats | null>(null);[m
+   const [loading, setLoading] = useState(true);[m
+   const [error, setError] = useState('');[m
+   const [activeTab, setActiveTab] = useState('overview');[m
+[31m-  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);[m
+[31m-  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);[m
+ [m
+[31m-  // Handle back navigation[m
+   const handleBack = () => {[m
+     if (onBack) {[m
+       onBack();[m
+[36m@@ -129,612 +81,307 @@[m [mconst CourseDetail: React.FC<CourseDetailProps> = ({ courseId: propCourseId, onB[m
+     }[m
+   };[m
+ [m
+[31m-  // Fetch course details[m
+[31m-  const fetchCourseDetails = useCallback(async () => {[m
+[31m-    if (!courseId || !currentUser?.id) return;[m
+[31m-[m
+[31m-    try {[m
+[31m-      setLoading(true);[m
+[31m-      setError('');[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    const fetchCourseDetails = async () => {[m
+[32m+[m[32m      if (!courseId || !currentUser?.id) return;[m
+[32m+[m
+[32m+[m[32m      try {[m
+[32m+[m[32m        setLoading(true);[m
+[32m+[m[32m        setError('');[m
+[32m+[m
+[32m+[m[32m        console.log('🔄 Fetching course details for:', courseId);[m
+[32m+[m
+[32m+[m[32m        const userCourses = await moodleService.getUserCourses(currentUser.id);[m
+[32m+[m[32m        const courseData = userCourses.find(c => c.id === courseId);[m
+[32m+[m[41m        [m
+[32m+[m[32m        if (!courseData) {[m
+[32m+[m[32m          setError('Course not found or you are not enrolled');[m
+[32m+[m[32m          setLoading(false);[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+ [m
+[31m-      console.log('🔄 Fetching course details for:', courseId);[m
+[32m+[m[32m        setCourse(courseData);[m
+[32m+[m[32m        console.log('✅ Course details loaded successfully');[m
+ [m
+[31m-      // Fetch course information[m
+[31m-      const userCourses = await moodleService.getUserCourses(currentUser.id);[m
+[31m-      const courseData = userCourses.find(c => c.id === courseId);[m
+[31m-      [m
+[31m-      if (!courseData) {[m
+[31m-        setError('Course not found or you are not enrolled');[m
+[32m+[m[32m      } catch (error) {[m
+[32m+[m[32m        console.error('❌ Error fetching course details:', error);[m
+[32m+[m[32m        setError('Failed to load course details. Please try again.');[m
+[32m+[m[32m      } finally {[m
+         setLoading(false);[m
+[31m-        return;[m
+       }[m
+[32m+[m[32m    };[m
+ [m
+[31m-      setCourse(courseData);[m
+[31m-[m
+[31m-      // Fetch course activities[m
+[31m-      const courseActivities = await moodleService.getCourseActivities(courseId);[m
+[31m-      [m
+[31m-      // Process activities[m
+[31m-      const processedActivities: Activity[] = courseActivities.map((activity: any) => ({[m
+[31m-        id: activity.id,[m
+[31m-        name: activity.name,[m
+[31m-        type: activity.modname as Activity['type'],[m
+[31m-        status: activity.completionstate === 1 ? 'completed' : [m
+[31m-                activity.completionstate === 2 ? 'in_progress' : 'not_started',[m
+[31m-        dueDate: activity.duedate ? activity.duedate * 1000 : undefined,[m
+[31m-        grade: activity.grade,[m
+[31m-        maxGrade: activity.grademax || 100,[m
+[31m-        description: activity.description,[m
+[31m-        submissionStatus: activity.submissionstatus[m
+[31m-      }));[m
+[31m-[m
+[31m-      setActivities(processedActivities);[m
+[31m-[m
+[31m-      // Generate mock lessons based on course structure[m
+[31m-      const mockLessons: Lesson[] = generateMockLessons(courseData);[m
+[31m-      setLessons(mockLessons);[m
+[31m-[m
+[31m-      // Calculate stats[m
+[31m-      const courseStats: CourseStats = {[m
+[31m-        totalLessons: mockLessons.length,[m
+[31m-        completedLessons: mockLessons.filter(l => l.status === 'completed').length,[m
+[31m-        totalActivities: processedActivities.length,[m
+[31m-        completedActivities: processedActivities.filter(a => a.status === 'completed').length,[m
+[31m-        averageGrade: courseData.averageGrade || 85,[m
+[31m-        timeSpent: courseData.timeSpent || 0,[m
+[31m-        certificates: courseData.certificates || 0,[m
+[31m-        enrollmentCount: courseData.enrollmentCount || 0[m
+[31m-      };[m
+[31m-[m
+[31m-      setStats(courseStats);[m
+[31m-[m
+[31m-      console.log('✅ Course details loaded successfully');[m
+[31m-[m
+[31m-    } catch (error) {[m
+[31m-      console.error('❌ Error fetching course details:', error);[m
+[31m-      setError('Failed to load course details. Please try again.');[m
+[31m-    } finally {[m
+[31m-      setLoading(false);[m
+[31m-    }[m
+[31m-  }, [courseId, currentUser?.id]);[m
+[31m-[m
+[31m-  // Generate mock lessons based on course structure[m
+[31m-  const generateMockLessons = (courseData: Course): Lesson[] => {[m
+[31m-    const lessonTypes: Lesson['type'][] = ['video', 'reading', 'quiz', 'assignment', 'discussion'];[m
+[31m-    const lessonNames = [[m
+[31m-      'Introduction to Course',[m
+[31m-      'Basic Concepts',[m
+[31m-      'Core Principles',[m
+[31m-      'Practical Applications',[m
+[31m-      'Advanced Topics',[m
+[31m-      'Project Work',[m
+[31m-      'Assessment Preparation',[m
+[31m-      'Final Review'[m
+[31m-    ];[m
+[31m-[m
+[31m-    return lessonNames.map((name, index) => ({[m
+[31m-      id: `lesson-${index + 1}`,[m
+[31m-      name,[m
+[31m-      description: `This lesson covers ${name.toLowerCase()} in ${courseData.fullname}`,[m
+[31m-      duration: Math.floor(Math.random() * 60) + 30, // 30-90 minutes[m
+[31m-      status: index < Math.floor(courseData.progress / 12.5) ? 'completed' : [m
+[31m-              index === Math.floor(courseData.progress / 12.5) ? 'in_progress' : 'not_started',[m
+[31m-      type: lessonTypes[index % lessonTypes.length],[m
+[31m-      prerequisites: index > 0 ? [`lesson-${index}`] : undefined,[m
+[31m-      resources: [[m
+[31m-        {[m
+[31m-          name: 'Lesson Materials',[m
+[31m-          type: 'pdf' as const,[m
+[31m-          url: '#'[m
+[31m-        },[m
+[31m-        {[m
+[31m-          name: 'Video Lecture',[m
+[31m-          type: 'video' as const,[m
+[31m-          url: '#'[m
+[31m-        }[m
+[31m-      ][m
+[31m-    }));[m
+[31m-  };[m
+[31m-[m
+[31m-  // Handle lesson click[m
+[31m-  const handleLessonClick = (lesson: Lesson) => {[m
+[31m-    setSelectedLesson(lesson);[m
+[31m-    setIsLessonModalOpen(true);[m
+[31m-  };[m
+[31m-[m
+[31m-  // Close lesson modal[m
+[31m-  const closeLessonModal = () => {[m
+[31m-    setIsLessonModalOpen(false);[m
+[31m-    setSelectedLesson(null);[m
+[31m-  };[m
+[31m-[m
+[31m-  // Get status color[m
+[31m-  const getStatusColor = (status: string) => {[m
+[31m-    switch (status) {[m
+[31m-      case 'completed': return 'bg-green-100 text-green-800';[m
+[31m-      case 'in_progress': return 'bg-blue-100 text-blue-800';[m
+[31m-      case 'not_started': return 'bg-gray-100 text-gray-800';[m
+[31m-      case 'overdue': return 'bg-red-100 text-red-800';[m
+[31m-      default: return 'bg-gray-100 text-gray-800';[m
+[31m-    }[m
+[31m-  };[m
+[31m-[m
+[31m-  // Get activity icon[m
+[31m-  const getActivityIcon = (type: string) => {[m
+[31m-    switch (type) {[m
+[31m-      case 'assignment': return <FileText className="w-4 h-4" />;[m
+[31m-      case 'quiz': return <BarChart3 className="w-4 h-4" />;[m
+[31m-      case 'forum': return <Users className="w-4 h-4" />;[m
+[31m-      case 'resource': return <BookOpen className="w-4 h-4" />;[m
+[31m-      case 'workshop': return <Target className="w-4 h-4" />;[m
+[31m-      default: return <FileText className="w-4 h-4" />;[m
+[31m-    }[m
+[31m-  };[m
+[31m-[m
+[31m-  // Get lesson icon[m
+[31m-  const getLessonIcon = (type: string) => {[m
+[31m-    switch (type) {[m
+[31m-      case 'video': return <Video className="w-4 h-4" />;[m
+[31m-      case 'reading': return <BookOpen className="w-4 h-4" />;[m
+[31m-      case 'quiz': return <BarChart3 className="w-4 h-4" />;[m
+[31m-      case 'assignment': return <FileText className="w-4 h-4" />;[m
+[31m-      case 'discussion': return <Users className="w-4 h-4" />;[m
+[31m-      default: return <BookOpen className="w-4 h-4" />;[m
+[31m-    }[m
+[31m-  };[m
+[31m-[m
+[31m-  // Format duration[m
+[31m-  const formatDuration = (minutes: number) => {[m
+[31m-    const hours = Math.floor(minutes / 60);[m
+[31m-    const mins = minutes % 60;[m
+[31m-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;[m
+[31m-  };[m
+[31m-[m
+[31m-  // Format date[m
+[31m-  const formatDate = (timestamp: number) => {[m
+[31m-    return new Date(timestamp).toLocaleDateString('en-US', {[m
+[31m-      year: 'numeric',[m
+[31m-      month: 'short',[m
+[31m-      day: 'numeric'[m
+[31m-    });[m
+[31m-  };[m
+[31m-[m
+[31m-  useEffect(() => {[m
+     fetchCourseDetails();[m
+[31m-  }, [fetchCourseDetails]);[m
+[32m+[m[32m  }, [courseId, currentUser?.id]);[m
+ [m
+   if (loading) {[m
+     return ([m
+[31m-      <div className="min-h-screen bg-gray-50 p-6">[m
+[31m-        <div className="max-w-7xl mx-auto space-y-6">[m
+[31m-          {/* Header Skeleton */}[m
+[31m-          <div className="flex items-center space-x-4">[m
+[31m-            <Skeleton className="h-10 w-10 rounded-lg" />[m
+[31m-            <div className="space-y-2">[m
+[31m-              <Skeleton className="h-6 w-64" />[m
+[31m-              <Skeleton className="h-4 w-48" />[m
+[31m-            </div>[m
+[32m+[m[32m      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>[m
+[32m+[m[32m        <div className="flex items-center justify-center min-h-[400px]">[m
+[32m+[m[32m          <div className="flex items-center space-x-2">[m
+[32m+[m[32m            <div className="animate-spin h-6 w-6 text-blue-600">⏳</div>[m
+[32m+[m[32m            <span className="text-gray-600">Loading course details...</span>[m
+           </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </DashboardLayout>[m
+[32m+[m[32m    );[m
+[32m+[m[32m  }[m
+ [m
+[31m-          {/* Course Overview Skeleton */}[m
+[31m-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">[m
+[31m-            <div className="lg:col-span-2">[m
+[31m-              <Skeleton className="h-96 w-full rounded-xl" />[m
+[31m-            </div>[m
+[31m-            <div className="space-y-4">[m
+[31m-              <Skeleton className="h-32 w-full rounded-lg" />[m
+[31m-              <Skeleton className="h-32 w-full rounded-lg" />[m
+[31m-              <Skeleton className="h-32 w-full rounded-lg" />[m
+[32m+[m[32m  if (error || !course) {[m
+[32m+[m[32m    return ([m
+[32m+[m[32m      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>[m
+[32m+[m[32m        <div className="flex items-center justify-center min-h-[400px] p-6">[m
+[32m+[m[32m          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">[m
+[32m+[m[32m            <div className="flex items-center space-x-2 text-red-800 mb-2">[m
+[32m+[m[32m              <AlertCircle className="w-5 h-5" />[m
+[32m+[m[32m              <span className="font-medium">Error Loading Course</span>[m
+             </div>[m
+[32m+[m[32m            <p className="text-red-700 mb-3">{error || 'Course not found'}</p>[m
+[32m+[m[32m            <Button onClick={handleBack} variant="outline" size="sm">[m
+[32m+[m[32m              <ArrowLeft className="w-4 h-4 mr-2" />[m
+[32m+[m[32m              Back to Courses[m
+[32m+[m[32m            </Button>[m
+           </div>[m
+         </div>[m
+[31m-      </div>[m
+[32m+[m[32m      </DashboardLayout>[m
+     );[m
+   }[m
+ [m
+[31m-  if (error || !course) {[m
+[31m-    return ([m
+[31m-      <div className="min-h-screen bg-gray-50 p-6">[m
+[31m-        <div className="max-w-7xl mx-auto">[m
+[31m-          <div className="flex items-center space-x-4 mb-6">[m
+[31m-            <Button[m
+[31m-              variant="ghost"[m
+[31m-              size="sm"[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>[m
+[32m+[m[32m      <div className="space-y-6">[m
+[32m+[m[32m        {/* Header */}[m
+[32m+[m[32m        <div className="flex items-center justify-between">[m
+[32m+[m[32m          <div className="flex items-center space-x-4">[m
+[32m+[m[32m            <Button[m[41m [m
+[32m+[m[32m              variant="outline"[m[41m [m
+[32m+[m[32m              size="sm"[m[41m [m
+               onClick={handleBack}[m
+               className="flex items-center space-x-2"[m
+             >[m
+               <ArrowLeft className="w-4 h-4" />[m
+[31m-              <span>Back</span>[m
+[32m+[m[32m              <span>Back to Courses</span>[m
+             </Button>[m
+[32m+[m[32m            <div className="h-6 w-px bg-gray-300"></div>[m
+[32m+[m[32m            <h1 className="text-xl font-semibold text-gray-900">{course.fullname}</h1>[m
+           </div>[m
+[32m+[m[32m          <div className="flex items-center space-x-4">[m
+[32m+[m[32m            <div className="text-sm text-gray-600">[m
+[32m+[m[32m              Progress: {course.progress || 0}%[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m            <div className="w-32">[m
+[32m+[m[32m              <Progress value={course.progress || 0} className="h-2" />[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        {/* Course Banner */}[m
+[32m+[m[32m        <div className="relative h-80 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-xl overflow-hidden">[m
+[32m+[m[32m          <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 to-purple-900/40"></div>[m
+           [m
+[31m-          <Card>[m
+[31m-            <CardContent className="p-8 text-center">[m
+[31m-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />[m
+[31m-              <h2 className="text-xl font-semibold mb-2">Course Not Found</h2>[m
+[31m-              <p className="text-gray-600 mb-4">{error || 'The requested course could not be found.'}</p>[m
+[31m-              <Button onClick={() => navigate('/dashboard/student')}>[m
+[31m-                Return to Dashboard[m
+[31m-              </Button>[m
+[31m-            </CardContent>[m
+[31m-          </Card>[m
+[32m+[m[32m          <div className="absolute top-6 left-6">[m
+[32m+[m[32m            <button[m
+[32m+[m[32m              onClick={handleBack}[m
+[32m+[m[32m              className="flex items-center space-x-2 text-white hover:text-blue-200 transition-colors"[m
+[32m+[m[32m            >[m
+[32m+[m[32m              <ArrowLeft className="w-4 h-4" />[m
+[32m+[m[32m              <span className="font-medium">Back to Courses</span>[m
+[32m+[m[32m            </button>[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <div className="absolute bottom-0 left-0 right-0 p-8">[m
+[32m+[m[32m            <div className="flex items-start justify-between">[m
+[32m+[m[32m              <div className="flex-1">[m
+[32m+[m[32m                <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-medium mb-4">[m
+[32m+[m[32m                  Beginner[m
+[32m+[m[32m                </div>[m
+[32m+[m[41m                [m
+[32m+[m[32m                <h1 className="text-4xl font-bold text-white mb-3">{course.fullname}</h1>[m
+[32m+[m[41m                [m
+[32m+[m[32m                <p className="text-white/90 text-lg max-w-2xl">[m
+[32m+[m[32m                  {course.summary || course.description || 'Learn fundamental computer skills and digital citizenship'}[m
+[32m+[m[32m                </p>[m
+[32m+[m[32m              </div>[m
+[32m+[m[32m            </div>[m
+[32m+[m[32m          </div>[m
+         </div>
