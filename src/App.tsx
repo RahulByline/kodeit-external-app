@@ -107,6 +107,8 @@ const StudentMessages = lazy(() => import("./pages/student/Messages"));
 const StudentProgress = lazy(() => import("./pages/student/Progress"));
 const StudentCommunity = lazy(() => import("./pages/student/Community"));
 const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
+const StudentCurrentLessons = lazy(() => import("./pages/student/CurrentLessons"));
+const StudentActivities = lazy(() => import("./pages/student/Activities"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
@@ -608,6 +610,20 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentEnrollments />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/current-lessons" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentCurrentLessons />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/activities" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <StudentActivities />
                     </Suspense>
                   </ProtectedRoute>
                 } />
