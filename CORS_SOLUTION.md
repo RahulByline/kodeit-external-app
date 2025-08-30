@@ -79,7 +79,7 @@ Make sure your backend has the following environment variables:
 
 ```env
 PORT=5000
-MOODLE_TOKEN=2eabaa23e0cf9a5442be25613c41abf5
+MOODLE_=2eabaa23e0cf9a5442be25613c41abf5
 ```
 
 ## Production Deployment

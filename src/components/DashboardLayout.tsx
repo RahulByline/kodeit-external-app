@@ -738,19 +738,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                           }}
 
                           disabled={isNavigating}
-                          className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            isActive
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                          } ${isNavigating ? 'opacity-50 cursor-not-allowed' : ''}`}
-
                           className={`w-full p-3 rounded-lg transition-all duration-200 hover:shadow-md ${
                             isActive
                               ? 'bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 shadow-sm'
                               : isCodeEditor
                                 ? 'bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200'
                                 : 'bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200'
-                          }`}
+                          } ${isNavigating ? 'opacity-50 cursor-not-allowed' : ''}`}
 
                         >
                           <div className="flex items-center space-x-3">
