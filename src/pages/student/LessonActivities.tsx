@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { 
   ArrowLeft,
@@ -40,7 +40,8 @@ import {
   Monitor,
   Handshake,
   Trophy,
-  Minus
+  Minus,
+  RefreshCw
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { moodleService } from '../../services/moodleApi';
@@ -48,6 +49,58 @@ import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Progress } from '../../components/ui/progress';
+import { Skeleton } from '../../components/ui/skeleton';
+import { getCacheKey, getCachedData, setCachedData, CACHE_KEYS } from '../../utils/cache';
+
+// Performance optimization constants
+const CACHE_DURATION = {
+  LESSON_DATA: 10 * 60 * 1000, // 10 minutes
+  ACTIVITIES: 5 * 60 * 1000, // 5 minutes
+  COURSE_DATA: 15 * 60 * 1000 // 15 minutes
+};
+
+// Request queue for batching API calls
+class RequestQueue {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private batchSize = 3;
+
+  async add<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await request();
+          resolve(result);
+          return result;
+        } catch (error) {
+          reject(error);
+          throw error;
+        }
+      });
+
+      if (!this.processing) {
+        this.processQueue();
+      }
+    });
+  }
+
+  private async processQueue() {
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const batch = this.queue.splice(0, this.batchSize);
+      await Promise.allSettled(batch.map(request => request()));
+      
+      if (this.queue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+    
+    this.processing = false;
+  }
+}
+
+const requestQueue = new RequestQueue();
 
 interface Lesson {
   id: string;
@@ -87,147 +140,307 @@ const LessonActivities: React.FC = () => {
   const { lessonId, courseId } = useParams<{ lessonId: string; courseId: string }>();
   const { currentUser } = useAuth();
   
+  // Advanced state management with performance optimizations
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start with false for instant render
   const [error, setError] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  // Performance optimization states
+  const [loadingStates, setLoadingStates] = useState({
+    lesson: false,
+    activities: false,
+    course: false
+  });
+  
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    loadTime: 0,
+    cacheHitRate: 0,
+    apiCallCount: 0
+  });
+  
+  // Refs for performance tracking
+  const loadStartTime = useRef<number>(0);
+  const apiCallCount = useRef<number>(0);
+  const cacheHitCount = useRef<number>(0);
+  
+  // Preloading state
+  const [preloadedData, setPreloadedData] = useState<{
+    lesson?: Lesson;
+    activities?: Activity[];
+    course?: any;
+  }>({});
 
-  // Get lesson data from location state or params
-  const getLessonData = () => {
+  // Enhanced lesson data retrieval with multiple cache layers
+  const getLessonData = useCallback(() => {
+    // 1. Try location state first (fastest)
     if (location.state?.selectedLesson) {
+      console.log('⚡ Using lesson data from location state');
       return location.state.selectedLesson;
     }
     
-    // Try to get from localStorage
+    // 2. Try localStorage (fast)
     const storedLesson = localStorage.getItem('selectedLesson');
     if (storedLesson) {
-      return JSON.parse(storedLesson);
+      try {
+        const parsed = JSON.parse(storedLesson);
+        console.log('⚡ Using lesson data from localStorage');
+        return parsed;
+      } catch (error) {
+        console.warn('Invalid lesson data in localStorage');
+        localStorage.removeItem('selectedLesson');
+      }
+    }
+    
+    // 3. Try sessionStorage (medium)
+    const sessionLesson = sessionStorage.getItem(`lesson_${lessonId}`);
+    if (sessionLesson) {
+      try {
+        const parsed = JSON.parse(sessionLesson);
+        console.log('⚡ Using lesson data from sessionStorage');
+        return parsed;
+      } catch (error) {
+        console.warn('Invalid lesson data in sessionStorage');
+        sessionStorage.removeItem(`lesson_${lessonId}`);
+      }
     }
     
     return null;
-  };
+  }, [location.state, lessonId]);
 
-  useEffect(() => {
-    const loadLessonData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  // Ultra-fast loading with advanced caching strategies
+  const loadLessonDataWithCache = useCallback(async () => {
+    if (!currentUser?.id) return;
 
-        // Get lesson data
-        const lessonData = getLessonData();
-        if (!lessonData && !lessonId) {
-          throw new Error('No lesson data available');
-        }
+    loadStartTime.current = performance.now();
+    apiCallCount.current = 0;
+    cacheHitCount.current = 0;
 
-        let targetLesson: Lesson;
-        if (lessonData) {
-          targetLesson = lessonData;
-        } else {
-          // Fetch lesson by ID if not provided in state
-          const userCourses = await moodleService.getUserCourses(currentUser?.id || '');
-          const course = userCourses.find((c: any) => c.id === courseId);
-          if (!course) {
-            throw new Error('Course not found');
-          }
-          
-          const courseLessons = await moodleService.getCourseLessons(course.id);
-          targetLesson = courseLessons.find((l: any) => l.id === lessonId);
-          if (!targetLesson) {
-            throw new Error('Lesson not found');
-          }
-        }
-
-        setLesson(targetLesson);
-
-        // Fetch activities for this specific lesson
-        console.log(`🔍 Fetching activities for lesson: ${targetLesson.title} (ID: ${targetLesson.id})`);
-        const courseActivities = await moodleService.getCourseActivities(targetLesson.courseId);
+    try {
+      console.log('🚀 Loading lesson activities with ULTRA-FAST optimizations...');
+      
+      // 1. Try to load cached data first for instant display
+      const lessonCacheKey = getCacheKey(`lesson_${lessonId}`, currentUser.id);
+      const activitiesCacheKey = getCacheKey(`activities_${lessonId}`, currentUser.id);
+      
+      const cachedLesson = getCachedData(lessonCacheKey);
+      const cachedActivities = getCachedData(activitiesCacheKey);
+      
+      if (cachedLesson && cachedActivities) {
+        console.log('⚡ INSTANT: Loading lesson data from cache...');
+        cacheHitCount.current += 2;
+        setLesson(cachedLesson);
+        setActivities(cachedActivities);
+        setLoadingStates(prev => ({ ...prev, lesson: false, activities: false }));
         
-        // Filter activities that belong to this lesson (section)
-        const lessonActivities = courseActivities.filter((activity: any) => 
-          activity.section === targetLesson.title
-        );
-        
-        // Transform activities to match our interface
-        const transformedActivities: Activity[] = lessonActivities.map((activity: any, index: number) => ({
-          id: activity.id,
-          title: activity.name,
-          description: getActivityDescription(activity.modname),
-          type: mapActivityType(activity.modname),
-          duration: getActivityDuration(activity.modname),
-          dueDate: activity.dueDate ? new Date(activity.dueDate * 1000).toISOString().split('T')[0] : undefined,
-          difficulty: getActivityDifficulty(activity.modname),
-          points: getActivityPoints(activity.modname),
-          status: getActivityStatus(activity.completionstatus),
-          image: getActivityImage(activity.modname),
-          url: activity.url,
-          progress: activity.completionstatus?.progress || 0
-        }));
-
-        // If no real activities found, create sample activities for demonstration
-        if (transformedActivities.length === 0) {
-          const sampleActivities: Activity[] = [
-            {
-              id: '1',
-              title: 'Digital Footprint Quiz',
-              description: 'Test your knowledge about digital footprints and online presence',
-              type: 'quiz',
-              duration: '15 min',
-              dueDate: '2025-01-20',
-              difficulty: 'Easy',
-              points: 50,
-              status: 'not-started',
-              image: '/card1.webp',
-              progress: 0
-            },
-            {
-              id: '2',
-              title: 'Online Safety Video',
-              description: 'Watch an interactive video about staying safe online',
-              type: 'video',
-              duration: '20 min',
-              difficulty: 'Easy',
-              points: 25,
-              status: 'completed',
-              image: '/card2.webp',
-              progress: 100
-            },
-            {
-              id: '3',
-              title: 'Create a Digital Citizenship Poster',
-              description: 'Design a poster promoting good digital citizenship practices',
-              type: 'assignment',
-              duration: '45 min',
-              dueDate: '2025-01-22',
-              difficulty: 'Medium',
-              points: 75,
-              status: 'in-progress',
-              image: '/card3.webp',
-              progress: 60
-            }
-          ];
-          setActivities(sampleActivities);
-        } else {
-          setActivities(transformedActivities);
-        }
-
-        console.log(`✅ Loaded ${activities.length} activities for lesson`);
-
-      } catch (err: any) {
-        console.error('❌ Error loading lesson data:', err);
-        setError(err.message || 'Failed to load lesson data');
-      } finally {
-        setLoading(false);
+        // Update performance metrics
+        const loadTime = performance.now() - loadStartTime.current;
+        setPerformanceMetrics({
+          loadTime: Math.round(loadTime),
+          cacheHitRate: 100,
+          apiCallCount: 0
+        });
+      } else {
+        setLoadingStates(prev => ({ ...prev, lesson: true, activities: true }));
       }
-    };
+      
+      // 2. Load fresh data in background with batching
+      const loadFreshData = async () => {
+        try {
+          console.log('🔄 Loading fresh lesson data with batched requests...');
+          
+          // Get lesson data from multiple sources
+          let targetLesson: Lesson;
+          const lessonData = getLessonData();
+          
+          if (lessonData) {
+            targetLesson = lessonData;
+          } else {
+            // Fetch lesson by ID if not provided in state
+            const userCourses = await requestQueue.add(() => 
+              moodleService.getUserCourses(currentUser.id)
+            );
+            apiCallCount.current++;
+            
+            const course = userCourses.find((c: any) => c.id === courseId);
+            if (!course) {
+              throw new Error('Course not found');
+            }
+            
+            const courseLessons = await requestQueue.add(() => 
+              moodleService.getCourseLessons(course.id)
+            );
+            apiCallCount.current++;
+            
+            targetLesson = courseLessons.find((l: any) => l.id === lessonId);
+            if (!targetLesson) {
+              throw new Error('Lesson not found');
+            }
+          }
 
-    if (currentUser?.id) {
-      loadLessonData();
-    }
-  }, [lessonId, courseId, currentUser?.id, location.state]);
+          setLesson(targetLesson);
+          setCachedData(lessonCacheKey, targetLesson);
+          setLoadingStates(prev => ({ ...prev, lesson: false }));
+
+          // Fetch activities for this specific lesson with batching
+          console.log(`🔍 Fetching activities for lesson: ${targetLesson.title} (ID: ${targetLesson.id})`);
+          const courseActivities = await requestQueue.add(() => 
+            moodleService.getCourseActivities(targetLesson.courseId)
+          );
+          apiCallCount.current++;
+          
+          // Filter activities that belong to this lesson (section)
+          const lessonActivities = courseActivities.filter((activity: any) => 
+            activity.section === targetLesson.title
+          );
+          
+          // Transform activities to match our interface
+          const transformedActivities: Activity[] = lessonActivities.map((activity: any, index: number) => ({
+            id: activity.id,
+            title: activity.name,
+            description: getActivityDescription(activity.modname),
+            type: mapActivityType(activity.modname),
+            duration: getActivityDuration(activity.modname),
+            dueDate: activity.dueDate ? new Date(activity.dueDate * 1000).toISOString().split('T')[0] : undefined,
+            difficulty: getActivityDifficulty(activity.modname),
+            points: getActivityPoints(activity.modname),
+            status: getActivityStatus(activity.completionstatus),
+            image: getActivityImage(activity.modname),
+            url: activity.url,
+            progress: activity.completionstatus?.progress || 0
+          }));
+
+                     // If no real activities found, create optimized sample activities
+           let finalActivities: Activity[];
+           if (transformedActivities.length === 0) {
+             const sampleActivities: Activity[] = [
+               {
+                 id: '1',
+                 title: 'Digital Footprint Quiz',
+                 description: 'Test your knowledge about digital footprints and online presence',
+                 type: 'quiz',
+                 duration: '15 min',
+                 dueDate: '2025-01-20',
+                 difficulty: 'Easy',
+                 points: 50,
+                 status: 'not-started',
+                 image: '/card1.webp',
+                 progress: 0
+               },
+               {
+                 id: '2',
+                 title: 'Online Safety Video',
+                 description: 'Watch an interactive video about staying safe online',
+                 type: 'video',
+                 duration: '20 min',
+                 difficulty: 'Easy',
+                 points: 25,
+                 status: 'completed',
+                 image: '/card2.webp',
+                 progress: 100
+               },
+               {
+                 id: '3',
+                 title: 'Create a Digital Citizenship Poster',
+                 description: 'Design a poster promoting good digital citizenship practices',
+                 type: 'assignment',
+                 duration: '45 min',
+                 dueDate: '2025-01-25',
+                 difficulty: 'Medium',
+                 points: 75,
+                 status: 'in-progress',
+                 image: '/card3.webp',
+                 progress: 30
+               }
+             ];
+             
+             finalActivities = sampleActivities;
+           } else {
+             finalActivities = transformedActivities;
+           }
+           
+           setActivities(finalActivities);
+           setCachedData(activitiesCacheKey, finalActivities);
+           setLoadingStates(prev => ({ ...prev, activities: false }));
+           
+           // Update performance metrics
+           const loadTime = performance.now() - loadStartTime.current;
+           const cacheHitRate = cacheHitCount.current > 0 ? 100 : 0;
+           
+           setPerformanceMetrics({
+             loadTime: Math.round(loadTime),
+             cacheHitRate,
+             apiCallCount: apiCallCount.current
+           });
+           
+           console.log(`⚡ ULTRA-FAST: Lesson activities loaded in ${Math.round(loadTime)}ms with ${apiCallCount.current} API calls`);
+           
+         } catch (error) {
+           console.error('❌ Error loading fresh lesson data:', error);
+           setError(error instanceof Error ? error.message : 'Failed to load lesson data');
+           setLoadingStates(prev => ({ ...prev, lesson: false, activities: false }));
+           
+           if (!cachedLesson && !cachedActivities) {
+             setLesson(null);
+             setActivities([]);
+           }
+         }
+       };
+       
+       // Start background loading
+       loadFreshData();
+       
+     } catch (error) {
+       console.error('❌ Error in loadLessonDataWithCache:', error);
+       setError(error instanceof Error ? error.message : 'Failed to load lesson data');
+       setLoadingStates(prev => ({ ...prev, lesson: false, activities: false }));
+     }
+   }, [currentUser?.id, lessonId, courseId, getLessonData]);
+
+   useEffect(() => {
+     loadLessonDataWithCache();
+   }, [loadLessonDataWithCache]);
+
+  // Performance metrics display
+  const performanceDisplay = useMemo(() => {
+    if (performanceMetrics.loadTime === 0) return null;
+    
+    return (
+      <div className="fixed bottom-4 right-4 bg-green-50 border border-green-200 rounded-lg p-3 shadow-lg z-50">
+        <div className="flex items-center space-x-2 text-sm">
+          <Rocket className="w-4 h-4 text-green-600" />
+          <span className="text-green-800 font-medium">
+            Loaded in {performanceMetrics.loadTime}ms
+          </span>
+        </div>
+        <div className="text-xs text-green-600 mt-1">
+          Cache: {performanceMetrics.cacheHitRate}% | API: {performanceMetrics.apiCallCount} calls
+        </div>
+      </div>
+    );
+  }, [performanceMetrics]);
+
+  // Skeleton loader components
+  const SkeletonActivityCard = () => (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+      <div className="flex items-center space-x-4 mb-4">
+        <Skeleton className="w-12 h-12 rounded-xl" />
+        <div className="flex-1">
+          <Skeleton className="h-6 w-3/4 mb-2" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      </div>
+      <Skeleton className="h-4 w-full mb-2" />
+      <Skeleton className="h-4 w-2/3 mb-4" />
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-8 w-20 rounded-lg" />
+        <Skeleton className="h-8 w-24 rounded-lg" />
+      </div>
+    </div>
+  );
 
   // Helper functions
   const getActivityDescription = (modname: string): string => {
@@ -451,6 +664,7 @@ const LessonActivities: React.FC = () => {
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
+        {performanceDisplay}
         <div className="max-w-7xl mx-auto space-y-8">
           
           {/* Header with Back Button and Full Screen Toggle */}
@@ -823,3 +1037,4 @@ const LessonActivities: React.FC = () => {
 };
 
 export default LessonActivities;
+

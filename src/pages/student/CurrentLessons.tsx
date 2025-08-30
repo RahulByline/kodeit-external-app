@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -27,7 +27,9 @@ import {
   Filter,
   RefreshCw,
   MessageSquare,
-  Users
+  Users,
+  Zap,
+  Rocket
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -37,6 +39,60 @@ import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Skeleton } from '../../components/ui/skeleton';
 import { getCacheKey, getCachedData, setCachedData, CACHE_KEYS } from '../../utils/cache';
+
+// Performance optimization constants
+const BATCH_SIZE = 5; // Number of courses to fetch in parallel
+const PRELOAD_THRESHOLD = 3; // Start preloading when user scrolls to 3rd item
+const DEBOUNCE_DELAY = 300; // Search debounce delay
+const CACHE_PRIORITY = {
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low'
+};
+
+// Request queue for batching API calls
+class RequestQueue {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private batchSize = BATCH_SIZE;
+
+  async add<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await request();
+          resolve(result);
+          return result;
+        } catch (error) {
+          reject(error);
+          throw error;
+        }
+      });
+
+      if (!this.processing) {
+        this.processQueue();
+      }
+    });
+  }
+
+  private async processQueue() {
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const batch = this.queue.splice(0, this.batchSize);
+      await Promise.allSettled(batch.map(request => request()));
+      
+      // Small delay between batches to prevent overwhelming the server
+      if (this.queue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    this.processing = false;
+  }
+}
+
+const requestQueue = new RequestQueue();
 
 interface Course {
   id: string;
@@ -78,24 +134,44 @@ const CurrentLessons: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Advanced state management with performance optimizations
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(false); // Start with false for instant render
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'in-progress' | 'completed' | 'not-started'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'in-progress' | 'completed' | 'not-started'>('all');
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('all');
   
-  // Individual loading states for progressive loading
+  // Performance optimization states
   const [loadingStates, setLoadingStates] = useState({
     courses: false,
     lessons: false,
     activities: false
   });
   
-  // Modal state (kept for compatibility)
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    loadTime: 0,
+    cacheHitRate: 0,
+    apiCallCount: 0
+  });
+  
+  // Refs for performance tracking
+  const loadStartTime = useRef<number>(0);
+  const apiCallCount = useRef<number>(0);
+  const cacheHitCount = useRef<number>(0);
+  const totalRequests = useRef<number>(0);
+  
+  // Debounced search term
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  
+  // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  
+  // Preloading state
+  const [preloadedLessons, setPreloadedLessons] = useState<Map<string, Lesson[]>>(new Map());
 
   // Skeleton loader components for fast loading
   const SkeletonLessonCard = () => (
@@ -363,6 +439,15 @@ const CurrentLessons: React.FC = () => {
     }
   }, [currentUser?.id]);
 
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, DEBOUNCE_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     loadLessonsWithCache();
   }, [loadLessonsWithCache]);
@@ -386,9 +471,24 @@ const CurrentLessons: React.FC = () => {
     navigate(path);
   };
 
-  // Handle lesson click to open lesson content
+  // Preload lesson data for faster navigation
+  const preloadLessonData = useCallback(async (lesson: Lesson) => {
+    if (preloadedLessons.has(lesson.id)) return;
+    
+    try {
+      const lessonData = await moodleService.getCourseLessons(lesson.courseId);
+      setPreloadedLessons(prev => new Map(prev).set(lesson.id, lessonData));
+    } catch (error) {
+      console.warn('Failed to preload lesson data:', error);
+    }
+  }, [preloadedLessons]);
+
+  // Handle lesson click with preloading
   const handleLessonClick = async (lesson: Lesson) => {
     console.log('📚 Lesson clicked:', lesson.title);
+    
+    // Preload data for faster navigation
+    preloadLessonData(lesson);
     
     // Navigate to lesson activities page
     navigate(`/dashboard/student/lesson-activities/${lesson.courseId}/${lesson.id}`, { 
@@ -397,6 +497,105 @@ const CurrentLessons: React.FC = () => {
       }
     });
   };
+
+  // Optimized lesson card component
+  const LessonCard = useMemo(() => {
+    return React.memo(({ lesson, index }: { lesson: Lesson; index: number }) => {
+      // Preload data when card comes into view
+      useEffect(() => {
+        if (index <= PRELOAD_THRESHOLD) {
+          preloadLessonData(lesson);
+        }
+      }, [lesson.id, index]);
+
+      return (
+        <div 
+          key={lesson.id} 
+          className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden hover:shadow-2xl hover:scale-105 transition-all duration-300 cursor-pointer group"
+          onClick={() => handleLessonClick(lesson)}
+        >
+          <div className="relative">
+            <img 
+              src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+              alt={lesson.title}
+              className="w-full h-40 object-cover group-hover:scale-110 transition-transform duration-300"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="absolute top-4 right-4">
+              <div className="bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg">
+                {lesson.isNew ? (
+                  <Eye className="w-4 h-4 text-blue-600" />
+                ) : (
+                  <Play className="w-4 h-4 text-green-600" />
+                )}
+              </div>
+            </div>
+            <div className="absolute bottom-4 left-4">
+              <span className={`${getStatusColor(lesson.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
+                {lesson.status.replace('-', ' ')}
+              </span>
+            </div>
+          </div>
+          <div className="p-6">
+            <h3 className="font-bold text-gray-900 mb-2 text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">{lesson.title}</h3>
+            <p className="text-gray-600 text-sm mb-4 line-clamp-2">{lesson.courseTitle}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-gray-500" />
+                <span className="text-sm text-gray-500">{lesson.duration}</span>
+              </div>
+              {lesson.totalModules && (
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-500">{lesson.completedModules}/{lesson.totalModules} modules</span>
+                </div>
+              )}
+            </div>
+            {lesson.prerequisites && (
+              <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded-lg">Prerequisites: {lesson.prerequisites}</p>
+            )}
+            <div className="mb-4">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${lesson.progress}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>Progress</span>
+                <span>{lesson.progress}%</span>
+              </div>
+            </div>
+            <button 
+              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl group-hover:scale-105"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLessonClick(lesson);
+              }}
+            >
+              {lesson.status === 'completed' ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Review Lesson</span>
+                </>
+              ) : lesson.status === 'in-progress' ? (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>Continue Lesson</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>Start Lesson</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      );
+    });
+  }, [preloadLessonData, handleLessonClick]);
 
   // Close modal
   const closeModal = () => {
@@ -544,27 +743,40 @@ const CurrentLessons: React.FC = () => {
     }
   };
 
-  const filteredLessons = lessons.filter(lesson => {
-    const matchesSearchTerm = lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              lesson.courseTitle.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = activeFilter === 'all' || lesson.status === activeFilter;
-    const matchesCourse = selectedCourseFilter === 'all' || lesson.courseId === selectedCourseFilter;
-    return matchesSearchTerm && matchesFilter && matchesCourse;
-  });
+  // Optimized filtering with memoization
+  const filteredLessons = useMemo(() => {
+    return lessons.filter(lesson => {
+      const matchesSearchTerm = lesson.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                                lesson.courseTitle.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+      const matchesFilter = activeFilter === 'all' || lesson.status === activeFilter;
+      const matchesCourse = selectedCourseFilter === 'all' || lesson.courseId === selectedCourseFilter;
+      return matchesSearchTerm && matchesFilter && matchesCourse;
+    });
+  }, [lessons, debouncedSearchTerm, activeFilter, selectedCourseFilter]);
 
-  // Debug logging for filtering
-  console.log('🔍 Filtering debug:', {
-    totalLessons: lessons.length,
-    searchTerm,
-    activeFilter,
-    selectedCourseFilter,
-    filteredCount: filteredLessons.length,
-    courses: courses.map(c => ({ id: c.id, name: c.title }))
-  });
+  // Performance metrics display
+  const performanceDisplay = useMemo(() => {
+    if (performanceMetrics.loadTime === 0) return null;
+    
+    return (
+      <div className="fixed bottom-4 right-4 bg-green-50 border border-green-200 rounded-lg p-3 shadow-lg z-50">
+        <div className="flex items-center space-x-2 text-sm">
+          <Rocket className="w-4 h-4 text-green-600" />
+          <span className="text-green-800 font-medium">
+            Loaded in {performanceMetrics.loadTime}ms
+          </span>
+        </div>
+        <div className="text-xs text-green-600 mt-1">
+          Cache: {performanceMetrics.cacheHitRate}% | API: {performanceMetrics.apiCallCount} calls
+        </div>
+      </div>
+    );
+  }, [performanceMetrics]);
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
+        {performanceDisplay}
         {/* Top Navigation Bar */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-8">
           <div className="flex space-x-2 p-2">
@@ -775,90 +987,8 @@ const CurrentLessons: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredLessons.map((lesson) => (
-                <div 
-                  key={lesson.id} 
-                  className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden hover:shadow-2xl hover:scale-105 transition-all duration-300 cursor-pointer group"
-                  onClick={() => handleLessonClick(lesson)}
-                >
-                  <div className="relative">
-                    <img 
-                      src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
-                      alt={lesson.title}
-                      className="w-full h-40 object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="absolute top-4 right-4">
-                      <div className="bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg">
-                        {lesson.isNew ? (
-                          <Eye className="w-4 h-4 text-blue-600" />
-                        ) : (
-                          <Play className="w-4 h-4 text-green-600" />
-                        )}
-                      </div>
-                    </div>
-                    <div className="absolute bottom-4 left-4">
-                      <span className={`${getStatusColor(lesson.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
-                        {lesson.status.replace('-', ' ')}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <h3 className="font-bold text-gray-900 mb-2 text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">{lesson.title}</h3>
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">{lesson.courseTitle}</p>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-2">
-                        <Clock className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm text-gray-500">{lesson.duration}</span>
-                      </div>
-                      {lesson.totalModules && (
-                        <div className="flex items-center space-x-2">
-                          <FileText className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm text-gray-500">{lesson.completedModules}/{lesson.totalModules} modules</span>
-                        </div>
-                      )}
-                    </div>
-                    {lesson.prerequisites && (
-                      <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded-lg">Prerequisites: {lesson.prerequisites}</p>
-                    )}
-                    <div className="mb-4">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-300 shadow-sm"
-                          style={{ width: `${lesson.progress}%` }}
-                        ></div>
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>Progress</span>
-                        <span>{lesson.progress}%</span>
-                      </div>
-                    </div>
-                    <button 
-                      className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl group-hover:scale-105"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLessonClick(lesson);
-                      }}
-                    >
-                      {lesson.status === 'completed' ? (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          <span>Review Lesson</span>
-                        </>
-                      ) : lesson.status === 'in-progress' ? (
-                        <>
-                          <Play className="w-4 h-4" />
-                          <span>Continue Lesson</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4" />
-                          <span>Start Lesson</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+              {filteredLessons.map((lesson, index) => (
+                <LessonCard key={lesson.id} lesson={lesson} index={index} />
               ))}
             </div>
           )}

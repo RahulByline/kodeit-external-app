@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { 
   ArrowLeft,
@@ -35,7 +35,8 @@ import {
   BarChart3,
   Activity,
   LayoutDashboard,
-  Circle
+  Circle,
+  RefreshCw
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { moodleService } from '../../services/moodleApi';
@@ -43,6 +44,58 @@ import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Progress } from '../../components/ui/progress';
+import { Skeleton } from '../../components/ui/skeleton';
+import { getCacheKey, getCachedData, setCachedData, CACHE_KEYS } from '../../utils/cache';
+
+// Performance optimization constants
+const CACHE_DURATION = {
+  COURSE_DATA: 15 * 60 * 1000, // 15 minutes
+  LESSONS_DATA: 10 * 60 * 1000, // 10 minutes
+  COURSE_DETAILS: 20 * 60 * 1000 // 20 minutes
+};
+
+// Request queue for batching API calls
+class RequestQueue {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private batchSize = 3;
+
+  async add<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await request();
+          resolve(result);
+          return result;
+        } catch (error) {
+          reject(error);
+          throw error;
+        }
+      });
+
+      if (!this.processing) {
+        this.processQueue();
+      }
+    });
+  }
+
+  private async processQueue() {
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const batch = this.queue.splice(0, this.batchSize);
+      await Promise.allSettled(batch.map(request => request()));
+      
+      if (this.queue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+    
+    this.processing = false;
+  }
+}
+
+const requestQueue = new RequestQueue();
 
 interface Course {
   id: string;
@@ -85,12 +138,30 @@ const CourseLessons: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const { currentUser } = useAuth();
   
+  // Advanced state management with performance optimizations
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start with false for instant render
   const [error, setError] = useState<string | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Performance optimization states
+  const [loadingStates, setLoadingStates] = useState({
+    course: false,
+    lessons: false
+  });
+  
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    loadTime: 0,
+    cacheHitRate: 0,
+    apiCallCount: 0
+  });
+  
+  // Refs for performance tracking
+  const loadStartTime = useRef<number>(0);
+  const apiCallCount = useRef<number>(0);
+  const cacheHitCount = useRef<number>(0);
 
   // Top navigation items
   const topNavItems = [
@@ -111,84 +182,222 @@ const CourseLessons: React.FC = () => {
     navigate(path);
   };
 
-  // Get course from location state or params
-  const getCourseData = () => {
+  // Enhanced course data retrieval with multiple cache layers
+  const getCourseData = useCallback(() => {
+    // 1. Try location state first (fastest)
     if (location.state?.selectedCourse) {
+      console.log('⚡ Using course data from location state');
       return location.state.selectedCourse;
     }
     
-    // Try to get from localStorage
+    // 2. Try sessionStorage (fast for current session)
+    const sessionCourse = sessionStorage.getItem(`course_${courseId}`);
+    if (sessionCourse) {
+      try {
+        const parsed = JSON.parse(sessionCourse);
+        console.log('⚡ Using course data from sessionStorage');
+        return parsed;
+      } catch (error) {
+        console.warn('Invalid course data in sessionStorage');
+        sessionStorage.removeItem(`course_${courseId}`);
+      }
+    }
+    
+    // 3. Try localStorage (persistent)
     const storedCourse = localStorage.getItem('selectedCourse');
     if (storedCourse) {
-      return JSON.parse(storedCourse);
+      try {
+        const parsed = JSON.parse(storedCourse);
+        console.log('⚡ Using course data from localStorage');
+        return parsed;
+      } catch (error) {
+        console.warn('Invalid course data in localStorage');
+        localStorage.removeItem('selectedCourse');
+      }
     }
     
     return null;
-  };
+  }, [location.state, courseId]);
 
-  useEffect(() => {
-    const loadCourseData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  // Ultra-fast loading with advanced caching strategies
+  const loadCourseDataWithCache = useCallback(async () => {
+    if (!courseId || !currentUser?.id) return;
 
-        // Get course data
-        const courseData = getCourseData();
-        if (!courseData && !courseId) {
-          throw new Error('No course data available');
-        }
+    loadStartTime.current = performance.now();
+    apiCallCount.current = 0;
+    cacheHitCount.current = 0;
 
-        let targetCourse: Course;
-        if (courseData) {
-          targetCourse = courseData;
-        } else {
-          // Fetch course by ID if not provided in state
-          const userCourses = await moodleService.getUserCourses(currentUser?.id || '');
-          targetCourse = userCourses.find((c: Course) => c.id === courseId);
-          if (!targetCourse) {
-            throw new Error('Course not found');
+    try {
+      console.log('🚀 Loading course lessons with ULTRA-FAST optimizations...');
+      
+      // 1. Try to load cached data first for instant display
+      const courseCacheKey = getCacheKey(`course_lessons_${courseId}`, currentUser.id);
+      const lessonsCacheKey = getCacheKey(`lessons_${courseId}`, currentUser.id);
+      
+      const cachedCourse = getCachedData(courseCacheKey);
+      const cachedLessons = getCachedData(lessonsCacheKey);
+      
+      if (cachedCourse && cachedLessons) {
+        console.log('⚡ INSTANT: Loading course lessons from cache...');
+        cacheHitCount.current += 2;
+        setCourse(cachedCourse);
+        setLessons(cachedLessons);
+        setLoadingStates(prev => ({ ...prev, course: false, lessons: false }));
+        
+        // Update performance metrics
+        const loadTime = performance.now() - loadStartTime.current;
+        setPerformanceMetrics({
+          loadTime: Math.round(loadTime),
+          cacheHitRate: 100,
+          apiCallCount: 0
+        });
+      } else {
+        setLoadingStates(prev => ({ ...prev, course: true, lessons: true }));
+      }
+      
+      // 2. Load fresh data in background with batching
+      const loadFreshData = async () => {
+        try {
+          console.log('🔄 Loading fresh course lessons with batched requests...');
+          
+          // Get course data from multiple sources
+          let targetCourse: Course;
+          const courseData = getCourseData();
+          
+          if (courseData) {
+            targetCourse = courseData;
+          } else {
+            // Fetch course by ID if not provided in state
+            const userCourses = await requestQueue.add(() => 
+              moodleService.getUserCourses(currentUser.id)
+            );
+            apiCallCount.current++;
+            
+            const foundCourse = userCourses.find((c: any) => c.id === courseId);
+            if (!foundCourse) {
+              throw new Error('Course not found');
+            }
+            
+            // Add required status property to match Course interface
+            targetCourse = {
+              ...foundCourse,
+              status: (foundCourse as any).status || 'in_progress'
+            };
+           }
+
+          setCourse(targetCourse);
+          setCachedData(courseCacheKey, targetCourse);
+          setLoadingStates(prev => ({ ...prev, course: false }));
+          
+          // Store in sessionStorage for instant access
+          sessionStorage.setItem(`course_${courseId}`, JSON.stringify(targetCourse));
+
+          // Fetch lessons for this specific course with batching
+          console.log(`🔍 Fetching lessons for course: ${targetCourse.fullname} (ID: ${targetCourse.id})`);
+          const courseLessons = await requestQueue.add(() => 
+            moodleService.getCourseLessons(targetCourse.id)
+          );
+          apiCallCount.current++;
+          
+          // Transform lessons to match our interface
+          const transformedLessons: Lesson[] = courseLessons.map((lesson: any) => ({
+            id: lesson.id,
+            title: lesson.name,
+            courseId: targetCourse.id,
+            courseTitle: targetCourse.fullname,
+            duration: getLessonDuration(lesson.totalModules || 0),
+            type: 'lesson',
+            status: lesson.status,
+            progress: lesson.progress,
+            dueDate: getLessonDueDate(lesson.dates),
+            prerequisites: lesson.prerequisites,
+            image: getLessonImage(targetCourse.courseimage),
+            totalModules: lesson.totalModules,
+            completedModules: lesson.completedModules,
+            description: lesson.description
+          }));
+
+          setLessons(transformedLessons);
+          setCachedData(lessonsCacheKey, transformedLessons);
+          setLoadingStates(prev => ({ ...prev, lessons: false }));
+          
+          console.log(`✅ Loaded ${transformedLessons.length} lessons for course`);
+          
+          // Update performance metrics
+          const loadTime = performance.now() - loadStartTime.current;
+          const cacheHitRate = cacheHitCount.current > 0 ? 100 : 0;
+          
+          setPerformanceMetrics({
+            loadTime: Math.round(loadTime),
+            cacheHitRate,
+            apiCallCount: apiCallCount.current
+          });
+          
+          console.log(`⚡ ULTRA-FAST: Course lessons loaded in ${Math.round(loadTime)}ms with ${apiCallCount.current} API calls`);
+          
+        } catch (error) {
+          console.error('❌ Error loading fresh course lessons:', error);
+          setError(error instanceof Error ? error.message : 'Failed to load course lessons');
+          setLoadingStates(prev => ({ ...prev, course: false, lessons: false }));
+          
+          if (!cachedCourse && !cachedLessons) {
+            setCourse(null);
+            setLessons([]);
           }
         }
-
-        setCourse(targetCourse);
-
-        // Fetch lessons for this specific course
-        console.log(`🔍 Fetching lessons for course: ${targetCourse.fullname} (ID: ${targetCourse.id})`);
-        const courseLessons = await moodleService.getCourseLessons(targetCourse.id);
-        
-        // Transform lessons to match our interface
-        const transformedLessons: Lesson[] = courseLessons.map((lesson: any) => ({
-          id: lesson.id,
-          title: lesson.name,
-          courseId: targetCourse.id,
-          courseTitle: targetCourse.fullname,
-          duration: getLessonDuration(lesson.totalModules || 0),
-          type: 'lesson',
-          status: lesson.status,
-          progress: lesson.progress,
-          dueDate: getLessonDueDate(lesson.dates),
-          prerequisites: lesson.prerequisites,
-          image: getLessonImage(targetCourse.courseimage),
-          totalModules: lesson.totalModules,
-          completedModules: lesson.completedModules,
-          description: lesson.description
-        }));
-
-        setLessons(transformedLessons);
-        console.log(`✅ Loaded ${transformedLessons.length} lessons for course`);
-
-      } catch (err: any) {
-        console.error('❌ Error loading course data:', err);
-        setError(err.message || 'Failed to load course data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (currentUser?.id) {
-      loadCourseData();
+      };
+      
+      // Start background loading
+      loadFreshData();
+      
+    } catch (error) {
+      console.error('❌ Error in loadCourseDataWithCache:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load course lessons');
+      setLoadingStates(prev => ({ ...prev, course: false, lessons: false }));
     }
-  }, [courseId, currentUser?.id, location.state]);
+  }, [courseId, currentUser?.id, getCourseData]);
+
+  useEffect(() => {
+    loadCourseDataWithCache();
+  }, [loadCourseDataWithCache]);
+
+  // Performance metrics display
+  const performanceDisplay = useMemo(() => {
+    if (performanceMetrics.loadTime === 0) return null;
+    
+    return (
+      <div className="fixed bottom-4 right-4 bg-green-50 border border-green-200 rounded-lg p-3 shadow-lg z-50">
+        <div className="flex items-center space-x-2 text-sm">
+          <Rocket className="w-4 h-4 text-green-600" />
+          <span className="text-green-800 font-medium">
+            Loaded in {performanceMetrics.loadTime}ms
+          </span>
+        </div>
+        <div className="text-xs text-green-600 mt-1">
+          Cache: {performanceMetrics.cacheHitRate}% | API: {performanceMetrics.apiCallCount} calls
+        </div>
+      </div>
+    );
+  }, [performanceMetrics]);
+
+  // Skeleton loader components
+  const SkeletonLessonCard = () => (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+      <div className="flex items-center space-x-4 mb-4">
+        <Skeleton className="w-16 h-16 rounded-xl" />
+        <div className="flex-1">
+          <Skeleton className="h-6 w-3/4 mb-2" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      </div>
+      <Skeleton className="h-4 w-full mb-2" />
+      <Skeleton className="h-4 w-2/3 mb-4" />
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-8 w-20 rounded-lg" />
+        <Skeleton className="h-8 w-24 rounded-lg" />
+      </div>
+    </div>
+  );
 
   // Helper functions
   const getLessonDuration = (totalModules: number): string => {
@@ -272,17 +481,18 @@ const CourseLessons: React.FC = () => {
     navigate('/dashboard/student/courses');
   };
 
-  if (loading) {
+  if (loadingStates.course || loadingStates.lessons) {
     return (
       <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
+          {performanceDisplay}
           <div className="max-w-7xl mx-auto space-y-8">
             <div className="animate-pulse">
               <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
               <div className="h-64 bg-gray-200 rounded-xl mb-8"></div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-80 bg-gray-200 rounded-xl"></div>
+                  <SkeletonLessonCard key={i} />
                 ))}
               </div>
             </div>
@@ -323,16 +533,17 @@ const CourseLessons: React.FC = () => {
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
+        {performanceDisplay}
         <div className="max-w-7xl mx-auto space-y-8">
           
           {/* Back Button */}
-          <button
+          {/* <button
             onClick={handleBackToCourses}
             className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             <span className="font-medium">Back to Courses</span>
-          </button>
+          </button> */}
 
           {/* Top Navigation Bar */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-8">
