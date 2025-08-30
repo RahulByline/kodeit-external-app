@@ -49,3 +49,4 @@ export const setCachedData = (key: string, data: any) => {
     console.error(`❌ Error caching data for ${key}:`, error);
   }
 };
+

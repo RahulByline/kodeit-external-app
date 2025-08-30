@@ -357,7 +357,7 @@ const Activities: React.FC = () => {
         </div>
 
         {/* Rest of the component content */}
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className=" mx-auto space-y-8">
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>

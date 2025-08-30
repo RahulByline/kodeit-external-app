@@ -7700,6 +7700,89 @@ export const moodleService = {
       return '1';
     }
   },
+
+  // Get course lessons (sections) with completion status
+  async getCourseLessons(courseId: string, userId?: string) {
+    try {
+      console.log(`🔍 Fetching course lessons (sections) for course ID: ${courseId}`);
+      
+      // Get course contents first
+      const contents = await this.getCourseContents(courseId);
+      const lessons = [];
+
+      // Process each section as a lesson
+      for (const section of contents) {
+        if (section.name && section.name !== 'General') {
+          // Calculate completion status for this section
+          let totalModules = 0;
+          let completedModules = 0;
+          let sectionProgress = 0;
+
+          if (section.modules && Array.isArray(section.modules)) {
+            totalModules = section.modules.length;
+            
+            // Get completion status for all modules in this section
+            try {
+              const completionResponse = await moodleApi.get('', {
+                params: {
+                  wsfunction: 'core_completion_get_activities_completion_status',
+                  courseid: courseId,
+                  userid: userId || await this.getCurrentUserId(),
+                },
+              });
+              
+              if (completionResponse.data && completionResponse.data.statuses) {
+                for (const module of section.modules) {
+                  const completion = completionResponse.data.statuses.find((status: any) => 
+                    status.cmid === module.id
+                  );
+                  if (completion && completion.state === 1) {
+                    completedModules++;
+                  }
+                }
+              }
+            } catch (completionError) {
+              console.warn('Could not fetch completion for section:', section.name);
+            }
+
+            // Calculate progress percentage
+            sectionProgress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+          }
+
+          // Determine lesson status based on progress
+          let status: 'completed' | 'in-progress' | 'not-started';
+          if (sectionProgress === 100) {
+            status = 'completed';
+          } else if (sectionProgress > 0) {
+            status = 'in-progress';
+          } else {
+            status = 'not-started';
+          }
+
+          lessons.push({
+            id: section.id.toString(),
+            name: section.name,
+            description: section.summary || '',
+            courseId: courseId,
+            totalModules: totalModules,
+            completedModules: completedModules,
+            progress: sectionProgress,
+            status: status,
+            visible: section.visible !== 0,
+            sectionNumber: section.section || 0,
+            modules: section.modules || [],
+            dates: section.dates || [],
+          });
+        }
+      }
+
+      console.log(`✅ Found ${lessons.length} lessons (sections) in course`);
+      return lessons;
+    } catch (error: any) {
+      console.error('❌ Error fetching course lessons:', error.response?.data || error.message);
+      return [];
+    }
+  },
 };
 
 // Test connection on startup (but don't block the app)

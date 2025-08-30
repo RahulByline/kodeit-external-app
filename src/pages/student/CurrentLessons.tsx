@@ -25,7 +25,9 @@ import {
   Star,
   BarChart3,
   Filter,
-  RefreshCw
+  RefreshCw,
+  MessageSquare,
+  Users
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -61,13 +63,15 @@ interface Lesson {
   courseTitle: string;
   courseShortName: string;
   duration: string;
-  type: 'video' | 'quiz' | 'assignment' | 'practice';
+  type: 'video' | 'quiz' | 'assignment' | 'practice' | 'lesson';
   status: 'completed' | 'in-progress' | 'not-started';
   progress: number;
   dueDate?: string;
   isNew?: boolean;
   prerequisites?: string;
   image?: string;
+  totalModules?: number;
+  completedModules?: number;
 }
 
 const CurrentLessons: React.FC = () => {
@@ -89,7 +93,7 @@ const CurrentLessons: React.FC = () => {
     activities: false
   });
   
-  // Modal state
+  // Modal state (kept for compatibility)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
 
@@ -159,16 +163,118 @@ const CurrentLessons: React.FC = () => {
         setLoadingStates(prev => ({ ...prev, lessons: true, courses: true }));
       }
       
-      // 2. Load fresh data in background
+       
       const loadFreshData = async () => {
         try {
           console.log('🔄 Loading fresh lessons data in background...');
           
           // Fetch all user courses
           const userCourses = await moodleService.getUserCourses(currentUser.id);
+          console.log('📚 Raw user courses:', userCourses);
+          
           const enrolledCourses = userCourses.filter(course => 
             course.visible !== 0 && course.categoryid && course.categoryid > 0
           );
+          
+          console.log('📚 Enrolled courses after filtering:', enrolledCourses);
+          
+          if (enrolledCourses.length === 0) {
+            console.warn('⚠️ No enrolled courses found, using sample data for testing');
+            
+            // Add sample data for testing
+            const sampleCourses: Course[] = [
+              {
+                id: '1',
+                title: 'Introduction to Programming',
+                fullname: 'Introduction to Programming',
+                shortname: 'PROG101',
+                description: 'Learn the basics of programming',
+                instructor: 'Dr. Sarah Johnson',
+                progress: 75,
+                totalLessons: 8,
+                completedLessons: 6,
+                duration: '8 weeks',
+                category: 'Programming',
+                image: '/card1.webp',
+                isActive: true,
+                lastAccessed: new Date().toISOString(),
+                difficulty: 'Beginner' as const
+              },
+              {
+                id: '2',
+                title: 'Advanced Python',
+                fullname: 'Advanced Python Programming',
+                shortname: 'PYTHON201',
+                description: 'Advanced Python concepts and applications',
+                instructor: 'Prof. Michael Chen',
+                progress: 45,
+                totalLessons: 12,
+                completedLessons: 5,
+                duration: '12 weeks',
+                category: 'Programming',
+                image: '/card2.webp',
+                isActive: true,
+                lastAccessed: new Date().toISOString(),
+                difficulty: 'Intermediate' as const
+              }
+            ];
+            
+            const sampleLessons: Lesson[] = [
+              {
+                id: '1',
+                title: 'Variables and Data Types',
+                courseId: '1',
+                courseTitle: 'Introduction to Programming',
+                courseShortName: 'PROG101',
+                duration: '45 min',
+                type: 'lesson',
+                status: 'completed',
+                progress: 100,
+                isNew: false,
+                prerequisites: 'Basic computer skills',
+                image: '/card1.webp',
+                totalModules: 5,
+                completedModules: 5
+              },
+              {
+                id: '2',
+                title: 'Control Structures',
+                courseId: '1',
+                courseTitle: 'Introduction to Programming',
+                courseShortName: 'PROG101',
+                duration: '60 min',
+                type: 'lesson',
+                status: 'in-progress',
+                progress: 60,
+                isNew: false,
+                prerequisites: 'Variables and Data Types',
+                image: '/card1.webp',
+                totalModules: 4,
+                completedModules: 2
+              },
+              {
+                id: '3',
+                title: 'Functions and Methods',
+                courseId: '2',
+                courseTitle: 'Advanced Python Programming',
+                courseShortName: 'PYTHON201',
+                duration: '90 min',
+                type: 'lesson',
+                status: 'not-started',
+                progress: 0,
+                isNew: true,
+                prerequisites: 'Basic Python knowledge',
+                image: '/card2.webp',
+                totalModules: 6,
+                completedModules: 0
+              }
+            ];
+            
+            setCourses(sampleCourses);
+            setLessons(sampleLessons);
+            setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+            return;
+          }
           
           // Transform courses
           const transformedCourses: Course[] = enrolledCourses.map(course => ({
@@ -194,35 +300,41 @@ const CurrentLessons: React.FC = () => {
           setLoadingStates(prev => ({ ...prev, courses: false }));
           
           // Fetch lessons from all courses in parallel for faster loading
-          const courseActivityPromises = enrolledCourses.map(async (course) => {
+          const courseLessonPromises = enrolledCourses.map(async (course) => {
             try {
-              console.log(`🔍 Fetching activities for course: ${course.fullname}`);
-              const courseActivities = await moodleService.getCourseActivities(course.id);
+              console.log(`🔍 Fetching lessons for course: ${course.fullname} (ID: ${course.id})`);
+              const courseLessons = await moodleService.getCourseLessons(course.id);
+              console.log(`📚 Lessons for course ${course.fullname}:`, courseLessons);
               
-              return courseActivities.map((activity: any) => ({
-                id: activity.id.toString(),
-                title: activity.name,
+              return courseLessons.map((lesson: any) => ({
+                id: lesson.id.toString(),
+                title: lesson.name,
                 courseId: course.id,
                 courseTitle: course.fullname,
                 courseShortName: course.shortname,
-                duration: getActivityDuration(activity.type),
-                type: mapActivityType(activity.type),
-                status: getActivityStatus(activity.completion),
-                progress: getActivityProgress(activity.completion),
-                dueDate: getActivityDueDate(activity.dates),
-                isNew: isNewActivity(activity.dates),
-                prerequisites: activity.availabilityinfo,
-                image: getActivityImage(activity.type, course.courseimage)
+                duration: getLessonDuration(lesson.totalModules),
+                type: 'lesson' as const,
+                status: lesson.status,
+                progress: lesson.progress,
+                dueDate: getLessonDueDate(lesson.dates),
+                isNew: isNewLesson(lesson.dates),
+                prerequisites: lesson.description,
+                image: getLessonImage(course.courseimage),
+                totalModules: lesson.totalModules,
+                completedModules: lesson.completedModules
               }));
             } catch (courseError) {
-              console.warn(`Failed to fetch activities for course ${course.fullname}:`, courseError);
+              console.error(`❌ Failed to fetch lessons for course ${course.fullname}:`, courseError);
               return [];
             }
           });
           
-          // Wait for all course activities to load in parallel
-          const allCourseLessons = await Promise.all(courseActivityPromises);
+          // Wait for all course lessons to load in parallel
+          const allCourseLessons = await Promise.all(courseLessonPromises);
           const allLessons = allCourseLessons.flat();
+          
+          console.log('📚 All lessons loaded:', allLessons);
+          console.log('📚 Total lessons count:', allLessons.length);
           
           setLessons(allLessons);
           setCachedData(lessonsCacheKey, allLessons);
@@ -275,21 +387,15 @@ const CurrentLessons: React.FC = () => {
   };
 
   // Handle lesson click to open lesson content
-  const handleLessonClick = (lesson: Lesson) => {
+  const handleLessonClick = async (lesson: Lesson) => {
     console.log('📚 Lesson clicked:', lesson.title);
     
-    // Store selected lesson in localStorage
-    localStorage.setItem('selectedLesson', JSON.stringify(lesson));
-    
-    // Find the course for this lesson
-    const course = courses.find(c => c.id === lesson.courseId);
-    if (course) {
-      localStorage.setItem('selectedCourse', JSON.stringify(course));
-    }
-    
-    // Open modal with lesson details
-    setSelectedLesson(lesson);
-    setIsModalOpen(true);
+    // Navigate to lesson activities page
+    navigate(`/dashboard/student/lesson-activities/${lesson.courseId}/${lesson.id}`, { 
+      state: { 
+        selectedLesson: lesson
+      }
+    });
   };
 
   // Close modal
@@ -382,6 +488,49 @@ const CurrentLessons: React.FC = () => {
     return typeImages[activityType] || courseImage || '/card1.webp';
   };
 
+  // Helper functions for lesson processing
+  const getLessonDuration = (totalModules: number): string => {
+    // Estimate duration based on number of modules
+    const estimatedMinutes = totalModules * 15; // 15 minutes per module
+    if (estimatedMinutes < 60) {
+      return `${estimatedMinutes} min`;
+    } else {
+      const hours = Math.floor(estimatedMinutes / 60);
+      const minutes = estimatedMinutes % 60;
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+  };
+
+  const getLessonDueDate = (dates: any[]): string | undefined => {
+    if (!dates || dates.length === 0) return undefined;
+    
+    const dueDate = dates.find((date: any) => date.label === 'Due date') || dates[dates.length - 1];
+    
+    if (dueDate) {
+      return new Date(dueDate.timestamp * 1000).toISOString().split('T')[0];
+    }
+    
+    return undefined;
+  };
+
+  const isNewLesson = (dates: any[]): boolean => {
+    if (!dates || dates.length === 0) return false;
+    
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    return dates.some((date: any) => {
+      const lessonDate = new Date(date.timestamp * 1000);
+      return lessonDate > oneWeekAgo;
+    });
+  };
+
+  const getLessonImage = (courseImage?: string): string => {
+    return courseImage || '/card1.webp';
+  };
+
+
+
   const getStatusColor = (status: 'completed' | 'in-progress' | 'not-started') => {
     switch (status) {
       case 'completed':
@@ -401,6 +550,16 @@ const CurrentLessons: React.FC = () => {
     const matchesFilter = activeFilter === 'all' || lesson.status === activeFilter;
     const matchesCourse = selectedCourseFilter === 'all' || lesson.courseId === selectedCourseFilter;
     return matchesSearchTerm && matchesFilter && matchesCourse;
+  });
+
+  // Debug logging for filtering
+  console.log('🔍 Filtering debug:', {
+    totalLessons: lessons.length,
+    searchTerm,
+    activeFilter,
+    selectedCourseFilter,
+    filteredCount: filteredLessons.length,
+    courses: courses.map(c => ({ id: c.id, name: c.title }))
   });
 
   return (
@@ -430,7 +589,7 @@ const CurrentLessons: React.FC = () => {
         </div>
 
         {/* Rest of the component content */}
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className=" mx-auto space-y-8">
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>
@@ -448,12 +607,38 @@ const CurrentLessons: React.FC = () => {
                 <BookOpen className="w-5 h-5" />
                 <span className="font-semibold">Back to Dashboard</span>
               </button>
+              <button
+                onClick={() => {
+                  console.log('🔄 Manual refresh triggered');
+                  loadLessonsWithCache();
+                }}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-300"
+              >
+                <RefreshCw className="w-5 h-5" />
+                <span className="font-semibold">Refresh</span>
+              </button>
               <div className="flex items-center space-x-2 text-sm text-gray-600 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-lg">
                 <Clock className="w-4 h-4" />
                 <span>Last updated: {new Date().toLocaleTimeString()}</span>
               </div>
             </div>
           </div>
+
+          {/* Debug Panel - Remove this in production
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+              <h3 className="font-semibold text-yellow-800 mb-2">Debug Info</h3>
+              <div className="text-sm text-yellow-700 space-y-1">
+                <p>Total Lessons: {lessons.length}</p>
+                <p>Total Courses: {courses.length}</p>
+                <p>Filtered Lessons: {filteredLessons.length}</p>
+                <p>Loading States: {JSON.stringify(loadingStates)}</p>
+                <p>Selected Course Filter: {selectedCourseFilter}</p>
+                <p>Active Filter: {activeFilter}</p>
+                <p>Search Term: "{searchTerm}"</p>
+              </div>
+            </div>
+          )} */}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -621,9 +806,17 @@ const CurrentLessons: React.FC = () => {
                   <div className="p-6">
                     <h3 className="font-bold text-gray-900 mb-2 text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">{lesson.title}</h3>
                     <p className="text-gray-600 text-sm mb-4 line-clamp-2">{lesson.courseTitle}</p>
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Clock className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-gray-500">{lesson.duration}</span>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-500">{lesson.duration}</span>
+                      </div>
+                      {lesson.totalModules && (
+                        <div className="flex items-center space-x-2">
+                          <FileText className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-500">{lesson.completedModules}/{lesson.totalModules} modules</span>
+                        </div>
+                      )}
                     </div>
                     {lesson.prerequisites && (
                       <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded-lg">Prerequisites: {lesson.prerequisites}</p>
@@ -728,6 +921,34 @@ const CurrentLessons: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                
+                {/* Module Information */}
+                {selectedLesson.totalModules && (
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Total Modules</p>
+                          <p className="font-semibold text-gray-900">{selectedLesson.totalModules}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Completed</p>
+                          <p className="font-semibold text-gray-900">{selectedLesson.completedModules}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Progress Bar */}
                 <div className="mb-6">
@@ -752,6 +973,8 @@ const CurrentLessons: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+
 
                 {/* Action Buttons */}
                 <div className="flex space-x-4">
