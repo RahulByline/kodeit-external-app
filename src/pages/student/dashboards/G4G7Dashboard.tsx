@@ -581,11 +581,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const handleCourseClick = useCallback((course: Course) => {
     console.log('🎓 Course clicked:', course.title);
     
-    // Store selected course in localStorage for the lessons view
-    localStorage.setItem('selectedCourse', JSON.stringify(course));
-    
-    // Navigate to the lessons view
-    navigate('/dashboard/student/current-lessons', { 
+    // Navigate to the course lessons page
+    navigate(`/dashboard/student/course-lessons/${course.id}`, { 
       state: { 
         selectedCourse: course
       }
@@ -878,23 +875,23 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   }
 
   return (
-    <div className='bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen'>
+    <div className='bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6'>
       {/* Top Navigation Bar */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex space-x-1 p-1">
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-8">
+        <div className="flex space-x-2 p-2">
           {topNavItems.map((item) => {
             const isActive = isActivePath(item.path);
             return (
               <button
                 key={item.name}
                 onClick={() => handleTopNavClick(item.path)}
-                className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
+                className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md'
                 }`}
               >
-                <item.icon className="w-4 h-4" />
+                <item.icon className="w-5 h-5" />
                 <span>{item.name}</span>
               </button>
             );
@@ -902,7 +899,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         </div>
       </div>
 
-      <div className="mx-auto space-y-6">
+      <div className=" mx-auto space-y-8">
         {/* Welcome Section */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
           <div className="flex items-center justify-between">

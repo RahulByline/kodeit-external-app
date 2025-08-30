@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -23,12 +23,82 @@ import {
   ExternalLink,
   Download,
   Star,
-  BarChart3
+  BarChart3,
+  Filter,
+  RefreshCw,
+  MessageSquare,
+  Users,
+  Zap,
+  Rocket
 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Progress } from '../../components/ui/progress';
+import { Input } from '../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Skeleton } from '../../components/ui/skeleton';
+import { getCacheKey, getCachedData, setCachedData, CACHE_KEYS } from '../../utils/cache';
+
+// Performance optimization constants
+const BATCH_SIZE = 5; // Number of courses to fetch in parallel
+const PRELOAD_THRESHOLD = 3; // Start preloading when user scrolls to 3rd item
+const DEBOUNCE_DELAY = 300; // Search debounce delay
+const CACHE_PRIORITY = {
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low'
+};
+
+// Request queue for batching API calls
+class RequestQueue {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private batchSize = BATCH_SIZE;
+
+  async add<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await request();
+          resolve(result);
+          return result;
+        } catch (error) {
+          reject(error);
+          throw error;
+        }
+      });
+
+      if (!this.processing) {
+        this.processQueue();
+      }
+    });
+  }
+
+  private async processQueue() {
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const batch = this.queue.splice(0, this.batchSize);
+      await Promise.allSettled(batch.map(request => request()));
+      
+      // Small delay between batches to prevent overwhelming the server
+      if (this.queue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    this.processing = false;
+  }
+}
+
+const requestQueue = new RequestQueue();
 
 interface Course {
   id: string;
   title: string;
+  fullname: string;
+  shortname: string;
   description: string;
   instructor: string;
   progress: number;
@@ -47,30 +117,340 @@ interface Lesson {
   title: string;
   courseId: string;
   courseTitle: string;
+  courseShortName: string;
   duration: string;
-  type: 'video' | 'quiz' | 'assignment' | 'practice';
+  type: 'video' | 'quiz' | 'assignment' | 'practice' | 'lesson';
   status: 'completed' | 'in-progress' | 'not-started';
   progress: number;
   dueDate?: string;
   isNew?: boolean;
   prerequisites?: string;
   image?: string;
+  totalModules?: number;
+  completedModules?: number;
 }
 
 const CurrentLessons: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Advanced state management with performance optimizations
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'in-progress' | 'completed' | 'not-started'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'in-progress' | 'completed' | 'not-started'>('all');
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('all');
+  
+  // Performance optimization states
+  const [loadingStates, setLoadingStates] = useState({
+    courses: false,
+    lessons: false,
+    activities: false
+  });
+  
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    loadTime: 0,
+    cacheHitRate: 0,
+    apiCallCount: 0
+  });
+  
+  // Refs for performance tracking
+  const loadStartTime = useRef<number>(0);
+  const apiCallCount = useRef<number>(0);
+  const cacheHitCount = useRef<number>(0);
+  const totalRequests = useRef<number>(0);
+  
+  // Debounced search term
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  
+  // Preloading state
+  const [preloadedLessons, setPreloadedLessons] = useState<Map<string, Lesson[]>>(new Map());
+
+  // Skeleton loader components for fast loading
+  const SkeletonLessonCard = () => (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+      <div className="relative">
+        <Skeleton className="w-full h-40" />
+        <div className="absolute top-4 right-4">
+          <Skeleton className="w-8 h-8 rounded-full" />
+        </div>
+        <div className="absolute bottom-4 left-4">
+          <Skeleton className="w-20 h-6 rounded-full" />
+        </div>
+      </div>
+      <div className="p-6">
+        <Skeleton className="h-6 w-3/4 mb-2" />
+        <Skeleton className="h-4 w-1/2 mb-4" />
+        <div className="flex items-center space-x-2 mb-4">
+          <Skeleton className="w-4 h-4" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        <div className="mb-4">
+          <div className="flex justify-between mb-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-12" />
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
+        </div>
+        <Skeleton className="w-full h-12 rounded-xl" />
+      </div>
+    </div>
+  );
+
+  const SkeletonStatsCard = () => (
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <Skeleton className="h-4 w-20 mb-2" />
+          <Skeleton className="h-8 w-12" />
+        </div>
+        <Skeleton className="w-12 h-12 rounded-xl" />
+      </div>
+    </div>
+  );
+
+  // Fast loading with caching and progressive loading
+  const loadLessonsWithCache = useCallback(async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      console.log('🚀 Loading lessons with fast loading optimizations...');
+      
+      // 1. Try to load cached data first for instant display
+      const lessonsCacheKey = getCacheKey(CACHE_KEYS.CURRENT_LESSONS, currentUser.id);
+      const coursesCacheKey = getCacheKey(CACHE_KEYS.USER_COURSES, currentUser.id);
+      
+      const cachedLessons = getCachedData(lessonsCacheKey);
+      const cachedCourses = getCachedData(coursesCacheKey);
+      
+      if (cachedLessons && cachedCourses) {
+        console.log('✅ Loading lessons from cache for instant display...');
+        setLessons(cachedLessons);
+        setCourses(cachedCourses);
+        setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+      } else {
+        setLoadingStates(prev => ({ ...prev, lessons: true, courses: true }));
+      }
+      
+       
+      const loadFreshData = async () => {
+        try {
+          console.log('🔄 Loading fresh lessons data in background...');
+          
+          // Fetch all user courses
+          const userCourses = await moodleService.getUserCourses(currentUser.id);
+          console.log('📚 Raw user courses:', userCourses);
+          
+          const enrolledCourses = userCourses.filter(course => 
+            course.visible !== 0 && course.categoryid && course.categoryid > 0
+          );
+          
+          console.log('📚 Enrolled courses after filtering:', enrolledCourses);
+          
+          if (enrolledCourses.length === 0) {
+            console.warn('⚠️ No enrolled courses found, using sample data for testing');
+            
+            // Add sample data for testing
+            const sampleCourses: Course[] = [
+              {
+                id: '1',
+                title: 'Introduction to Programming',
+                fullname: 'Introduction to Programming',
+                shortname: 'PROG101',
+                description: 'Learn the basics of programming',
+                instructor: 'Dr. Sarah Johnson',
+                progress: 75,
+                totalLessons: 8,
+                completedLessons: 6,
+                duration: '8 weeks',
+                category: 'Programming',
+                image: '/card1.webp',
+                isActive: true,
+                lastAccessed: new Date().toISOString(),
+                difficulty: 'Beginner' as const
+              },
+              {
+                id: '2',
+                title: 'Advanced Python',
+                fullname: 'Advanced Python Programming',
+                shortname: 'PYTHON201',
+                description: 'Advanced Python concepts and applications',
+                instructor: 'Prof. Michael Chen',
+                progress: 45,
+                totalLessons: 12,
+                completedLessons: 5,
+                duration: '12 weeks',
+                category: 'Programming',
+                image: '/card2.webp',
+                isActive: true,
+                lastAccessed: new Date().toISOString(),
+                difficulty: 'Intermediate' as const
+              }
+            ];
+            
+            const sampleLessons: Lesson[] = [
+              {
+                id: '1',
+                title: 'Variables and Data Types',
+                courseId: '1',
+                courseTitle: 'Introduction to Programming',
+                courseShortName: 'PROG101',
+                duration: '45 min',
+                type: 'lesson',
+                status: 'completed',
+                progress: 100,
+                isNew: false,
+                prerequisites: 'Basic computer skills',
+                image: '/card1.webp',
+                totalModules: 5,
+                completedModules: 5
+              },
+              {
+                id: '2',
+                title: 'Control Structures',
+                courseId: '1',
+                courseTitle: 'Introduction to Programming',
+                courseShortName: 'PROG101',
+                duration: '60 min',
+                type: 'lesson',
+                status: 'in-progress',
+                progress: 60,
+                isNew: false,
+                prerequisites: 'Variables and Data Types',
+                image: '/card1.webp',
+                totalModules: 4,
+                completedModules: 2
+              },
+              {
+                id: '3',
+                title: 'Functions and Methods',
+                courseId: '2',
+                courseTitle: 'Advanced Python Programming',
+                courseShortName: 'PYTHON201',
+                duration: '90 min',
+                type: 'lesson',
+                status: 'not-started',
+                progress: 0,
+                isNew: true,
+                prerequisites: 'Basic Python knowledge',
+                image: '/card2.webp',
+                totalModules: 6,
+                completedModules: 0
+              }
+            ];
+            
+            setCourses(sampleCourses);
+            setLessons(sampleLessons);
+            setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+            return;
+          }
+          
+          // Transform courses
+          const transformedCourses: Course[] = enrolledCourses.map(course => ({
+            id: course.id,
+            title: course.fullname,
+            fullname: course.fullname,
+            shortname: course.shortname,
+            description: course.summary || '',
+            instructor: 'Instructor',
+            progress: course.progress || 0,
+            totalLessons: 0,
+            completedLessons: 0,
+            duration: '4 weeks',
+            category: course.categoryname || 'General',
+            image: course.courseimage || '/card1.webp',
+            isActive: course.progress > 0,
+            lastAccessed: course.startdate ? new Date(course.startdate * 1000).toISOString() : '',
+            difficulty: 'Beginner' as const
+          }));
+          
+          setCourses(transformedCourses);
+          setCachedData(coursesCacheKey, transformedCourses);
+          setLoadingStates(prev => ({ ...prev, courses: false }));
+          
+          // Fetch lessons from all courses in parallel for faster loading
+          const courseLessonPromises = enrolledCourses.map(async (course) => {
+            try {
+              console.log(`🔍 Fetching lessons for course: ${course.fullname} (ID: ${course.id})`);
+              const courseLessons = await moodleService.getCourseLessons(course.id);
+              console.log(`📚 Lessons for course ${course.fullname}:`, courseLessons);
+              
+              return courseLessons.map((lesson: any) => ({
+                id: lesson.id.toString(),
+                title: lesson.name,
+                courseId: course.id,
+                courseTitle: course.fullname,
+                courseShortName: course.shortname,
+                duration: getLessonDuration(lesson.totalModules),
+                type: 'lesson' as const,
+                status: lesson.status,
+                progress: lesson.progress,
+                dueDate: getLessonDueDate(lesson.dates),
+                isNew: isNewLesson(lesson.dates),
+                prerequisites: lesson.description,
+                image: getLessonImage(course.courseimage),
+                totalModules: lesson.totalModules,
+                completedModules: lesson.completedModules
+              }));
+            } catch (courseError) {
+              console.error(`❌ Failed to fetch lessons for course ${course.fullname}:`, courseError);
+              return [];
+            }
+          });
+          
+          // Wait for all course lessons to load in parallel
+          const allCourseLessons = await Promise.all(courseLessonPromises);
+          const allLessons = allCourseLessons.flat();
+          
+          console.log('📚 All lessons loaded:', allLessons);
+          console.log('📚 Total lessons count:', allLessons.length);
+          
+          setLessons(allLessons);
+          setCachedData(lessonsCacheKey, allLessons);
+          setLoadingStates(prev => ({ ...prev, lessons: false }));
+          
+          console.log(`✅ Fresh lessons loaded and cached: ${allLessons.length} lessons`);
+          
+        } catch (error) {
+          console.error('❌ Error loading fresh lessons data:', error);
+          setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+          
+          // If no cached data and API fails, show empty state
+          if (!cachedLessons && !cachedCourses) {
+            setLessons([]);
+            setCourses([]);
+          }
+        }
+      };
+      
+      // Start background loading
+      loadFreshData();
+      
+    } catch (error) {
+      console.error('❌ Error in loadLessonsWithCache:', error);
+      setLoadingStates(prev => ({ ...prev, lessons: false, courses: false }));
+    }
+  }, [currentUser?.id]);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, DEBOUNCE_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    loadLessonsWithCache();
+  }, [loadLessonsWithCache]);
 
   // Top navigation items
   const topNavItems = [
@@ -91,86 +471,137 @@ const CurrentLessons: React.FC = () => {
     navigate(path);
   };
 
-  // Handle lesson click to open lesson content
-  const handleLessonClick = (lesson: Lesson) => {
+  // Preload lesson data for faster navigation
+  const preloadLessonData = useCallback(async (lesson: Lesson) => {
+    if (preloadedLessons.has(lesson.id)) return;
+    
+    try {
+      const lessonData = await moodleService.getCourseLessons(lesson.courseId);
+      setPreloadedLessons(prev => new Map(prev).set(lesson.id, lessonData));
+    } catch (error) {
+      console.warn('Failed to preload lesson data:', error);
+    }
+  }, [preloadedLessons]);
+
+  // Handle lesson click with preloading
+  const handleLessonClick = async (lesson: Lesson) => {
     console.log('📚 Lesson clicked:', lesson.title);
     
-    // Store selected lesson in localStorage
-    localStorage.setItem('selectedLesson', JSON.stringify(lesson));
-    localStorage.setItem('selectedCourse', JSON.stringify(selectedCourse));
+    // Preload data for faster navigation
+    preloadLessonData(lesson);
     
-    // Open modal with lesson details
-    setSelectedLesson(lesson);
-    setIsModalOpen(true);
+    // Navigate to lesson activities page
+    navigate(`/dashboard/student/lesson-activities/${lesson.courseId}/${lesson.id}`, { 
+      state: { 
+        selectedLesson: lesson
+      }
+    });
   };
+
+  // Optimized lesson card component
+  const LessonCard = useMemo(() => {
+    return React.memo(({ lesson, index }: { lesson: Lesson; index: number }) => {
+      // Preload data when card comes into view
+      useEffect(() => {
+        if (index <= PRELOAD_THRESHOLD) {
+          preloadLessonData(lesson);
+        }
+      }, [lesson.id, index]);
+
+      return (
+        <div 
+          key={lesson.id} 
+          className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden hover:shadow-2xl hover:scale-105 transition-all duration-300 cursor-pointer group"
+          onClick={() => handleLessonClick(lesson)}
+        >
+          <div className="relative">
+            <img 
+              src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+              alt={lesson.title}
+              className="w-full h-40 object-cover group-hover:scale-110 transition-transform duration-300"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="absolute top-4 right-4">
+              <div className="bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg">
+                {lesson.isNew ? (
+                  <Eye className="w-4 h-4 text-blue-600" />
+                ) : (
+                  <Play className="w-4 h-4 text-green-600" />
+                )}
+              </div>
+            </div>
+            <div className="absolute bottom-4 left-4">
+              <span className={`${getStatusColor(lesson.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
+                {lesson.status.replace('-', ' ')}
+              </span>
+            </div>
+          </div>
+          <div className="p-6">
+            <h3 className="font-bold text-gray-900 mb-2 text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">{lesson.title}</h3>
+            <p className="text-gray-600 text-sm mb-4 line-clamp-2">{lesson.courseTitle}</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-gray-500" />
+                <span className="text-sm text-gray-500">{lesson.duration}</span>
+              </div>
+              {lesson.totalModules && (
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-500">{lesson.completedModules}/{lesson.totalModules} modules</span>
+                </div>
+              )}
+            </div>
+            {lesson.prerequisites && (
+              <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded-lg">Prerequisites: {lesson.prerequisites}</p>
+            )}
+            <div className="mb-4">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${lesson.progress}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>Progress</span>
+                <span>{lesson.progress}%</span>
+              </div>
+            </div>
+            <button 
+              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl group-hover:scale-105"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLessonClick(lesson);
+              }}
+            >
+              {lesson.status === 'completed' ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Review Lesson</span>
+                </>
+              ) : lesson.status === 'in-progress' ? (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>Continue Lesson</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>Start Lesson</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      );
+    });
+  }, [preloadLessonData, handleLessonClick]);
 
   // Close modal
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedLesson(null);
   };
-
-  useEffect(() => {
-    const loadLessons = async () => {
-      setLoading(true);
-      
-      try {
-        // Get selected course from localStorage or route state
-        let course: Course | null = null;
-        
-        // Try to get from route state first
-        if (location.state?.selectedCourse) {
-          course = location.state.selectedCourse;
-        } else {
-          // Try to get from localStorage
-          const storedCourse = localStorage.getItem('selectedCourse');
-          if (storedCourse) {
-            course = JSON.parse(storedCourse);
-          }
-        }
-        
-        if (!course) {
-          console.warn('No course selected, redirecting to dashboard');
-          navigate('/dashboard/student');
-          return;
-        }
-        
-        setSelectedCourse(course);
-        console.log('📚 Loading lessons for course:', course.title);
-        
-        // Fetch lessons for the specific course from Moodle API
-        const courseActivities = await moodleService.getCourseActivities(course.id);
-        
-        // Transform Moodle activities to lessons
-        const courseLessons = courseActivities.map((activity: any) => ({
-          id: activity.id.toString(),
-          title: activity.name,
-          courseId: course.id,
-          courseTitle: course.title,
-          duration: getActivityDuration(activity.type),
-          type: mapActivityType(activity.type),
-          status: getActivityStatus(activity.completion),
-          progress: getActivityProgress(activity.completion),
-          dueDate: getActivityDueDate(activity.dates),
-          isNew: isNewActivity(activity.dates),
-          prerequisites: activity.availabilityinfo,
-          image: getActivityImage(activity.type, course.image)
-        }));
-        
-        console.log(`✅ Loaded ${courseLessons.length} lessons for course: ${course.title}`);
-        setLessons(courseLessons);
-        
-      } catch (error) {
-        console.error('Error loading lessons:', error);
-        // Fallback to empty lessons array
-        setLessons([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadLessons();
-  }, [location.state, navigate]);
 
   // Helper functions for Moodle activity processing
   const getActivityDuration = (activityType: string): string => {
@@ -256,6 +687,49 @@ const CurrentLessons: React.FC = () => {
     return typeImages[activityType] || courseImage || '/card1.webp';
   };
 
+  // Helper functions for lesson processing
+  const getLessonDuration = (totalModules: number): string => {
+    // Estimate duration based on number of modules
+    const estimatedMinutes = totalModules * 15; // 15 minutes per module
+    if (estimatedMinutes < 60) {
+      return `${estimatedMinutes} min`;
+    } else {
+      const hours = Math.floor(estimatedMinutes / 60);
+      const minutes = estimatedMinutes % 60;
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+  };
+
+  const getLessonDueDate = (dates: any[]): string | undefined => {
+    if (!dates || dates.length === 0) return undefined;
+    
+    const dueDate = dates.find((date: any) => date.label === 'Due date') || dates[dates.length - 1];
+    
+    if (dueDate) {
+      return new Date(dueDate.timestamp * 1000).toISOString().split('T')[0];
+    }
+    
+    return undefined;
+  };
+
+  const isNewLesson = (dates: any[]): boolean => {
+    if (!dates || dates.length === 0) return false;
+    
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    return dates.some((date: any) => {
+      const lessonDate = new Date(date.timestamp * 1000);
+      return lessonDate > oneWeekAgo;
+    });
+  };
+
+  const getLessonImage = (courseImage?: string): string => {
+    return courseImage || '/card1.webp';
+  };
+
+
+
   const getStatusColor = (status: 'completed' | 'in-progress' | 'not-started') => {
     switch (status) {
       case 'completed':
@@ -269,16 +743,40 @@ const CurrentLessons: React.FC = () => {
     }
   };
 
-  const filteredLessons = lessons.filter(lesson => {
-    const matchesSearchTerm = lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              lesson.courseTitle.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = activeFilter === 'all' || lesson.status === activeFilter;
-    return matchesSearchTerm && matchesFilter;
-  });
+  // Optimized filtering with memoization
+  const filteredLessons = useMemo(() => {
+    return lessons.filter(lesson => {
+      const matchesSearchTerm = lesson.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                                lesson.courseTitle.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+      const matchesFilter = activeFilter === 'all' || lesson.status === activeFilter;
+      const matchesCourse = selectedCourseFilter === 'all' || lesson.courseId === selectedCourseFilter;
+      return matchesSearchTerm && matchesFilter && matchesCourse;
+    });
+  }, [lessons, debouncedSearchTerm, activeFilter, selectedCourseFilter]);
+
+  // Performance metrics display
+  const performanceDisplay = useMemo(() => {
+    if (performanceMetrics.loadTime === 0) return null;
+    
+    return (
+      <div className="fixed bottom-4 right-4 bg-green-50 border border-green-200 rounded-lg p-3 shadow-lg z-50">
+        <div className="flex items-center space-x-2 text-sm">
+          <Rocket className="w-4 h-4 text-green-600" />
+          <span className="text-green-800 font-medium">
+            Loaded in {performanceMetrics.loadTime}ms
+          </span>
+        </div>
+        <div className="text-xs text-green-600 mt-1">
+          Cache: {performanceMetrics.cacheHitRate}% | API: {performanceMetrics.apiCallCount} calls
+        </div>
+      </div>
+    );
+  }, [performanceMetrics]);
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
       <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
+        {performanceDisplay}
         {/* Top Navigation Bar */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-8">
           <div className="flex space-x-2 p-2">
@@ -303,16 +801,14 @@ const CurrentLessons: React.FC = () => {
         </div>
 
         {/* Rest of the component content */}
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className=" mx-auto space-y-8">
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Current Lessons</h1>
-              {selectedCourse && (
-                <p className="text-gray-600 text-lg">
-                  Lessons for: <span className="font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{selectedCourse.title}</span>
-                </p>
-              )}
+              <p className="text-gray-600 text-lg">
+                Lessons from all your enrolled courses
+              </p>
               <p className="text-gray-600 mt-2">Track your learning progress and upcoming lessons</p>
             </div>
             <div className="flex items-center space-x-4">
@@ -323,6 +819,16 @@ const CurrentLessons: React.FC = () => {
                 <BookOpen className="w-5 h-5" />
                 <span className="font-semibold">Back to Dashboard</span>
               </button>
+              <button
+                onClick={() => {
+                  console.log('🔄 Manual refresh triggered');
+                  loadLessonsWithCache();
+                }}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-300"
+              >
+                <RefreshCw className="w-5 h-5" />
+                <span className="font-semibold">Refresh</span>
+              </button>
               <div className="flex items-center space-x-2 text-sm text-gray-600 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-lg">
                 <Clock className="w-4 h-4" />
                 <span>Last updated: {new Date().toLocaleTimeString()}</span>
@@ -330,52 +836,79 @@ const CurrentLessons: React.FC = () => {
             </div>
           </div>
 
+          {/* Debug Panel - Remove this in production
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+              <h3 className="font-semibold text-yellow-800 mb-2">Debug Info</h3>
+              <div className="text-sm text-yellow-700 space-y-1">
+                <p>Total Lessons: {lessons.length}</p>
+                <p>Total Courses: {courses.length}</p>
+                <p>Filtered Lessons: {filteredLessons.length}</p>
+                <p>Loading States: {JSON.stringify(loadingStates)}</p>
+                <p>Selected Course Filter: {selectedCourseFilter}</p>
+                <p>Active Filter: {activeFilter}</p>
+                <p>Search Term: "{searchTerm}"</p>
+              </div>
+            </div>
+          )} */}
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Lessons</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.length}</p>
+            {loadingStates.lessons ? (
+              <>
+                <SkeletonStatsCard />
+                <SkeletonStatsCard />
+                <SkeletonStatsCard />
+                <SkeletonStatsCard />
+              </>
+            ) : (
+              <>
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Lessons</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <BookOpen className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <BookOpen className="w-6 h-6 text-white" />
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Completed</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'completed').length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Completed</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'completed').length}</p>
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">In Progress</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'in-progress').length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                      <Clock className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <CheckCircle className="w-6 h-6 text-white" />
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Not Started</p>
+                      <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'not-started').length}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <Play className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">In Progress</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'in-progress').length}</p>
-                </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <Clock className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Not Started</p>
-                  <p className="text-3xl font-bold text-gray-900">{lessons.filter(l => l.status === 'not-started').length}</p>
-                </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <Play className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* Filter and Search */}
@@ -399,24 +932,40 @@ const CurrentLessons: React.FC = () => {
                   ))}
                 </div>
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search lessons..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full md:w-80 px-4 py-2 pl-10 bg-white/60 backdrop-blur-sm border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+              <div className="flex items-center space-x-4">
+                <Select value={selectedCourseFilter} onValueChange={setSelectedCourseFilter}>
+                  <SelectTrigger className="w-48 bg-white/60 backdrop-blur-sm border border-white/20">
+                    <SelectValue placeholder="Select Course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Courses</SelectItem>
+                    {courses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.shortname || course.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search lessons..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full md:w-80 px-4 py-2 pl-10 bg-white/60 backdrop-blur-sm border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Lessons Grid */}
-          {loading ? (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading lessons...</p>
+          {loadingStates.lessons ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <SkeletonLessonCard key={i} />
+              ))}
             </div>
           ) : filteredLessons.length === 0 ? (
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
@@ -438,82 +987,8 @@ const CurrentLessons: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredLessons.map((lesson) => (
-                <div 
-                  key={lesson.id} 
-                  className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden hover:shadow-2xl hover:scale-105 transition-all duration-300 cursor-pointer group"
-                  onClick={() => handleLessonClick(lesson)}
-                >
-                  <div className="relative">
-                    <img 
-                      src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
-                      alt={lesson.title}
-                      className="w-full h-40 object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="absolute top-4 right-4">
-                      <div className="bg-white/90 backdrop-blur-sm p-2 rounded-full shadow-lg">
-                        {lesson.isNew ? (
-                          <Eye className="w-4 h-4 text-blue-600" />
-                        ) : (
-                          <Play className="w-4 h-4 text-green-600" />
-                        )}
-                      </div>
-                    </div>
-                    <div className="absolute bottom-4 left-4">
-                      <span className={`${getStatusColor(lesson.status)} px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
-                        {lesson.status.replace('-', ' ')}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <h3 className="font-bold text-gray-900 mb-2 text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">{lesson.title}</h3>
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">{lesson.courseTitle}</p>
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Clock className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-gray-500">{lesson.duration}</span>
-                    </div>
-                    {lesson.prerequisites && (
-                      <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded-lg">Prerequisites: {lesson.prerequisites}</p>
-                    )}
-                    <div className="mb-4">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-300 shadow-sm"
-                          style={{ width: `${lesson.progress}%` }}
-                        ></div>
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>Progress</span>
-                        <span>{lesson.progress}%</span>
-                      </div>
-                    </div>
-                    <button 
-                      className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl group-hover:scale-105"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLessonClick(lesson);
-                      }}
-                    >
-                      {lesson.status === 'completed' ? (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          <span>Review Lesson</span>
-                        </>
-                      ) : lesson.status === 'in-progress' ? (
-                        <>
-                          <Play className="w-4 h-4" />
-                          <span>Continue Lesson</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4" />
-                          <span>Start Lesson</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+              {filteredLessons.map((lesson, index) => (
+                <LessonCard key={lesson.id} lesson={lesson} index={index} />
               ))}
             </div>
           )}
@@ -576,6 +1051,34 @@ const CurrentLessons: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                
+                {/* Module Information */}
+                {selectedLesson.totalModules && (
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Total Modules</p>
+                          <p className="font-semibold text-gray-900">{selectedLesson.totalModules}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Completed</p>
+                          <p className="font-semibold text-gray-900">{selectedLesson.completedModules}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Progress Bar */}
                 <div className="mb-6">
@@ -600,6 +1103,8 @@ const CurrentLessons: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+
 
                 {/* Action Buttons */}
                 <div className="flex space-x-4">
