@@ -14,6 +14,8 @@ import {
   Clock,
   Activity,
   Play,
+
+  
   Calendar,
   Target,
   TrendingUp,
@@ -1236,18 +1238,27 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                                           </div>
                                           {isLessonOpen && (
                                             <ul className="mt-2 ml-8 space-y-1">
-                                              {currentLessonActivities.length === 0 ? (
-                                                <li className="text-xs text-gray-500">No activities</li>
+                                              {isLoading ? (
+                                                <li className="text-xs text-gray-500 flex items-center space-x-2">
+                                                  <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
+                                                  <span>Loading activities...</span>
+                                                </li>
+                                              ) : currentLessonActivities.length === 0 ? (
+                                                <li className="text-xs text-gray-500">No activities found for this lesson</li>
                                               ) : (
                                                 currentLessonActivities.map(activity => (
-                                                  <li key={activity.id} className="flex items-center justify-between">
-                                                    <button className="text-left text-sm text-gray-700 hover:text-gray-900" onClick={() => handleActivityClick(activity)}>
-                                                      {activity.title}
+                                                  <li key={activity.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                                                    <button className="text-left text-sm text-gray-700 hover:text-gray-900 flex-1" onClick={() => handleActivityClick(activity)}>
+                                                      <div className="font-medium">{activity.title}</div>
+                                                      <div className="text-xs text-gray-500">{activity.type} • {activity.points} points</div>
                                                     </button>
-                                                    <div className="flex items-center space-x-2 text-xs text-gray-500">
-                                                      <span>{activity.type}</span>
-                                                      <span>•</span>
-                                                      <span>{activity.status}</span>
+                                                    <div className="flex items-center space-x-2">
+                                                      <span className={`px-2 py-0.5 rounded-full text-[10px] ${getActivityStatusColor(activity.status)}`}>
+                                                        {activity.status}
+                                                      </span>
+                                                      <span className={`px-2 py-0.5 rounded-full text-[10px] ${getDifficultyColor(activity.difficulty)}`}>
+                                                        {activity.difficulty}
+                                                      </span>
                                                     </div>
                                                   </li>
                                                 ))
