@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lom xmlns="http://ltsc.ieee.org/xsd/LOM" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://ltsc.ieee.org/xsd/LOM http://ltsc.ieee.org/xsd/lomv1.0/lom.xsd">
+  <general>
+    <identifier>
+      <catalog>URI</catalog>
+      <entry>http://kodeit.com/scorm/kodeit-learning-module</entry>
+    </identifier>
+    <title>
+      <string language="en">KODEIT Interactive Learning Module</string>
+    </title>
+    <description>
+      <string language="en">Real SCORM package for IOMAD/Moodle integration with interactive learning content, assessments, and progress tracking.</string>
+    </description>
+    <keyword>
+      <string language="en">SCORM</string>
+    </keyword>
+    <keyword>
+      <string language="en">Interactive Learning</string>
+    </keyword>
+    <keyword>
+      <string language="en">Programming</string>
+    </keyword>
+    <keyword>
+      <string language="en">Digital Literacy</string>
+    </keyword>
+    <language>en</language>
+  </general>
+  <lifecycle>
+    <version>
+      <string language="en">1.0</string>
+    </version>
+    <status>
+      <source>LOMv1.0</source>
+      <value>Final</value>
+    </status>
+  </lifecycle>
+  <technical>
+    <format>
+      <string language="en">text/html</string>
+    </format>
+    <size>0</size>
+    <location>
+      <string language="en">index.html</string>
+    </location>
+    <requirement>
+      <type>
+        <source>LOMv1.0</source>
+        <value>Browser</value>
+      </type>
+      <name>
+        <source>LOMv1.0</source>
+        <value>Netscape Communicator</value>
+      </name>
+      <minimumVersion>4.0</minimumVersion>
+      <maximumVersion></maximumVersion>
+    </requirement>
+  </technical>
+  <educational>
+    <interactivityType>
+      <source>LOMv1.0</source>
+      <value>Active</value>
+    </interactivityType>
+    <learningResourceType>
+      <source>LOMv1.0</source>
+      <value>Exercise</value>
+    </learningResourceType>
+    <interactivityLevel>
+      <source>LOMv1.0</source>
+      <value>Medium</value>
+    </interactivityLevel>
+    <semanticDensity>
+      <source>LOMv1.0</source>
+      <value>Medium</value>
+    </semanticDensity>
+    <intendedEndUserRole>
+      <source>LOMv1.0</source>
+      <value>Learner</value>
+    </intendedEndUserRole>
+    <context>
+      <source>LOMv1.0</source>
+      <value>School</value>
+    </context>
+    <typicalAgeRange>
+      <string language="en">8-18</string>
+    </typicalAgeRange>
+    <difficulty>
+      <source>LOMv1.0</source>
+      <value>Medium</value>
+    </difficulty>
+    <typicalLearningTime>
+      <duration>PT30M</duration>
+    </typicalLearningTime>
+    <description>
+      <string language="en">Interactive learning module covering programming fundamentals, digital literacy, and problem-solving skills.</string>
+    </description>
+    <language>en</language>
+  </educational>
+  <rights>
+    <cost>
+      <source>LOMv1.0</source>
+      <value>No</value>
+    </cost>
+    <copyrightAndOtherRestrictions>
+      <source>LOMv1.0</source>
+      <value>Yes</value>
+    </copyrightAndOtherRestrictions>
+    <description>
+      <string language="en">Copyright KODEIT 2024. All rights reserved.</string>
+    </description>
+  </rights>
+</lom>

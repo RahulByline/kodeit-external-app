@@ -324,6 +324,142 @@ export const enhancedMoodleService = {
     }
   },
 
+  // SCORM Web Services
+  // Map course module id to SCORM instance id using mod_scorm_get_scorms_by_courses
+  async getScormInstanceByCourseModule(courseId: number | string, courseModuleId: number | string): Promise<any | null> {
+    try {
+      const params = new URLSearchParams({
+        wsfunction: 'mod_scorm_get_scorms_by_courses',
+        'courseids[0]': String(courseId)
+      });
+      const response = await enhancedMoodleApi.post('', params);
+      const scorms = response.data?.scorms || [];
+      const match = scorms.find((s: any) => String(s.coursemodule) === String(courseModuleId));
+      return match || null;
+    } catch (error) {
+      console.warn('Failed to get SCORM instances for course', courseId, error);
+      return null;
+    }
+  },
+
+  async getScormAccessInformation(scormId: number | string): Promise<any> {
+    try {
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'mod_scorm_get_scorm_access_information',
+        scormid: String(scormId)
+      }));
+      return response.data;
+    } catch (error) {
+      console.warn('Failed to get SCORM access information', error);
+      return null;
+    }
+  },
+
+  async getScormAttemptCount(scormId: number | string, userId: number | string, ignoreMissingCompletion: number = 0): Promise<number> {
+    try {
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'mod_scorm_get_scorm_attempt_count',
+        scormid: String(scormId),
+        userid: String(userId),
+        ignoremissingcompletion: String(ignoreMissingCompletion)
+      }));
+      return response.data?.attemptscount ?? 0;
+    } catch (error) {
+      console.warn('Failed to get SCORM attempt count', error);
+      return 0;
+    }
+  },
+
+  async getScormScoes(scormId: number | string, organization: string = ''): Promise<any[]> {
+    try {
+      const params = new URLSearchParams({
+        wsfunction: 'mod_scorm_get_scorm_scoes',
+        scormid: String(scormId)
+      });
+      if (organization) params.append('organization', organization);
+      const response = await enhancedMoodleApi.post('', params);
+      return response.data?.scoes || [];
+    } catch (error) {
+      console.warn('Failed to get SCORM SCOes', error);
+      return [];
+    }
+  },
+
+  async getScormScoTracks(scoId: number | string, userId: number | string, attempt: number = 0): Promise<any> {
+    try {
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'mod_scorm_get_scorm_sco_tracks',
+        scoid: String(scoId),
+        userid: String(userId),
+        attempt: String(attempt)
+      }));
+      return response.data || null;
+    } catch (error) {
+      console.warn('Failed to get SCORM SCO tracks', error);
+      return null;
+    }
+  },
+
+  async getScormUserData(scormId: number | string, attempt: number): Promise<any> {
+    try {
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'mod_scorm_get_scorm_user_data',
+        scormid: String(scormId),
+        attempt: String(attempt)
+      }));
+      return response.data || null;
+    } catch (error) {
+      console.warn('Failed to get SCORM user data', error);
+      return null;
+    }
+  },
+
+  async insertScormTracks(scoId: number | string, attempt: number, tracks: { element: string; value: string }[]): Promise<any> {
+    try {
+      const params = new URLSearchParams({
+        wsfunction: 'mod_scorm_insert_scorm_tracks',
+        scoid: String(scoId),
+        attempt: String(attempt)
+      });
+      tracks.forEach((t, i) => {
+        params.append(`tracks[${i}][element]`, t.element);
+        params.append(`tracks[${i}][value]`, t.value);
+      });
+      const response = await enhancedMoodleApi.post('', params);
+      return response.data || null;
+    } catch (error) {
+      console.warn('Failed to insert SCORM tracks', error);
+      return null;
+    }
+  },
+
+  async launchSco(scormId: number | string, scoId: number | string = 0): Promise<any> {
+    try {
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'mod_scorm_launch_sco',
+        scormid: String(scormId),
+        scoid: String(scoId)
+      }));
+      return response.data || null;
+    } catch (error) {
+      console.warn('Failed to launch SCORM SCO', error);
+      return null;
+    }
+  },
+
+  async viewScorm(scormId: number | string): Promise<any> {
+    try {
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'mod_scorm_view_scorm',
+        scormid: String(scormId)
+      }));
+      return response.data || null;
+    } catch (error) {
+      console.warn('Failed to view SCORM', error);
+      return null;
+    }
+  },
+
   // Clear cache for specific user
   clearUserCache(userId: string) {
     const keysToDelete = [

@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KODEIT Real SCORM Package</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .content {
+            padding: 40px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #4facfe;
+        }
+        .section h2 {
+            color: #2c3e50;
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+        .section p {
+            line-height: 1.6;
+            color: #555;
+        }
+        .interactive-demo {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .demo-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .demo-btn {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        .demo-btn:hover {
+            background: #1976d2;
+            transform: translateY(-2px);
+        }
+        .demo-result {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            min-height: 60px;
+        }
+        .assessment {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+        .question {
+            margin-bottom: 20px;
+        }
+        .question h3 {
+            color: #e65100;
+            margin-bottom: 10px;
+        }
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .option {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .option:hover {
+            background: #f5f5f5;
+            border-color: #2196f3;
+        }
+        .option input[type="radio"] {
+            margin-right: 10px;
+        }
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        .nav-btn {
+            background: #4facfe;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover {
+            background: #3f8fd1;
+            transform: translateY(-1px);
+        }
+        .nav-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            transition: width 0.3s ease;
+        }
+        .score-display {
+            text-align: center;
+            font-size: 1.2em;
+            color: #2c3e50;
+            margin: 10px 0;
+        }
+        .completion-message {
+            text-align: center;
+            padding: 40px;
+            background: #e8f5e8;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .completion-message h2 {
+            color: #2e7d32;
+            margin-bottom: 15px;
+        }
+        .completion-message p {
+            color: #388e3c;
+            font-size: 1.1em;
+        }
+        .certificate-btn {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+        .certificate-btn:hover {
+            background: #388e3c;
+            transform: translateY(-2px);
+        }
+        .scorm-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="scorm-status" id="scorm-status">SCORM: Initializing...</div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>KODEIT Learning Module</h1>
+            <p>Real SCORM Package for IOMAD/Moodle Integration</p>
+        </div>
+
+        <div class="content">
+            <!-- Progress Bar -->
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="score-display" id="score-display">Score: 0%</div>
+
+            <!-- Module Content -->
+            <div id="module-content">
+                <!-- Section 1: Introduction -->
+                <div class="section" id="section-1">
+                    <h2>Welcome to KODEIT Learning!</h2>
+                    <p>This is a real SCORM package that integrates with your IOMAD/Moodle system. It tracks progress, scores, and completion status automatically.</p>
+                    
+                    <div class="interactive-demo">
+                        <h3>Interactive Learning Demo</h3>
+                        <p>Click the buttons below to explore different learning concepts:</p>
+                        <div class="demo-buttons">
+                            <button class="demo-btn" onclick="showDemo('Programming Fundamentals: Learn the basics of coding and computer science concepts.')">Programming</button>
+                            <button class="demo-btn" onclick="showDemo('Digital Literacy: Understanding computers, internet safety, and digital tools.')">Digital Literacy</button>
+                            <button class="demo-btn" onclick="showDemo('Problem Solving: Develop critical thinking and logical reasoning skills.')">Problem Solving</button>
+                        </div>
+                        <div class="demo-result" id="demo-result">
+                            <p>Click a button above to learn about different concepts.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Assessment -->
+                <div class="section" id="section-2" style="display: none;">
+                    <h2>Knowledge Assessment</h2>
+                    <p>Test your understanding of the learning material:</p>
+                    
+                    <div class="assessment">
+                        <div class="question">
+                            <h3>Question 1: What is the primary purpose of programming?</h3>
+                            <div class="options">
+                                <label class="option">
+                                    <input type="radio" name="q1" value="a" onchange="updateScore()">
+                                    To give instructions to computers
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q1" value="b" onchange="updateScore()">
+                                    To play games
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q1" value="c" onchange="updateScore()">
+                                    To browse the internet
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q1" value="d" onchange="updateScore()">
+                                    To watch videos
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="question">
+                            <h3>Question 2: Which skill is most important for programming?</h3>
+                            <div class="options">
+                                <label class="option">
+                                    <input type="radio" name="q2" value="a" onchange="updateScore()">
+                                    Typing speed
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q2" value="b" onchange="updateScore()">
+                                    Logical thinking
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q2" value="c" onchange="updateScore()">
+                                    Drawing skills
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q2" value="d" onchange="updateScore()">
+                                    Music ability
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="question">
+                            <h3>Question 3: What does digital literacy include?</h3>
+                            <div class="options">
+                                <label class="option">
+                                    <input type="radio" name="q3" value="a" onchange="updateScore()">
+                                    Only using social media
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q3" value="b" onchange="updateScore()">
+                                    Understanding computers and internet safety
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q3" value="c" onchange="updateScore()">
+                                    Playing video games
+                                </label>
+                                <label class="option">
+                                    <input type="radio" name="q3" value="d" onchange="updateScore()">
+                                    Watching TV
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Completion -->
+                <div class="section" id="section-3" style="display: none;">
+                    <div class="completion-message">
+                        <h2>🎉 Congratulations!</h2>
+                        <p>You have successfully completed the KODEIT Learning Module!</p>
+                        <p>You scored <span id="final-score">0%</span> on the assessment.</p>
+                        <button class="certificate-btn" onclick="downloadCertificate()">Download Certificate</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="navigation">
+            <button class="nav-btn" id="prev-btn" onclick="navigate('prev')" disabled>Previous</button>
+            <button class="nav-btn" id="next-btn" onclick="navigate('next')">Next</button>
+        </div>
+    </div>
+
+    <script>
+        // SCORM API Implementation
+        let currentSection = 1;
+        let totalSections = 3;
+        let score = 0;
+        let progress = 0;
+        let scormInitialized = false;
+
+        // SCORM API Functions
+        function initializeSCORM() {
+            try {
+                // Try to find SCORM API
+                let api = findAPI(window);
+                if (api) {
+                    api.LMSInitialize("");
+                    scormInitialized = true;
+                    updateStatus("SCORM: Connected");
+                    console.log("✅ SCORM API initialized successfully");
+                } else {
+                    updateStatus("SCORM: Not found (Preview mode)");
+                    console.log("⚠️ SCORM API not found - running in preview mode");
+                }
+            } catch (error) {
+                updateStatus("SCORM: Error");
+                console.error("❌ SCORM initialization error:", error);
+            }
+        }
+
+        function findAPI(win) {
+            let findAPITries = 0;
+            while ((win.API == null) && (win.parent != null) && (win.parent != win)) {
+                findAPITries++;
+                if (findAPITries > 500) {
+                    console.error("Error finding SCORM API -- too deeply nested.");
+                    return null;
+                }
+                win = win.parent;
+            }
+            return win.API;
+        }
+
+        function updateStatus(message) {
+            document.getElementById('scorm-status').textContent = message;
+        }
+
+        function setSCORMData(element, value) {
+            if (scormInitialized) {
+                try {
+                    let api = findAPI(window);
+                    api.LMSSetValue(element, value);
+                    console.log(`✅ SCORM Set: ${element} = ${value}`);
+                } catch (error) {
+                    console.error(`❌ SCORM Set Error: ${element}`, error);
+                }
+            }
+        }
+
+        function getSCORMData(element) {
+            if (scormInitialized) {
+                try {
+                    let api = findAPI(window);
+                    return api.LMSGetValue(element);
+                } catch (error) {
+                    console.error(`❌ SCORM Get Error: ${element}`, error);
+                    return "";
+                }
+            }
+            return "";
+        }
+
+        // Initialize the module
+        function initModule() {
+            initializeSCORM();
+            updateProgress();
+            updateNavigation();
+            
+            // Load saved data from SCORM
+            let savedProgress = getSCORMData("cmi.progress_measure");
+            let savedScore = getSCORMData("cmi.score.raw");
+            
+            if (savedProgress) {
+                progress = parseFloat(savedProgress) * 100;
+                currentSection = Math.ceil(progress / 33.33);
+            }
+            
+            if (savedScore) {
+                score = parseInt(savedScore);
+            }
+            
+            showSection(currentSection);
+            updateProgress();
+        }
+
+        // Show demo content
+        function showDemo(content) {
+            document.getElementById('demo-result').innerHTML = '<p>' + content + '</p>';
+        }
+
+        // Update score based on answers
+        function updateScore() {
+            let correctAnswers = 0;
+            let totalQuestions = 3;
+
+            // Check answers
+            if (document.querySelector('input[name="q1"]:checked')?.value === 'a') correctAnswers++;
+            if (document.querySelector('input[name="q2"]:checked')?.value === 'b') correctAnswers++;
+            if (document.querySelector('input[name="q3"]:checked')?.value === 'b') correctAnswers++;
+
+            score = Math.round((correctAnswers / totalQuestions) * 100);
+            document.getElementById('score-display').textContent = 'Score: ' + score + '%';
+            
+            // Save to SCORM
+            setSCORMData("cmi.score.raw", score.toString());
+            setSCORMData("cmi.score.min", "0");
+            setSCORMData("cmi.score.max", "100");
+            
+            // Send to parent window if in iframe
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'scorm-score-update',
+                    score: score
+                }, '*');
+            }
+        }
+
+        // Navigate between sections
+        function navigate(direction) {
+            if (direction === 'next' && currentSection < totalSections) {
+                currentSection++;
+            } else if (direction === 'prev' && currentSection > 1) {
+                currentSection--;
+            }
+
+            showSection(currentSection);
+            updateProgress();
+            updateNavigation();
+        }
+
+        // Show specific section
+        function showSection(sectionNumber) {
+            // Hide all sections
+            for (let i = 1; i <= totalSections; i++) {
+                document.getElementById('section-' + i).style.display = 'none';
+            }
+            
+            // Show current section
+            document.getElementById('section-' + sectionNumber).style.display = 'block';
+
+            // Update final score if on completion section
+            if (sectionNumber === 3) {
+                document.getElementById('final-score').textContent = score + '%';
+                // Mark as completed in SCORM
+                setSCORMData("cmi.completion_status", "completed");
+                setSCORMData("cmi.success_status", score >= 70 ? "passed" : "failed");
+            }
+        }
+
+        // Update progress bar
+        function updateProgress() {
+            progress = Math.round((currentSection / totalSections) * 100);
+            document.getElementById('progress-fill').style.width = progress + '%';
+            
+            // Save to SCORM
+            setSCORMData("cmi.progress_measure", (progress / 100).toString());
+            
+            // Send progress to parent window
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'scorm-progress-update',
+                    progress: progress
+                }, '*');
+            }
+        }
+
+        // Update navigation buttons
+        function updateNavigation() {
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            
+            prevBtn.disabled = currentSection === 1;
+            
+            if (currentSection === totalSections) {
+                nextBtn.textContent = 'Finish Module';
+                nextBtn.onclick = function() {
+                    // Mark as completed
+                    setSCORMData("cmi.completion_status", "completed");
+                    setSCORMData("cmi.success_status", score >= 70 ? "passed" : "failed");
+                    
+                    // Send completion message to parent
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'scorm-finish',
+                            score: score,
+                            progress: progress
+                        }, '*');
+                    }
+                    
+                    // Commit to SCORM
+                    if (scormInitialized) {
+                        try {
+                            let api = findAPI(window);
+                            api.LMSCommit("");
+                            updateStatus("SCORM: Completed & Saved");
+                        } catch (error) {
+                            console.error("❌ SCORM commit error:", error);
+                        }
+                    }
+                };
+            } else {
+                nextBtn.textContent = 'Next';
+                nextBtn.onclick = function() { navigate('next'); };
+            }
+        }
+
+        // Download certificate
+        function downloadCertificate() {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'scorm-download-certificate',
+                    score: score
+                }, '*');
+            }
+        }
+
+        // Initialize when page loads
+        window.onload = function() {
+            initModule();
+        };
+
+        // Handle messages from parent window
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'scorm-navigate') {
+                navigate(event.data.direction);
+            }
+        });
+
+        // Cleanup on page unload
+        window.onbeforeunload = function() {
+            if (scormInitialized) {
+                try {
+                    let api = findAPI(window);
+                    api.LMSFinish("");
+                } catch (error) {
+                    console.error("❌ SCORM finish error:", error);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
