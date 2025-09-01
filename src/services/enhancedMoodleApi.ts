@@ -1,8 +1,15 @@
 import axios from 'axios';
 
 // Enhanced Moodle API Configuration for KodeIt LMS
-const API_BASE_URL = 'https://kodeit.legatoserver.com/webservice/rest/server.php';
-const API_TOKEN = '2eabaa23e0cf9a5442be25613c41abf5';
+const API_BASE_URL = import.meta.env.VITE_MOODLE_API_URL || 'https://kodeit.legatoserver.com/webservice/rest/server.php';
+const API_TOKEN = import.meta.env.VITE_MOODLE_TOKEN || '2eabaa23e0cf9a5442be25613c41abf5';
+
+// Fallback API URLs if primary server is down
+const FALLBACK_URLS = [
+  'https://kodeit.legatoserver.com/webservice/rest/server.php',
+  'https://backup-kodeit.legatoserver.com/webservice/rest/server.php',
+  // Add your backup server URLs here
+];
 
 // Type definitions
 interface MoodleUser {
@@ -63,6 +70,35 @@ interface MoodleAssignment {
   submissiontypes?: string[];
   gradingtypes?: string[];
 }
+
+// Function to test server connectivity
+const testServerConnectivity = async (url: string): Promise<boolean> => {
+  try {
+    const response = await axios.get(url, {
+      timeout: 5000,
+      params: {
+        wstoken: API_TOKEN,
+        moodlewsrestformat: 'json',
+        wsfunction: 'core_webservice_get_site_info'
+      }
+    });
+    return response.status === 200;
+  } catch (error) {
+    console.warn(`Server ${url} is not reachable:`, error.message);
+    return false;
+  }
+};
+
+// Function to get working API URL
+const getWorkingApiUrl = async (): Promise<string> => {
+  for (const url of FALLBACK_URLS) {
+    if (await testServerConnectivity(url)) {
+      console.log(`✅ Using API server: ${url}`);
+      return url;
+    }
+  }
+  throw new Error('No working API server found. Please check your server configuration.');
+};
 
 // Create enhanced axios instance for Moodle API
 const enhancedMoodleApi = axios.create({

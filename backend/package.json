@@ -1,25 +1,31 @@
 {
-  "name": "my-ai-buddy-backend",
+  "name": "kodeit-proxy-server",
   "version": "1.0.0",
-  "description": "Backend for My AI Buddy chatbot",
-  "main": "index.js",
-  "type": "module",
-  "engines": { "node": ">=18" },
+  "description": "Proxy server for KodeIt SCORM content to bypass X-Frame-Options",
+  "main": "proxy-server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node proxy-server.js",
+    "dev": "nodemon proxy-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "proxy",
+    "scorm",
+    "iframe",
+    "x-frame-options",
+    "kodeit"
+  ],
+  "author": "KodeIt Team",
+  "license": "MIT",
   "dependencies": {
-    "axios": "^1.11.0",
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "node-fetch": "^3.3.2",
-    "uuid": "^11.1.0",
-    "dotenv": "^16.4.5",
-    "express-rate-limit": "^7.2.0",
-    "helmet": "^7.1.0"
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
