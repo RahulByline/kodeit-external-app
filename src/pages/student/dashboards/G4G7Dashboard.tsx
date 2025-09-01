@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
+import {
   Building,
   Info,
   CheckCircle,
@@ -33,7 +33,8 @@ import {
   X,
   ExternalLink,
   Download,
-  BarChart3 as BarChart3Icon
+  BarChart3 as BarChart3Icon,
+  Lock
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import moodleService from '../../../services/moodleApi';
@@ -113,7 +114,7 @@ const mapActivityType = (moodleType: string): 'video' | 'quiz' | 'assignment' | 
 
 const getActivityStatus = (completion: any): 'completed' | 'in-progress' | 'not-started' => {
   if (!completion) return 'not-started';
-  
+
   if (completion.state === 1) return 'completed';
   if (completion.state === 0) return 'in-progress';
   return 'not-started';
@@ -121,7 +122,7 @@ const getActivityStatus = (completion: any): 'completed' | 'in-progress' | 'not-
 
 const getActivityProgress = (completion: any): number => {
   if (!completion) return 0;
-  
+
   if (completion.state === 1) return 100;
   if (completion.state === 0) return 50;
   return 0;
@@ -129,11 +130,11 @@ const getActivityProgress = (completion: any): number => {
 
 const isNewActivity = (dates: any[]): boolean => {
   if (!dates || dates.length === 0) return false;
-  
+
   // Check if any date is within the last 7 days
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  
+
   return dates.some((date: any) => {
     const activityDate = new Date(date.timestamp * 1000);
     return activityDate > oneWeekAgo;
@@ -142,14 +143,14 @@ const isNewActivity = (dates: any[]): boolean => {
 
 const getActivityDueDate = (dates: any[]): string | undefined => {
   if (!dates || dates.length === 0) return undefined;
-  
+
   // Find the due date (usually the last date in the array)
   const dueDate = dates.find((date: any) => date.label === 'Due date') || dates[dates.length - 1];
-  
+
   if (dueDate) {
     return new Date(dueDate.timestamp * 1000).toISOString().split('T')[0];
   }
-  
+
   return undefined;
 };
 
@@ -164,7 +165,7 @@ const getActivityImage = (activityType: string, courseImage?: string): string =>
     'scorm': '/card2.webp',
     'lti': '/card3.webp'
   };
-  
+
   return typeImages[activityType] || courseImage || '/card1.webp';
 };
 
@@ -269,12 +270,12 @@ const dashboardService = {
   async fetchStudentCourses(studentId: string): Promise<Course[]> {
     try {
       console.log('🎓 Fetching courses from Moodle API with real progress data for student:', studentId);
-      
+
       // Use the enhanced Moodle API that includes real progress data
       const moodleCourses = await moodleService.getUserCourses(studentId);
-      
+
       console.log('📚 Moodle courses with real progress data fetched:', moodleCourses);
-      
+
       // Transform Moodle course data to match our Course interface with real data
       return moodleCourses.map((course: any) => ({
         id: course.id,
@@ -312,20 +313,20 @@ const dashboardService = {
   async fetchStudentLessons(studentId: string): Promise<Lesson[]> {
     try {
       console.log('📚 Fetching lessons from Moodle API for student:', studentId);
-      
+
       // First get all user courses
       const userCourses = await moodleService.getUserCourses(studentId);
-      
+
       // Limit to first 3 courses to reduce API calls and improve performance
       const limitedCourses = userCourses.slice(0, 3);
       console.log(`🔍 Fetching activities for ${limitedCourses.length} courses (limited for performance)`);
-      
+
       // Fetch activities for limited courses in parallel
       const courseActivitiesPromises = limitedCourses.map(async (course) => {
         try {
           console.log(`🔍 Fetching activities for course: ${course.fullname}`);
           const courseActivities = await moodleService.getCourseActivities(course.id);
-          
+
           // Transform Moodle activities to lessons
           return courseActivities.map((activity: any) => ({
             id: activity.id.toString(),
@@ -346,16 +347,16 @@ const dashboardService = {
           return [];
         }
       });
-      
+
       // Wait for all course activities to be fetched in parallel
       const allCourseLessons = await Promise.all(courseActivitiesPromises);
-      
+
       // Flatten the results
       const allLessons = allCourseLessons.flat();
-      
+
       console.log(`✅ Fetched ${allLessons.length} lessons from Moodle API (optimized)`);
       return allLessons;
-      
+
     } catch (error) {
       console.error('Error fetching lessons from Moodle:', error);
       return [];
@@ -368,8 +369,8 @@ const dashboardService = {
       // Return mock activity data for better performance
       // This avoids additional API calls that slow down the dashboard
       return [
-    {
-      id: '1',
+        {
+          id: '1',
           title: 'HTML Structure Quiz',
           type: 'quiz',
           courseId: '1',
@@ -416,11 +417,11 @@ const dashboardService = {
     try {
       // For now, return mock exam data
       return [
-    {
-      id: '1',
+        {
+          id: '1',
           title: 'Web Development Fundamentals - Final Exam',
-      schedule: 'Tue, 26th Aug - 06:55pm - 08:35pm',
-      daysLeft: 4,
+          schedule: 'Tue, 26th Aug - 06:55pm - 08:35pm',
+          daysLeft: 4,
           isNew: true,
           courseTitle: 'Web Development Fundamentals'
         }
@@ -431,17 +432,17 @@ const dashboardService = {
     }
   },
 
-    // Fetch student's schedule (mock data for now)
+  // Fetch student's schedule (mock data for now)
   async fetchStudentSchedule(studentId: string): Promise<ScheduleEvent[]> {
     try {
       // Return default schedule
       return [
-    { date: '20', day: 'THU', hasActivity: true, isDisabled: false },
-    { date: '21', day: 'FRI', hasActivity: true, isDisabled: false },
-    { date: '22', day: 'SAT', hasActivity: true, isDisabled: false },
-    { date: '23', day: 'SUN', hasActivity: true, isDisabled: false },
-    { date: '24', day: 'MON', hasActivity: false, isDisabled: true },
-    { date: '25', day: 'TUE', hasActivity: true, isDisabled: false },
+        { date: '20', day: 'THU', hasActivity: true, isDisabled: false },
+        { date: '21', day: 'FRI', hasActivity: true, isDisabled: false },
+        { date: '22', day: 'SAT', hasActivity: true, isDisabled: false },
+        { date: '23', day: 'SUN', hasActivity: true, isDisabled: false },
+        { date: '24', day: 'MON', hasActivity: false, isDisabled: true },
+        { date: '25', day: 'TUE', hasActivity: true, isDisabled: false },
         { date: '26', day: 'WED', hasActivity: true, isDisabled: false }
       ];
     } catch (error) {
@@ -505,7 +506,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     }
     return [];
   });
-  
+
   const [lessons, setLessons] = useState<Lesson[]>(() => {
     const cached = localStorage.getItem('dashboard_lessons');
     if (cached) {
@@ -520,7 +521,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     }
     return [];
   });
-  
+
   const [activities, setActivities] = useState<Activity[]>(() => {
     const cached = localStorage.getItem('dashboard_activities');
     if (cached) {
@@ -535,7 +536,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     }
     return [];
   });
-  
+
   const [exams, setExams] = useState<Exam[]>([]);
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
   const [studentStats, setStudentStats] = useState<StudentStats>({
@@ -556,6 +557,23 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  // View mode state: 'card' | 'tree'
+  const [viewMode, setViewMode] = useState<'card' | 'tree'>(() => {
+    const cached = localStorage.getItem('g4g7_view_mode');
+    return cached === 'tree' ? 'tree' : 'card';
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('g4g7_view_mode', viewMode);
+    } catch { }
+  }, [viewMode]);
+
+  // Tree state: track expanded nodes
+  const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
+  const [expandedLessons, setExpandedLessons] = useState<Record<string, boolean>>({});
+  // Track activities for each lesson
+  const [lessonActivities, setLessonActivities] = useState<Record<string, Activity[]>>({});
+  const [loadingActivities, setLoadingActivities] = useState<Record<string, boolean>>({});
 
   // Memoized top navigation items to prevent re-creation
   const topNavItems = useMemo(() => [
@@ -580,34 +598,86 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   // Handle course click to show lessons
   const handleCourseClick = useCallback((course: Course) => {
     console.log('🎓 Course clicked:', course.title);
-    
+
     // Navigate to the course lessons page
-    navigate(`/dashboard/student/course-lessons/${course.id}`, { 
-      state: { 
+    navigate(`/dashboard/student/course-lessons/${course.id}`, {
+      state: {
         selectedCourse: course
       }
     });
   }, [navigate]);
 
-  // Handle lesson click to open lesson content
+  // Expand/collapse handlers for Tree View
+  const toggleCourseExpanded = useCallback((courseId: string) => {
+    setExpandedCourses(prev => ({ ...prev, [courseId]: !prev[courseId] }));
+  }, []);
+
+  const toggleLessonExpanded = useCallback(async (lessonId: string) => {
+    const isCurrentlyOpen = !!expandedLessons[lessonId];
+
+    if (!isCurrentlyOpen) {
+      // Opening lesson - fetch activities if not already loaded
+      if (!lessonActivities[lessonId]) {
+        setLoadingActivities(prev => ({ ...prev, [lessonId]: true }));
+        try {
+          // Find the lesson to get courseId
+          const lesson = lessons.find(l => l.id === lessonId);
+          if (lesson) {
+            // Fetch activities for this specific lesson from Moodle API
+            const lessonActivitiesData = await moodleService.getCourseActivities(lesson.courseId);
+
+            // Filter activities that belong to this lesson (you may need to adjust this logic based on your API structure)
+            const filteredActivities: Activity[] = lessonActivitiesData
+              .filter((activity: any) => {
+                // This is a placeholder - you'll need to adjust based on how your API links activities to lessons
+                // For now, we'll show all activities for the course
+                return true;
+              })
+              .map((activity: any) => ({
+                id: activity.id.toString(),
+                title: activity.name,
+                type: mapActivityType(activity.type) === 'video' ? 'quiz' :
+                  mapActivityType(activity.type) === 'practice' ? 'discussion' :
+                    mapActivityType(activity.type) === 'assignment' ? 'assignment' : 'quiz',
+                courseId: lesson.courseId,
+                courseTitle: lesson.courseTitle,
+                dueDate: getActivityDueDate(activity.dates) || 'No due date',
+                status: getActivityStatus(activity.completion) === 'completed' ? 'submitted' :
+                  getActivityStatus(activity.completion) === 'in-progress' ? 'pending' : 'pending',
+                points: Math.floor(Math.random() * 100) + 25, // Mock points for now
+                difficulty: Math.random() > 0.7 ? 'hard' : Math.random() > 0.4 ? 'medium' : 'easy',
+                timeRemaining: 'Due soon'
+              }));
+
+            setLessonActivities(prev => ({ ...prev, [lessonId]: filteredActivities }));
+          }
+        } catch (error) {
+          console.error('Error fetching lesson activities:', error);
+          setLessonActivities(prev => ({ ...prev, [lessonId]: [] }));
+        } finally {
+          setLoadingActivities(prev => ({ ...prev, [lessonId]: false }));
+        }
+      }
+    }
+
+    setExpandedLessons(prev => ({ ...prev, [lessonId]: !prev[lessonId] }));
+  }, [expandedLessons, lessonActivities, lessons]);
+
+  // Handle lesson click to navigate to activities page
   const handleLessonClick = useCallback((lesson: Lesson) => {
     console.log('📚 Lesson clicked:', lesson.title);
-    
-    // Store selected lesson in localStorage
-    localStorage.setItem('selectedLesson', JSON.stringify(lesson));
-    
-    // Open modal with lesson details
-    setSelectedLesson(lesson);
-    setIsLessonModalOpen(true);
-  }, []);
+
+    // Navigate to the lesson activities journey page
+    navigate(`/dashboard/student/lesson-activities-journey/${lesson.courseId}/${lesson.id}`);
+  }, [navigate]);
 
   // Handle activity click to open activity
   const handleActivityClick = useCallback((activity: Activity) => {
     console.log('🎯 Activity clicked:', activity.title);
-    
+
     // Store selected activity in localStorage
     localStorage.setItem('selectedActivity', JSON.stringify(activity));
-    
+
     // Open modal with activity details
     setSelectedActivity(activity);
     setIsActivityModalOpen(true);
@@ -661,10 +731,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             const { data: coursesData, timestamp: coursesTime } = JSON.parse(cachedCourses);
             const { data: lessonsData, timestamp: lessonsTime } = JSON.parse(cachedLessons);
             const { data: activitiesData, timestamp: activitiesTime } = JSON.parse(cachedActivities);
-            
+
             // Check if cache is still valid (10 minutes)
             const cacheValid = Date.now() - Math.max(coursesTime, lessonsTime, activitiesTime) < 10 * 60 * 1000;
-            
+
             if (cacheValid) {
               console.log('📦 Using cached dashboard data');
               setLoadingProgress(100);
@@ -673,7 +743,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               setActivities(activitiesData);
               setHasInitialized(true);
               setIsLoading(false);
-              
+
               // Fetch fresh data in background
               fetchFreshDataInBackground();
               return;
@@ -686,15 +756,15 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         // Fetch essential data first (courses only) with timeout
         console.log('🚀 Fetching essential data first...');
         setLoadingProgress(20);
-        
+
         // Add timeout to prevent hanging
         const coursesData = await Promise.race([
           dashboardService.fetchStudentCourses(currentUser.id.toString()),
-          new Promise<never>((_, reject) => 
+          new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Courses fetch timeout')), 10000)
           )
         ]);
-        
+
         // Show courses immediately
         setLoadingProgress(50);
         setCourses(coursesData);
@@ -818,31 +888,31 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     return lessons.filter(l => l.status === 'completed').length;
   }, [courses, lessons]);
   const pendingActivitiesCount = useMemo(() => activities.filter(a => a.status === 'pending').length, [activities]);
-  
+
   // Additional real data stats
   const totalProgress = useMemo(() => {
     if (courses.length === 0) return 0;
     const totalProgress = courses.reduce((sum, course) => sum + (course.progress || 0), 0);
     return Math.round(totalProgress / courses.length);
   }, [courses]);
-  
+
   const totalTimeSpent = useMemo(() => {
     return courses.reduce((sum, course) => sum + (course.timeSpent || 0), 0);
   }, [courses]);
-  
+
   const totalCertificates = useMemo(() => {
     return courses.reduce((sum, course) => sum + (course.certificates || 0), 0);
   }, [courses]);
 
   if (isLoading && !hasInitialized) {
-  return (
+    return (
       <div className="bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100 min-h-screen">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600 mb-2">Loading your dashboard...</p>
             <div className="w-64 bg-gray-200 rounded-full h-2 mx-auto">
-              <div 
+              <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${loadingProgress}%` }}
               ></div>
@@ -862,7 +932,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             <div className="text-red-500 text-6xl mb-4">⚠️</div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
             <p className="text-gray-600 mb-4">{error}</p>
-            <button 
+            <button
               onClick={() => window.location.reload()}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
@@ -885,11 +955,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               <button
                 key={item.name}
                 onClick={() => handleTopNavClick(item.path)}
-                className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
-                  isActive
+                className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${isActive
                     ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md'
-                }`}
+                  }`}
               >
                 <item.icon className="w-5 h-5" />
                 <span>{item.name}</span>
@@ -920,6 +989,25 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           </div>
         </div>
 
+        {/* View Mode Toggle (Card / Tree) - specific to G4G7 only */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-3 flex items-center justify-between">
+          <div className="text-sm font-medium text-gray-700">View</div>
+          <div className="flex items-center bg-gray-100 rounded-xl p-1">
+            <button
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow' : 'text-gray-700 hover:text-gray-900'}`}
+              onClick={() => setViewMode('card')}
+            >
+              Card View
+            </button>
+            <button
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'tree' ? 'bg-blue-600 text-white shadow' : 'text-gray-700 hover:text-gray-900'}`}
+              onClick={() => setViewMode('tree')}
+            >
+              Tree View
+            </button>
+          </div>
+        </div>
+
         {/* Summary Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -938,10 +1026,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-5 h-5 text-green-600" />
               </div>
-                             <div>
-                 <div className="text-2xl font-bold text-gray-900">{completedLessonsCount}</div>
-                 <div className="text-sm text-gray-600">Lessons Done</div>
-               </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{completedLessonsCount}</div>
+                <div className="text-sm text-gray-600">Lessons Done</div>
+              </div>
             </div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -949,10 +1037,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
                 <Award className="w-5 h-5 text-yellow-600" />
               </div>
-                             <div>
-                 <div className="text-2xl font-bold text-gray-900">{totalProgress}%</div>
-                 <div className="text-sm text-gray-600">Avg Progress</div>
-               </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">{totalProgress}%</div>
+                <div className="text-sm text-gray-600">Avg Progress</div>
+              </div>
             </div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -968,118 +1056,219 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           </div>
         </div>
 
+
+
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Column - Main Content */}
           <div className="lg:col-span-3 space-y-6">
-            {/* My Courses Section */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">My Courses</h2>
-                <button className="text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
-                  <span>View All</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-              {courses.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                  <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Courses Enrolled</h3>
-                  <p className="text-gray-600 mb-4">You haven't enrolled in any courses yet.</p>
-                  <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
-                    Browse Courses
+            {/* My Courses Section - conditional layouts */}
+            {viewMode === 'card' ? (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-900">My Courses</h2>
+                  <button className="text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
+                    <span>View All</span>
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
-                              ) : (
+                {courses.length === 0 ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                    <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Courses Enrolled</h3>
+                    <p className="text-gray-600 mb-4">You haven't enrolled in any courses yet.</p>
+                    <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                      Browse Courses
+                    </button>
+                  </div>
+                ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                   {courses.map((course) => (
-                     <div 
-                       key={course.id} 
-                       className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:scale-105 transition-all duration-300 cursor-pointer"
-                       onClick={() => handleCourseClick(course)}
-                     >
-                      <div className="relative">
-                        <img 
-                          src={course.image} 
-                          alt={course.title}
-                          className="w-full h-32 object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop';
-                          }}
-                        />
-                        <div className="absolute top-3 right-3">
-                          <span className={`${getDifficultyBadgeColor(course.difficulty)} text-white px-2 py-1 rounded-full text-xs font-medium`}>
-                            {course.difficulty}
-                          </span>
+                    {courses.map((course) => (
+                      <div
+                        key={course.id}
+                        className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:scale-105 transition-all duration-300 cursor-pointer"
+                        onClick={() => handleCourseClick(course)}
+                      >
+                        <div className="relative">
+                          <img
+                            src={course.image}
+                            alt={course.title}
+                            className="w-full h-32 object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop';
+                            }}
+                          />
+                          <div className="absolute top-3 right-3">
+                            <span className={`${getDifficultyBadgeColor(course.difficulty)} text-white px-2 py-1 rounded-full text-xs font-medium`}>
+                              {course.difficulty}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="p-4">
+                          <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{course.title}</h3>
+                          <p className="text-gray-600 text-sm mb-3 line-clamp-2">{course.description}</p>
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between text-sm mb-1">
+                              <span className="text-gray-600">Progress</span>
+                              <span className="font-medium">{course.progress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${course.progress}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-1 text-sm text-gray-500">
+                              <BookOpen className="w-3 h-3" />
+                              <span>{course.completedLessons}/{course.totalLessons} lessons</span>
+                            </div>
+                            <div className="flex items-center space-x-1 text-sm text-gray-500">
+                              <Clock className="w-3 h-3" />
+                              <span>{course.duration}</span>
+                            </div>
+                          </div>
+                          {course.completionStatus && (
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${course.completionStatus === 'completed' ? 'bg-green-100 text-green-600' :
+                                  course.completionStatus === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                    course.completionStatus === 'almost_complete' ? 'bg-yellow-100 text-yellow-600' :
+                                      'bg-gray-100 text-gray-600'
+                                }`}>
+                                {course.completionStatus.replace('_', ' ')}
+                              </span>
+                              {course.averageGrade > 0 && (
+                                <span className="text-xs text-gray-500">
+                                  Grade: {course.averageGrade}%
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {course.enrollmentCount > 0 && (
+                            <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                              <span>{course.enrollmentCount} students enrolled</span>
+                              {course.certificates > 0 && (
+                                <span>{course.certificates} certificates</span>
+                              )}
+                            </div>
+                          )}
+                          <button
+                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center justify-center space-x-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCourseClick(course);
+                            }}
+                          >
+                            <Play className="w-4 h-4" />
+                            <span>Continue Learning</span>
+                          </button>
                         </div>
                       </div>
-                      <div className="p-4">
-                        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{course.title}</h3>
-                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{course.description}</p>
-                                                 <div className="mb-3">
-                           <div className="flex items-center justify-between text-sm mb-1">
-                             <span className="text-gray-600">Progress</span>
-                             <span className="font-medium">{course.progress}%</span>
-                           </div>
-                           <div className="w-full bg-gray-200 rounded-full h-2">
-                             <div 
-                               className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
-                               style={{ width: `${course.progress}%` }}
-                             ></div>
-                           </div>
-                         </div>
-                         <div className="flex items-center justify-between mb-3">
-                           <div className="flex items-center space-x-1 text-sm text-gray-500">
-                             <BookOpen className="w-3 h-3" />
-                             <span>{course.completedLessons}/{course.totalLessons} lessons</span>
-                           </div>
-                           <div className="flex items-center space-x-1 text-sm text-gray-500">
-                             <Clock className="w-3 h-3" />
-                             <span>{course.duration}</span>
-                           </div>
-                         </div>
-                         {/* Real data indicators */}
-                         {course.completionStatus && (
-                           <div className="flex items-center justify-between mb-2">
-                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                               course.completionStatus === 'completed' ? 'bg-green-100 text-green-600' :
-                               course.completionStatus === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                               course.completionStatus === 'almost_complete' ? 'bg-yellow-100 text-yellow-600' :
-                               'bg-gray-100 text-gray-600'
-                             }`}>
-                               {course.completionStatus.replace('_', ' ')}
-                             </span>
-                             {course.averageGrade > 0 && (
-                               <span className="text-xs text-gray-500">
-                                 Grade: {course.averageGrade}%
-                               </span>
-                             )}
-                           </div>
-                         )}
-                         {course.enrollmentCount > 0 && (
-                           <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                             <span>{course.enrollmentCount} students enrolled</span>
-                             {course.certificates > 0 && (
-                               <span>{course.certificates} certificates</span>
-                             )}
-                           </div>
-                         )}
-                                                 <button 
-                           className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center justify-center space-x-2"
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             handleCourseClick(course);
-                           }}
-                         >
-                           <Play className="w-4 h-4" />
-                           <span>Continue Learning</span>
-                         </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Tree View
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-900">My Courses (Tree)</h2>
                 </div>
-              )}
-            </div>
+                {courses.length === 0 ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                    <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Courses Enrolled</h3>
+                    <p className="text-gray-600 mb-4">You haven't enrolled in any courses yet.</p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                    <ul className="divide-y divide-gray-100">
+                      {courses.map(course => {
+                        const isExpanded = !!expandedCourses[course.id];
+                        const courseLessons = lessons.filter(l => l.courseId === course.id);
+                        return (
+                          <li key={course.id} className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <button
+                                  className={`w-7 h-7 rounded-md flex items-center justify-center bg-gray-100 ${isExpanded ? 'text-blue-600' : 'text-gray-600'}`}
+                                  onClick={() => toggleCourseExpanded(course.id)}
+                                  aria-label={isExpanded ? 'Collapse course' : 'Expand course'}
+                                >
+                                  <ChevronRight className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                </button>
+                                {/* <img src={course.image} alt={course.title} className="w-2 h-2 rounded-md object-cover" /> */}
+                                <button className="text-left" onClick={() => handleCourseClick(course)}>
+                                  <div className="font-semibold text-gray-900">{course.title}</div>
+                                  <div className="text-xs text-gray-500">{course.completedLessons}/{course.totalLessons} lessons • {course.progress}%</div>
+                                </button>
+                              </div>
+                            </div>
+                            {isExpanded && (
+                              <div className="mt-3 ml-10">
+                                {courseLessons.length === 0 ? (
+                                  <div className="text-sm text-gray-500">No lessons found.</div>
+                                ) : (
+                                  <ul className="space-y-2">
+                                    {courseLessons.map(lesson => {
+                                      const isLessonOpen = !!expandedLessons[lesson.id];
+                                      const currentLessonActivities = lessonActivities[lesson.id] || [];
+                                      const isLoading = loadingActivities[lesson.id];
+                                      return (
+                                        <li key={lesson.id}>
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-3">
+                                              <button
+                                                className={`w-6 h-6 rounded-md flex items-center justify-center bg-gray-100 ${isLessonOpen ? 'text-blue-600' : 'text-gray-600'}`}
+                                                onClick={() => toggleLessonExpanded(lesson.id)}
+                                                aria-label={isLessonOpen ? 'Collapse lesson' : 'Expand lesson'}
+                                              >
+                                                <ChevronRight className={`w-4 h-4 transform transition-transform ${isLessonOpen ? 'rotate-90' : ''}`} />
+                                              </button>
+                                              <button className="text-left" onClick={() => handleLessonClick(lesson)}>
+                                                <div className="font-medium text-gray-900">{lesson.title}</div>
+                                                <div className="text-xs text-gray-500">{lesson.progress}% • {lesson.duration}</div>
+                                              </button>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] ${getStatusColor(lesson.status)}`}>{lesson.status.replace('-', ' ')}</span>
+                                          </div>
+                                          {isLessonOpen && (
+                                            <ul className="mt-2 ml-8 space-y-1">
+                                              {currentLessonActivities.length === 0 ? (
+                                                <li className="text-xs text-gray-500">No activities</li>
+                                              ) : (
+                                                currentLessonActivities.map(activity => (
+                                                  <li key={activity.id} className="flex items-center justify-between">
+                                                    <button className="text-left text-sm text-gray-700 hover:text-gray-900" onClick={() => handleActivityClick(activity)}>
+                                                      {activity.title}
+                                                    </button>
+                                                    <div className="flex items-center space-x-2 text-xs text-gray-500">
+                                                      <span>{activity.type}</span>
+                                                      <span>•</span>
+                                                      <span>{activity.status}</span>
+                                                    </div>
+                                                  </li>
+                                                ))
+                                              )}
+                                            </ul>
+                                          )}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Current Lessons Section */}
             <div>
@@ -1096,17 +1285,17 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">No Lessons Available</h3>
                   <p className="text-gray-600">Start a course to see your lessons here.</p>
                 </div>
-                              ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                   {lessons.slice(0, 6).map((lesson) => (
-                     <div 
-                       key={lesson.id} 
-                       className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:scale-105 transition-all duration-300 cursor-pointer"
-                       onClick={() => handleLessonClick(lesson)}
-                     >
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {lessons.slice(0, 6).map((lesson) => (
+                    <div
+                      key={lesson.id}
+                      className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:scale-105 transition-all duration-300 cursor-pointer"
+                      onClick={() => handleLessonClick(lesson)}
+                    >
                       <div className="relative">
-                        <img 
-                          src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+                        <img
+                          src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'}
                           alt={lesson.title}
                           className="w-full h-32 object-cover"
                         />
@@ -1132,21 +1321,21 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         )}
                         <div className="mb-3">
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
+                            <div
                               className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                               style={{ width: `${lesson.progress}%` }}
                             ></div>
                           </div>
                         </div>
-                                                 <button 
-                           className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             handleLessonClick(lesson);
-                           }}
-                         >
-                           {lesson.status === 'completed' ? 'Review Lesson' : lesson.status === 'in-progress' ? 'Continue Lesson' : 'Start Lesson'}
-                         </button>
+                        <button
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLessonClick(lesson);
+                          }}
+                        >
+                          {lesson.status === 'completed' ? 'Review Lesson' : lesson.status === 'in-progress' ? 'Continue Lesson' : 'Start Lesson'}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -1170,25 +1359,24 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   <p className="text-gray-600">You're all caught up! No pending activities.</p>
                 </div>
               ) : (
-                                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                   <div className="space-y-4">
-                     {activities.slice(0, 3).map((activity) => (
-                       <div 
-                         key={activity.id} 
-                         className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 cursor-pointer"
-                         onClick={() => handleActivityClick(activity)}
-                       >
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="space-y-4">
+                    {activities.slice(0, 3).map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 cursor-pointer"
+                        onClick={() => handleActivityClick(activity)}
+                      >
                         <div className="flex items-center space-x-4">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            activity.type === 'quiz' ? 'bg-purple-100' :
-                            activity.type === 'assignment' ? 'bg-orange-100' :
-                            activity.type === 'project' ? 'bg-green-100' :
-                            'bg-blue-100'
-                          }`}>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activity.type === 'quiz' ? 'bg-purple-100' :
+                              activity.type === 'assignment' ? 'bg-orange-100' :
+                                activity.type === 'project' ? 'bg-green-100' :
+                                  'bg-blue-100'
+                            }`}>
                             {activity.type === 'quiz' ? <FileText className="w-5 h-5 text-purple-600" /> :
-                             activity.type === 'assignment' ? <Code className="w-5 h-5 text-orange-600" /> :
-                             activity.type === 'project' ? <Target className="w-5 h-5 text-green-600" /> :
-                             <Users className="w-5 h-5 text-blue-600" />}
+                              activity.type === 'assignment' ? <Code className="w-5 h-5 text-orange-600" /> :
+                                activity.type === 'project' ? <Target className="w-5 h-5 text-green-600" /> :
+                                  <Users className="w-5 h-5 text-blue-600" />}
                           </div>
                           <div className="flex-1">
                             <h3 className="font-medium text-gray-900 mb-1">{activity.title}</h3>
@@ -1204,18 +1392,18 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                             </div>
                           </div>
                         </div>
-                                                 <div className="text-right">
-                           <div className="text-sm text-gray-500 mb-1">Due in {activity.timeRemaining}</div>
-                           <button 
-                             className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               handleActivityClick(activity);
-                             }}
-                           >
-                             {activity.status === 'submitted' ? 'View' : 'Start'}
-                           </button>
-                         </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500 mb-1">Due in {activity.timeRemaining}</div>
+                          <button
+                            className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleActivityClick(activity);
+                            }}
+                          >
+                            {activity.status === 'submitted' ? 'View' : 'Start'}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1233,36 +1421,36 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   <p className="text-gray-600">You don't have any exams scheduled at the moment.</p>
                 </div>
               ) : (
-              <div className="space-y-4">
+                <div className="space-y-4">
                   {exams.map((exam, index) => (
-                  <div key={exam.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-3">
-                          {exam.isNew && (
-                            <button className="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-xs font-medium">
-                              New Attempt
-                            </button>
-                          )}
-                          <Building className="w-5 h-5 text-purple-500" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{exam.title}</h3>
+                    <div key={exam.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-3">
+                            {exam.isNew && (
+                              <button className="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-xs font-medium">
+                                New Attempt
+                              </button>
+                            )}
+                            <Building className="w-5 h-5 text-purple-500" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{exam.title}</h3>
                           <p className="text-gray-600 text-sm mb-1">{exam.courseTitle}</p>
-                        <p className="text-gray-600 text-sm mb-3">{exam.schedule}</p>
-                      </div>
-                      <div className="flex flex-col items-end space-y-3">
-                        <button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-6 py-2 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl">
-                          Attempt →
-                        </button>
-                        <span className="text-green-600 text-sm font-medium">{exam.daysLeft} Day to go!</span>
+                          <p className="text-gray-600 text-sm mb-3">{exam.schedule}</p>
+                        </div>
+                        <div className="flex flex-col items-end space-y-3">
+                          <button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-6 py-2 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl">
+                            Attempt →
+                          </button>
+                          <span className="text-green-600 text-sm font-medium">{exam.daysLeft} Day to go!</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
                 </div>
               )}
-              </div>
             </div>
+          </div>
 
 
           {/* Right Column - Sidebar */}
@@ -1273,10 +1461,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
                   <User className="w-6 h-6 text-white" />
                 </div>
-            <div>
+                <div>
                   <h3 className="font-semibold text-gray-900">{currentUser?.fullname || "Student"}</h3>
                   <p className="text-blue-600 text-sm">Daily Rank →</p>
-              </div>
+                </div>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1290,7 +1478,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
 
             {/* Quick Stats */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Quick Stats</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1314,7 +1502,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Activity className="w-4 h-4 text-purple-600" />
+                      <Activity className="w-4 h-4 text-purple-600" />
                     </div>
                     <span className="text-sm text-gray-600">Pending Activities</span>
                   </div>
@@ -1353,33 +1541,32 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 <Info className="w-4 h-4 text-purple-500" />
               </div>
               <p className="text-gray-600 text-sm mb-4">Today's Schedule</p>
-                
-                {/* Calendar Strip */}
-                <div className="relative mb-4">
+
+              {/* Calendar Strip */}
+              <div className="relative mb-4">
                 <div className="flex space-x-2 px-4 overflow-x-auto">
-                    {scheduleEvents.slice(0, 7).map((event, index) => (
-                      <div key={index} className="flex flex-col items-center min-w-[40px]">
-                        <span className="text-xs text-gray-500 mb-1">{event.day}</span>
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 ${
-                          event.isDisabled 
-                            ? 'bg-gray-100 text-gray-400' 
-                            : event.hasActivity 
-                              ? 'bg-green-100 text-green-600 hover:bg-green-200' 
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  {scheduleEvents.slice(0, 7).map((event, index) => (
+                    <div key={index} className="flex flex-col items-center min-w-[40px]">
+                      <span className="text-xs text-gray-500 mb-1">{event.day}</span>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 ${event.isDisabled
+                          ? 'bg-gray-100 text-gray-400'
+                          : event.hasActivity
+                            ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}>
-                          {event.date}
-                        </div>
-                        {event.hasActivity && !event.isDisabled && (
-                          <CheckCircle className="w-3 h-3 text-green-500 mt-1" />
-                        )}
+                        {event.date}
                       </div>
-                    ))}
-                </div>
-              </div>
-                  </div>
+                      {event.hasActivity && !event.isDisabled && (
+                        <CheckCircle className="w-3 h-3 text-green-500 mt-1" />
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
 
       {/* Lesson Details Modal */}
       {isLessonModalOpen && selectedLesson && (
@@ -1387,8 +1574,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="relative">
-              <img 
-                src={selectedLesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+              <img
+                src={selectedLesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'}
                 alt={selectedLesson.title}
                 className="w-full h-48 object-cover rounded-t-3xl"
               />
@@ -1408,22 +1595,22 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
             {/* Modal Content */}
             <div className="p-8">
-                <div className="mb-6">
+              <div className="mb-6">
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedLesson.title}</h2>
                 <p className="text-gray-600 text-lg">{selectedLesson.courseTitle}</p>
-                </div>
-                
+              </div>
+
               {/* Lesson Stats */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                       <Clock className="w-5 h-5 text-blue-600" />
-                            </div>
+                    </div>
                     <div>
                       <p className="text-sm text-gray-600">Duration</p>
                       <p className="font-semibold text-gray-900">{selectedLesson.duration}</p>
-                          </div>
+                    </div>
                   </div>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4">
@@ -1446,7 +1633,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   <span className="text-sm text-gray-500">{selectedLesson.progress}% Complete</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div 
+                  <div
                     className="bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full transition-all duration-300 shadow-sm"
                     style={{ width: `${selectedLesson.progress}%` }}
                   ></div>
@@ -1481,16 +1668,16 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                     <span>Start Lesson</span>
                   </button>
                 )}
-                <button 
+                <button
                   onClick={closeLessonModal}
                   className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-300"
                 >
                   Close
                 </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Activity Details Modal */}
@@ -1501,7 +1688,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             <div className="relative">
               <div className="w-full h-48 bg-gradient-to-br from-orange-500 to-red-500 rounded-t-3xl flex items-center justify-center">
                 <Activity className="w-16 h-16 text-white" />
-                </div>
+              </div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent rounded-t-3xl"></div>
               <button
                 onClick={closeActivityModal}
@@ -1521,7 +1708,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               <div className="mb-6">
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedActivity.title}</h2>
                 <p className="text-gray-600 text-lg">{selectedActivity.courseTitle}</p>
-          </div>
+              </div>
 
               {/* Activity Stats */}
               <div className="grid grid-cols-2 gap-4 mb-6">
@@ -1529,23 +1716,23 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                       <Clock className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
+                    </div>
+                    <div>
                       <p className="text-sm text-gray-600">Time Remaining</p>
                       <p className="font-semibold text-gray-900">{selectedActivity.timeRemaining}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
                       <Award className="w-5 h-5 text-yellow-600" />
-              </div>
+                    </div>
                     <div>
                       <p className="text-sm text-gray-600">Points</p>
                       <p className="font-semibold text-gray-900">{selectedActivity.points}</p>
-                </div>
-                </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1554,18 +1741,18 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-700">Type</span>
                   <span className="text-sm text-gray-900 capitalize">{selectedActivity.type}</span>
-            </div>
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-700">Difficulty</span>
                   <span className={`${getDifficultyColor(selectedActivity.difficulty)} px-2 py-1 rounded-full text-xs font-medium`}>
                     {selectedActivity.difficulty}
                   </span>
-          </div>
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-700">Due Date</span>
                   <span className="text-sm text-gray-900">{selectedActivity.dueDate}</span>
-        </div>
-      </div>
+                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex space-x-4">
@@ -1585,7 +1772,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                     <span>Start Activity</span>
                   </button>
                 )}
-                <button 
+                <button
                   onClick={closeActivityModal}
                   className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-300"
                 >

@@ -464,8 +464,8 @@ const CourseLessons: React.FC = () => {
   };
 
   const handleLessonClick = (lesson: Lesson) => {
-    // Navigate to lesson activities page
-    navigate(`/dashboard/student/lesson-activities/${lesson.courseId}/${lesson.id}`, { 
+    // Navigate to lesson activities journey page
+    navigate(`/dashboard/student/lesson-activities-journey/${lesson.courseId}/${lesson.id}`, { 
       state: { 
         selectedLesson: lesson
       }
