@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import {  useLocation } from 'react-router-dom';
 import { 
   BookOpen, 
   Clock, 
@@ -51,7 +51,7 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import moodleService from '../../services/moodleApi';
-import CourseDetail from './CourseDetail';
+// import CourseDetail from './CourseDetail';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -60,6 +60,7 @@ import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getDashboardTypeByGrade, extractGradeFromCohortName } from '../../utils/gradeCohortMapping';
 
 interface Course {
   id: string;
@@ -359,12 +360,56 @@ const Courses: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Top navigation items
+  // Get student grade and dashboard type
+  const [studentGrade, setStudentGrade] = useState<number | null>(null);
+  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G8_PLUS');
+
+  // Get student grade from localStorage or determine from cohort
+  useEffect(() => {
+    if (currentUser?.id) {
+      // Try to get grade from localStorage first
+      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
+      if (storedGrade) {
+        const grade = parseInt(storedGrade);
+        setStudentGrade(grade);
+        setDashboardType(getDashboardTypeByGrade(grade));
+        console.log('🎓 Courses: Using stored grade:', grade, 'Dashboard type:', getDashboardTypeByGrade(grade));
+      } else {
+        // If no stored grade, try to get from cohort
+        const fetchStudentGrade = async () => {
+          try {
+            const userCohorts = await moodleService.getCohorts();
+            if (userCohorts && userCohorts.length > 0) {
+              const cohort = userCohorts[0]; // Use first cohort
+              const extractedGrade = extractGradeFromCohortName(cohort.name);
+              if (extractedGrade) {
+                setStudentGrade(extractedGrade);
+                setDashboardType(getDashboardTypeByGrade(extractedGrade));
+                localStorage.setItem(`student_grade_${currentUser.id}`, extractedGrade.toString());
+                console.log('🎓 Courses: Extracted grade from cohort:', extractedGrade, 'Dashboard type:', getDashboardTypeByGrade(extractedGrade));
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error fetching student grade:', error);
+            // Default to G8+ if error
+            setStudentGrade(8);
+            setDashboardType('G8_PLUS');
+          }
+        };
+        fetchStudentGrade();
+      }
+    }
+  }, [currentUser?.id]);
+
+  // Top navigation items - conditionally show based on dashboard type
   const topNavItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
     { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
-    { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' },
-    { name: 'Activities', icon: Activity, path: '/dashboard/student/activities' }
+    // Only show Current Lessons and Activities for G4G7 students
+    ...(dashboardType === 'G4_G7' ? [
+      { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' },
+      { name: 'Activities', icon: Activity, path: '/dashboard/student/activities' }
+    ] : [])
   ];
 
   const isActivePath = (path: string) => {
@@ -508,11 +553,14 @@ const Courses: React.FC = () => {
     }
   };
 
-  const handleCourseClick = async (course: Course) => {
-    // Open the new detailed course view
-    setSelectedCourseForDetail(course);
-    setShowCourseDetail(true);
-  };
+      const handleCourseClick = async (course: Course) => {
+      // Navigate to course lessons page with course data
+      navigate(`/dashboard/student/course-lessons/${course.id}`, { 
+        state: { 
+          selectedCourse: course
+        }
+      });
+    };
 
   const handleCourseDetailsClick = async (course: Course) => {
     setSelectedCourse(course);
@@ -719,145 +767,165 @@ const Courses: React.FC = () => {
   }
 
   if (showCourseDetail && selectedCourseForDetail) {
-    return (
-      <CourseDetail 
-        courseId={selectedCourseForDetail.id} 
-        onBack={() => setShowCourseDetail(false)} 
-      />
-    );
+    // return (
+    //   // <CourseDetail 
+    //   //   courseId={selectedCourseForDetail.id} 
+    //   //   onBack={() => setShowCourseDetail(false)} 
+    //   // />
+    // );
   }
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      {/* Top Navigation Bar */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex space-x-1 p-1">
-          {topNavItems.map((item) => {
-            const isActive = isActivePath(item.path);
-            return (
-              <button
-                key={item.name}
-                onClick={() => handleTopNavClick(item.path)}
-                className={`flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <item.icon className="w-4 h-4" />
-                <span>{item.name}</span>
-              </button>
-            );
-          })}
+      <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
+        {/* Top Navigation Bar */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-8">
+          <div className="flex space-x-2 p-2">
+            {topNavItems.map((item) => {
+              const isActive = isActivePath(item.path);
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => handleTopNavClick(item.path)}
+                  className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md'
+                  }`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.name}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Courses</h1>
-            <p className="text-gray-600 mt-1">Real-time course data from IOMAD Moodle API - {courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
+        {/* Rest of the component content */}
+        <div className=" mx-auto space-y-8">
+                    {/* Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">My Courses</h1>
+              <p className="text-gray-600 text-lg">
+                Real-time course data from IOMAD Moodle API
+              </p>
+              <p className="text-gray-600 mt-2">{courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/dashboard/student')}
+                className="flex items-center space-x-2 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl hover:bg-white hover:shadow-lg transition-all duration-300 border border-white/20"
+              >
+                <LayoutDashboard className="w-5 h-5" />
+                <span className="font-semibold">Back to Dashboard</span>
+              </button>
+              <button
+                onClick={refreshData}
+                disabled={refreshing}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-300 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <span className="font-semibold">Refresh</span>
+              </button>
+              <button
+                onClick={exportCoursesData}
+                className="flex items-center space-x-2 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl hover:bg-white hover:shadow-lg transition-all duration-300 border border-white/20"
+              >
+                <Download className="w-5 h-5" />
+                <span className="font-semibold">Export</span>
+              </button>
+            </div>
           </div>
-          
-          <div className="flex items-center space-x-3">
-            <Button variant="outline" onClick={refreshData} disabled={refreshing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button variant="outline" onClick={exportCoursesData}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-          </div>
-        </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{courses.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Available courses
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.filter(c => c.status === 'in_progress').length}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Courses</p>
+                <p className="text-3xl font-bold text-gray-900">{courses.length}</p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Active courses
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.filter(c => c.status === 'completed').length}
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <BookOpen className="w-6 h-6 text-white" />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Finished courses
-              </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
-              <Award className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.length > 0 ? Math.round(courses.reduce((sum, course) => sum + (course.grade || 0), 0) / courses.length) : 0}%
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">In Progress</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {courses.filter(c => c.status === 'in_progress').length}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Overall performance
-              </p>
-            </CardContent>
-          </Card>
+              <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                <Clock className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Completed</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {courses.filter(c => c.status === 'completed').length}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                <CheckCircle className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Average Grade</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {courses.length > 0 ? Math.round(courses.reduce((sum, course) => sum + (course.grade || 0), 0) / courses.length) : 0}%
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Award className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Search and Filter */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                type="text"
-                placeholder="Search courses..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+            <div className="flex items-center space-x-4">
+              <h2 className="text-2xl font-bold text-gray-900">Filter Courses</h2>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-48 bg-white/60 backdrop-blur-sm border border-white/20">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Courses</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="not_started">Not Started</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search courses..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full md:w-80 px-4 py-2 pl-10 bg-white/60 backdrop-blur-sm border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+              </div>
             </div>
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Courses</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="not_started">Not Started</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         {/* Courses Grid - Direct View for Students */}
@@ -865,7 +933,7 @@ const Courses: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">My Enrolled Courses</h2>
-              <p className="text-sm text-gray-600">All your available courses from IOMAD Moodle</p>
+              <p className="text-gray-600 text-lg">All your available courses from IOMAD Moodle</p>
             </div>
           </div>
 
@@ -1027,6 +1095,7 @@ const Courses: React.FC = () => {
               )}
             </div>
           )}
+        </div>
         </div>
       </div>
     </DashboardLayout>

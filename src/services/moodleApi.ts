@@ -142,37 +142,6 @@ declare global {
   }
 }
 
-// Utility function to construct and validate Moodle course image URLs
-const constructCourseImageUrl = (courseId: string, baseUrl?: string): string => {
-  const moodleBaseUrl = baseUrl || API_BASE_URL.replace('/webservice/rest/server.php', '');
-  
-  // Try different possible image paths
-  const possiblePaths = [
-    `${moodleBaseUrl}/pluginfile.php/${courseId}/course/overviewfiles/0/course_image.jpg`,
-    `${moodleBaseUrl}/pluginfile.php/${courseId}/course/overviewfiles/0/course_image.png`,
-    `${moodleBaseUrl}/pluginfile.php/${courseId}/course/overviewfiles/0/course_image.jpeg`,
-    `${moodleBaseUrl}/pluginfile.php/${courseId}/course/overviewfiles/0/course_image.gif`,
-    `${moodleBaseUrl}/pluginfile.php/${courseId}/course/overviewfiles/0/course_image.webp`
-  ];
-  
-  return possiblePaths[0]; // Return the most common format
-};
-
-// Utility function to validate image URL
-const validateImageUrl = async (url: string): Promise<string | null> => {
-  if (!url) return null;
-  
-  try {
-    const response = await fetch(url, { method: 'HEAD' });
-    if (response.ok) {
-      return url;
-    }
-  } catch (error) {
-    console.warn(`⚠️ Image validation failed for ${url}:`, error);
-  }
-  return null;
-};
-
 export const moodleService = {
   async testApiConnection() {
     try {
@@ -1068,10 +1037,6 @@ export const moodleService = {
 
   async getUserCourses(userId: string) {
     try {
-
-      console.log('🔄 Fetching user courses with enhanced image support...');
-      
-      // First, get basic enrolled courses
       console.log('📚 Fetching user courses with real progress data for user:', userId);
       
       const response = await moodleApi.get('', {
@@ -1082,47 +1047,6 @@ export const moodleService = {
       });
 
       if (response.data && Array.isArray(response.data)) {
-        console.log(`📚 Found ${response.data.length} enrolled courses`);
-        
-        // Now get detailed course information for better image support
-        const detailedCourses = await Promise.all(
-          response.data.map(async (course: MoodleCourse) => {
-            try {
-              // Get detailed course information
-              const detailedResponse = await moodleApi.get('', {
-                params: {
-                  wsfunction: 'core_course_get_courses_by_field',
-                  field: 'id',
-                  value: course.id.toString()
-                },
-              });
-
-              let detailedCourse = course;
-              if (detailedResponse.data && detailedResponse.data.courses && detailedResponse.data.courses.length > 0) {
-                detailedCourse = detailedResponse.data.courses[0];
-              }
-
-              // Extract the best available image
-              let courseImage = detailedCourse.courseimage;
-              
-              // If courseimage is not available, try to construct the image URL
-              if (!courseImage) {
-                // Try to get image from overviewfiles if available
-                if (detailedCourse.overviewfiles && Array.isArray(detailedCourse.overviewfiles) && detailedCourse.overviewfiles.length > 0) {
-                  courseImage = detailedCourse.overviewfiles[0].fileurl;
-                }
-                // Try to get image from summaryfiles if available
-                else if (detailedCourse.summaryfiles && Array.isArray(detailedCourse.summaryfiles) && detailedCourse.summaryfiles.length > 0) {
-                  courseImage = detailedCourse.summaryfiles[0].fileurl;
-                }
-                // If still no image, try to construct a default course image URL
-                else {
-                  courseImage = constructCourseImageUrl(course.id.toString());
-                }
-              }
-
-              console.log(`✅ Course "${course.fullname}" - Image: ${courseImage || 'No image found'}`);
-
         console.log(`✅ Found ${response.data.length} courses for user ${userId}`);
         
         // Fetch real progress data for each course
@@ -1140,38 +1064,22 @@ export const moodleService = {
               
               // Get course statistics
               const courseStats = await this.getCourseStatistics(course.id.toString());
-
+              
               return {
           id: course.id.toString(),
           fullname: course.fullname,
           shortname: course.shortname,
           summary: course.summary,
           categoryid: course.categoryid || course.category,
-
-                courseimage: courseImage,
-          progress: Math.floor(Math.random() * 100), // Mock progress
-
           courseimage: course.courseimage || course.overviewfiles?.[0]?.fileurl,
                 progress: progress.percentage,
                 completedLessons: progress.completedLessons,
                 totalLessons: progress.totalLessons,
-
           categoryname: course.categoryname,
           format: course.format,
           startdate: course.startdate,
           enddate: course.enddate,
           visible: course.visible,
-
-          type: ['ILT', 'VILT', 'Self-paced'][Math.floor(Math.random() * 3)],
-          tags: ['Professional Development', 'Teaching Skills', 'Assessment'],
-                // Include additional image-related fields
-                overviewfiles: detailedCourse.overviewfiles || [],
-                summaryfiles: detailedCourse.summaryfiles || []
-              };
-            } catch (error) {
-              console.warn(`⚠️ Error fetching detailed info for course ${course.id}:`, error);
-              // Return basic course info if detailed fetch fails
-
                 type: this.determineCourseType(course.format),
                 tags: this.generateCourseTags(course.fullname, course.categoryname),
                 duration: this.calculateDuration(course.startdate, course.enddate),
@@ -1189,16 +1097,12 @@ export const moodleService = {
             } catch (error) {
               console.warn(`⚠️ Error fetching progress for course ${course.id}:`, error);
               // Return course with fallback data
-
               return {
                 id: course.id.toString(),
                 fullname: course.fullname,
                 shortname: course.shortname,
                 summary: course.summary,
                 categoryid: course.categoryid || course.category,
-
-                courseimage: course.courseimage,
-                progress: Math.floor(Math.random() * 100),
                 courseimage: course.courseimage || course.overviewfiles?.[0]?.fileurl,
                 progress: 0,
                 completedLessons: 0,
@@ -1208,16 +1112,6 @@ export const moodleService = {
                 startdate: course.startdate,
                 enddate: course.enddate,
                 visible: course.visible,
-                type: ['ILT', 'VILT', 'Self-paced'][Math.floor(Math.random() * 3)],
-                tags: ['Professional Development', 'Teaching Skills', 'Assessment'],
-              };
-            }
-          })
-        );
-
-        console.log(`✅ Enhanced courses with images processed: ${detailedCourses.length}`);
-        return detailedCourses;
-
                 type: this.determineCourseType(course.format),
                 tags: this.generateCourseTags(course.fullname, course.categoryname),
                 duration: this.calculateDuration(course.startdate, course.enddate),
@@ -7804,6 +7698,89 @@ export const moodleService = {
     } catch (error) {
       console.warn('Could not get current user ID, using fallback');
       return '1';
+    }
+  },
+
+  // Get course lessons (sections) with completion status
+  async getCourseLessons(courseId: string, userId?: string) {
+    try {
+      console.log(`🔍 Fetching course lessons (sections) for course ID: ${courseId}`);
+      
+      // Get course contents first
+      const contents = await this.getCourseContents(courseId);
+      const lessons = [];
+
+      // Process each section as a lesson
+      for (const section of contents) {
+        if (section.name && section.name !== 'General') {
+          // Calculate completion status for this section
+          let totalModules = 0;
+          let completedModules = 0;
+          let sectionProgress = 0;
+
+          if (section.modules && Array.isArray(section.modules)) {
+            totalModules = section.modules.length;
+            
+            // Get completion status for all modules in this section
+            try {
+              const completionResponse = await moodleApi.get('', {
+                params: {
+                  wsfunction: 'core_completion_get_activities_completion_status',
+                  courseid: courseId,
+                  userid: userId || await this.getCurrentUserId(),
+                },
+              });
+              
+              if (completionResponse.data && completionResponse.data.statuses) {
+                for (const module of section.modules) {
+                  const completion = completionResponse.data.statuses.find((status: any) => 
+                    status.cmid === module.id
+                  );
+                  if (completion && completion.state === 1) {
+                    completedModules++;
+                  }
+                }
+              }
+            } catch (completionError) {
+              console.warn('Could not fetch completion for section:', section.name);
+            }
+
+            // Calculate progress percentage
+            sectionProgress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+          }
+
+          // Determine lesson status based on progress
+          let status: 'completed' | 'in-progress' | 'not-started';
+          if (sectionProgress === 100) {
+            status = 'completed';
+          } else if (sectionProgress > 0) {
+            status = 'in-progress';
+          } else {
+            status = 'not-started';
+          }
+
+          lessons.push({
+            id: section.id.toString(),
+            name: section.name,
+            description: section.summary || '',
+            courseId: courseId,
+            totalModules: totalModules,
+            completedModules: completedModules,
+            progress: sectionProgress,
+            status: status,
+            visible: section.visible !== 0,
+            sectionNumber: section.section || 0,
+            modules: section.modules || [],
+            dates: section.dates || [],
+          });
+        }
+      }
+
+      console.log(`✅ Found ${lessons.length} lessons (sections) in course`);
+      return lessons;
+    } catch (error: any) {
+      console.error('❌ Error fetching course lessons:', error.response?.data || error.message);
+      return [];
     }
   },
 };

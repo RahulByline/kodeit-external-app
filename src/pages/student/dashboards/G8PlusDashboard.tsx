@@ -21,7 +21,12 @@ import {
   Activity,
   Circle,
   Link,
-  ArrowRight
+  ArrowRight,
+  Star,
+  Zap,
+  Lock,
+  Info,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { Skeleton } from '../../../components/ui/skeleton';
@@ -114,6 +119,11 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState<'card' | 'tree'>('card');
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
+  const [expandedLessons, setExpandedLessons] = useState<Set<string>>(new Set());
 
   // Function to handle image loading state
   const handleImageLoad = (courseId: string) => {
@@ -122,6 +132,31 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
 
   const handleImageError = (courseId: string) => {
     setImageLoadingStates(prev => ({ ...prev, [courseId]: false }));
+  };
+
+  // Toggle functions for tree view
+  const toggleCourseExpansion = (courseId: string) => {
+    setExpandedCourses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(courseId)) {
+        newSet.delete(courseId);
+      } else {
+        newSet.add(courseId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleLessonExpansion = (lessonId: string) => {
+    setExpandedLessons(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(lessonId)) {
+        newSet.delete(lessonId);
+      } else {
+        newSet.add(lessonId);
+      }
+      return newSet;
+    });
   };
 
   // Initialize image loading states when courses are loaded
@@ -233,6 +268,263 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
             </button>
           </div>
         </div>
+
+      {/* My Courses Section with View Toggle */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        {/* Section Header */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">My Courses</h2>
+            <p className="text-gray-600 text-sm">View your enrolled courses in different layouts.</p>
+          </div>
+          
+          {/* View Options */}
+          <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+            <button 
+              onClick={() => setViewMode('card')}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                viewMode === 'card' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Card View
+            </button>
+            <button 
+              onClick={() => setViewMode('tree')}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                viewMode === 'tree' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Tree View
+            </button>
+          </div>
+        </div>
+
+        {/* Card View */}
+        {viewMode === 'card' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userCourses.map((course, index) => (
+              <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                {/* Course Image */}
+                <div className="relative h-48 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
+                  {course.courseimage ? (
+                    <img 
+                      src={course.courseimage} 
+                      alt={course.fullname}
+                      className="w-full h-full object-cover"
+                      onLoad={() => handleImageLoad(course.id)}
+                      onError={() => handleImageError(course.id)}
+                      style={{ display: imageLoadingStates[course.id] ? 'none' : 'block' }}
+                    />
+                  ) : null}
+                  
+                  {/* Fallback placeholder */}
+                  <div className={`absolute inset-0 flex items-center justify-center ${
+                    course.courseimage && !imageLoadingStates[course.id] ? 'hidden' : 'flex'
+                  }`}>
+                    <div className="text-center">
+                      <BookOpen className="w-16 h-16 text-blue-500 mx-auto mb-2" />
+                      <div className="text-sm text-gray-600">{course.shortname}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Course Type Icon */}
+                  <div className="absolute bottom-2 right-2 w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                    <BookOpen className="w-4 h-4 text-white" />
+                  </div>
+                  
+                  {/* New Badge for first course */}
+                  {index === 0 && (
+                    <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                      New
+                    </div>
+                  )}
+                </div>
+                
+                {/* Course Details */}
+                <div className="p-4">
+                  {/* Dates */}
+                  <div className="text-xs text-gray-500 mb-2">
+                    {course.startdate ? (
+                      <>
+                        Starts {new Date(course.startdate * 1000).toLocaleDateString('en-US', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          year: 'numeric' 
+                        })}
+                        {course.enddate && (
+                          <> | Ends {new Date(course.enddate * 1000).toLocaleDateString('en-US', { 
+                            day: 'numeric', 
+                            month: 'short', 
+                            year: 'numeric' 
+                          })}</>
+                        )}
+                      </>
+                    ) : (
+                      'Dates not available'
+                    )}
+                  </div>
+                  
+                  {/* Course Title */}
+                  <h3 className="font-bold text-gray-900 text-lg mb-2 line-clamp-2">
+                    {course.fullname}
+                  </h3>
+                  
+                  {/* Status */}
+                  <div className="flex items-center text-sm text-gray-600 mb-3">
+                    <div className="w-3 h-3 bg-gray-400 rounded-full mr-2 animate-pulse"></div>
+                    Course Not Started
+                  </div>
+                  
+                  {/* Progress */}
+                  <div className="flex items-center justify-between text-sm mb-3">
+                    <span className="text-gray-700">Progress</span>
+                    <span className="font-medium text-green-600">{course.progress || 0}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1 mb-4">
+                    <div 
+                      className="bg-green-500 h-1 rounded-full transition-all duration-300"
+                      style={{ width: `${course.progress || 0}%` }}
+                    ></div>
+                  </div>
+                  
+                  {/* Modules and Activities */}
+                  <div className="grid grid-cols-2 gap-4 mb-4 text-center">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {Math.floor(Math.random() * 10) + 3} Modules
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {Math.floor(Math.random() * 15) + 5} Activities
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Start Learning Button */}
+                  <button 
+                    onClick={() => navigate(`/dashboard/student/course-lessons/${course.id}`)}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Start Learning
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tree View */}
+        {viewMode === 'tree' && (
+          <div className="space-y-2">
+            {userCourses.map((course) => (
+              <div key={course.id} className="border border-gray-200 rounded-lg">
+                {/* Course Header */}
+                <div 
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+                  onClick={() => toggleCourseExpansion(course.id)}
+                >
+                  <div className="flex items-center space-x-3">
+                    <ChevronRight 
+                      className={`w-5 h-5 text-gray-500 transition-transform ${
+                        expandedCourses.has(course.id) ? 'rotate-90' : ''
+                      }`}
+                    />
+                    <BookOpen className="w-6 h-6 text-blue-600" />
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{course.fullname}</h3>
+                      <p className="text-sm text-gray-600">{course.shortname}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-900">{course.progress || 0}%</div>
+                      <div className="text-xs text-gray-500">Progress</div>
+                    </div>
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <BookOpen className="w-4 h-4 text-blue-600" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Expanded Course Content */}
+                {expandedCourses.has(course.id) && (
+                  <div className="border-t border-gray-200 bg-gray-50">
+                    <div className="p-4">
+                      <div className="space-y-3">
+                        {/* Sample Lessons */}
+                        {[1, 2, 3].map((lessonIndex) => (
+                          <div key={lessonIndex} className="ml-8 border border-gray-200 rounded-lg bg-white">
+                            <div 
+                              className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                              onClick={() => toggleLessonExpansion(`${course.id}_lesson_${lessonIndex}`)}
+                            >
+                              <div className="flex items-center space-x-3">
+                                <ChevronRight 
+                                  className={`w-4 h-4 text-gray-500 transition-transform ${
+                                    expandedLessons.has(`${course.id}_lesson_${lessonIndex}`) ? 'rotate-90' : ''
+                                  }`}
+                                />
+                                <Star className="w-5 h-5 text-purple-600" />
+                                <div>
+                                  <h4 className="font-medium text-gray-900">Lesson {lessonIndex}: Introduction to Topic</h4>
+                                  <p className="text-sm text-gray-600">Basic concepts and fundamentals</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <div className="text-right">
+                                  <div className="text-sm font-medium text-gray-900">25%</div>
+                                  <div className="text-xs text-gray-500">Complete</div>
+                                </div>
+                                <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
+                                  <Star className="w-3 h-3 text-purple-600" />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Expanded Lesson Activities */}
+                            {expandedLessons.has(`${course.id}_lesson_${lessonIndex}`) && (
+                              <div className="border-t border-gray-200 bg-gray-50">
+                                <div className="p-3 space-y-2">
+                                  {[1, 2, 3].map((activityIndex) => (
+                                    <div key={activityIndex} className="ml-8 flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                      <div className="flex items-center space-x-3">
+                                        <Zap className="w-4 h-4 text-green-600" />
+                                        <div>
+                                          <h5 className="font-medium text-gray-900">Activity {activityIndex}: Practice Exercise</h5>
+                                          <p className="text-sm text-gray-600">Interactive learning activity</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <div className="text-right">
+                                          <div className="text-sm font-medium text-gray-900">15 pts</div>
+                                          <div className="text-xs text-gray-500">Points</div>
+                                        </div>
+                                        <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                                          <Zap className="w-3 h-3 text-green-600" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -462,7 +754,10 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
                   </div>
                   
                   {/* Start Learning Button */}
-                  <button className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center">
+                  <button 
+                    onClick={() => navigate(`/dashboard/student/course-lessons/${course.id}`)}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center"
+                  >
                     <Play className="w-4 h-4 mr-2" />
                     Start Learning
                   </button>

@@ -664,75 +664,14 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     }
   };
 
-  // Fetch course details for integrated view
+  // Navigate to course lessons page
   const fetchCourseDetails = async (courseId: string) => {
     if (!currentUser?.id) return;
 
-    // Check if we already have this course loaded
-    if (selectedCourseForDetail?.id === courseId && showCourseDetailView) {
-      console.log('📦 Course already loaded:', courseId);
-      return;
-    }
-
-    try {
-      console.log('🚀 Loading course details for:', courseId);
-
-      // Check for cached course data
-      const cachedCourseData = localStorage.getItem(`course_detail_${courseId}_${currentUser.id}`);
-      if (cachedCourseData) {
-        const parsed = JSON.parse(cachedCourseData);
-        const cacheAge = Date.now() - parsed.timestamp;
-        
-        // Use cache if less than 10 minutes old
-        if (cacheAge < 10 * 60 * 1000) {
-          console.log('📦 Using cached course data');
-          setSelectedCourseForDetail(parsed.course);
-          setShowCourseDetailView(true);
-          return;
-        }
-      }
-
-      // Fetch course basic info first (fast)
-      const userCourses = await moodleService.getUserCourses(currentUser.id.toString());
-      const courseInfo = userCourses.find((c: any) => c.id.toString() === courseId);
-      
-      if (!courseInfo) {
-        console.warn('Course not found:', courseId);
-        return;
-      }
-
-      // Create basic course structure immediately with enhanced image fetching
-      const basicCourse: CourseDetail = {
-        id: courseInfo.id.toString(),
-        fullname: courseInfo.fullname,
-        shortname: courseInfo.shortname,
-        summary: courseInfo.summary || '',
-        categoryid: courseInfo.categoryid || 1,
-        categoryname: courseInfo.categoryname || 'General',
-        courseimage: getBestImage(courseInfo),
-        progress: courseInfo.progress || Math.floor(Math.random() * 100),
-        totalLessons: Math.floor(Math.random() * 20) + 10,
-        completedLessons: Math.floor(Math.random() * 10) + 1,
-        duration: `${Math.floor(Math.random() * 8) + 4} weeks`,
-        difficulty: courseInfo.categoryid === 1 ? 'Beginner' : courseInfo.categoryid === 2 ? 'Intermediate' : 'Advanced',
-        startdate: courseInfo.startdate,
-        enddate: courseInfo.enddate,
-        visible: courseInfo.visible || 1,
-        sections: []
-      };
-
-      // Set basic course data immediately for fast display
-      setSelectedCourseForDetail(basicCourse);
-      setShowCourseDetailView(true);
-
-      // Load detailed contents in background
-      setTimeout(() => {
-        loadDetailedCourseContents(courseId, basicCourse);
-      }, 100);
-
-    } catch (error) {
-      console.error('❌ Error in fast course loading:', error);
-    }
+    console.log('🚀 Navigating to course lessons for:', courseId);
+    
+    // Navigate to the course lessons page
+    navigate(`/dashboard/student/course-lessons/${courseId}`);
   };
 
   // Fetch lesson activities for integrated view
@@ -1738,6 +1677,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                     </div>
                   </div>
                 </div>
+
+
 
                 {/* My Courses Section */}
                 <div className="mb-8">
