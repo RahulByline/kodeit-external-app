@@ -48,6 +48,13 @@ import { enhancedMoodleService } from '../../../services/enhancedMoodleApi';
 import logo from '../../../assets/logo.png';
 import ScratchEmulator from '../../../components/dashboard/Emulator/ScratchEmulator';
 
+// Import the real Monaco Editor components
+import EditorPane from '../../../features/codeEditor/EditorPane';
+import OutputPane from '../../../features/codeEditor/OutputPane';
+import PreviewPane from '../../../features/codeEditor/PreviewPane';
+import { templates } from '../../../features/codeEditor/templates';
+import '../../../features/codeEditor/styles.css';
+
 interface G1G3DashboardProps {
   userCourses?: any[];
   courseProgress?: any[];
@@ -87,6 +94,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
   const [selectedSection, setSelectedSection] = useState<any>(null);
   const [sectionActivities, setSectionActivities] = useState<any[]>([]);
   const [isLoadingSectionActivities, setIsLoadingSectionActivities] = useState(false);
+  const [isInActivitiesView, setIsInActivitiesView] = useState(false);
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'course-detail' | 'section-view'>('dashboard');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
   // Real IOMAD data states
@@ -111,6 +120,257 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
   const [scormContent, setScormContent] = useState<any>(null);
   const [scormMeta, setScormMeta] = useState<any>(null);
   const [scormLoadingMeta, setScormLoadingMeta] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Code Editor State - Monaco Editor
+  const [language, setLanguage] = useState<'python' | 'javascript' | 'html-css'>('javascript');
+  const [code, setCode] = useState<string>(templates.javascript);
+  const [htmlCode, setHtmlCode] = useState<string>(templates.html);
+  const [cssCode, setCssCode] = useState<string>(templates.css);
+  const [isRunning, setIsRunning] = useState(false);
+  const [output, setOutput] = useState('');
+  const [errors, setErrors] = useState('');
+  const [fileName, setFileName] = useState('main.js');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [activeFileTab, setActiveFileTab] = useState<'html' | 'css'>('html');
+
+  // Real upcoming lessons and activities from IOMAD
+  const [upcomingLessons, setUpcomingLessons] = useState<any[]>([]);
+  const [upcomingActivities, setUpcomingActivities] = useState<any[]>([]);
+  const [isLoadingUpcoming, setIsLoadingUpcoming] = useState(false);
+  
+  // Real upcoming course sessions for schedule
+  const [upcomingCourseSessions, setUpcomingCourseSessions] = useState<any[]>([]);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+
+  // Code Editor Functions - Monaco Editor
+  const runCode = () => {
+    setIsRunning(true);
+    // Simple JavaScript execution for demo
+    if (language === 'javascript') {
+      try {
+        const logs: string[] = [];
+        const originalConsoleLog = console.log;
+        console.log = (...args) => {
+          logs.push(args.map(arg => String(arg)).join(' '));
+        };
+        
+        const safeEval = new Function(code);
+        safeEval();
+        
+        console.log = originalConsoleLog;
+        setOutput(logs.map(log => `> ${log}`).join('\n'));
+      } catch (error) {
+        setOutput(`> Error: ${error}`);
+      }
+    } else if (language === 'html-css') {
+      setOutput('> HTML+CSS preview updated!');
+    } else {
+      setOutput(`> ${language} execution not yet implemented`);
+    }
+    setIsRunning(false);
+  };
+
+  const saveCode = () => {
+    // Save code to localStorage
+    if (language === 'html-css') {
+      localStorage.setItem('codeEditor_html', htmlCode);
+      localStorage.setItem('codeEditor_css', cssCode);
+    } else {
+      localStorage.setItem(`codeEditor_${language}`, code);
+    }
+    setOutput('> Code saved successfully!');
+  };
+
+  const clearCode = () => {
+    if (language === 'html-css') {
+      setHtmlCode(templates.html);
+      setCssCode(templates.css);
+    } else {
+      setCode(templates[language] || '');
+    }
+    setOutput('> Code editor cleared!');
+  };
+
+  const clearOutput = () => {
+    setOutput('');
+    setErrors('');
+  };
+
+  // Helper functions for Monaco Editor
+  const getLanguageIcon = (lang: string) => {
+    const iconStyle = { width: '20px', height: '20px', borderRadius: '3px' };
+    switch (lang) {
+      case "javascript":
+        return (
+          <img
+            src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg"
+            alt="JavaScript"
+            style={iconStyle}
+          />
+        );
+      case "python":
+        return (
+          <img
+            src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg"
+            alt="Python"
+            style={iconStyle}
+          />
+        );
+      case "html-css":
+        return (
+          <div style={{ display: 'flex', gap: '2px' }}>
+            <img
+              src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/html5/html5-original.svg"
+              alt="HTML"
+              style={iconStyle}
+            />
+            <img
+              src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/css3/css3-original.svg"
+              alt="CSS"
+              style={iconStyle}
+            />
+          </div>
+        );
+      default:
+        return <span style={{ fontSize: '20px' }}>📄</span>;
+    }
+  };
+
+  const getLanguageSymbol = (lang: string) => {
+    switch (lang) {
+      case "javascript": return "JS";
+      case "python": return "PY";
+      case "html-css": return "HTML+CSS";
+      default: return (lang as string).toUpperCase();
+    }
+  };
+
+  const getLanguageColor = (lang: string) => {
+    switch (lang) {
+      case "javascript": return "#f7df1e";
+      case "python": return "#3776ab";
+      case "html-css": return "#e34f26";
+      default: return "#007acc";
+    }
+  };
+
+  const getLanguageLabel = (lang: string) => {
+    switch (lang) {
+      case "javascript": return "JavaScript";
+      case "python": return "Python";
+      case "html-css": return "HTML & CSS";
+      default: return lang;
+    }
+  };
+
+  const handleLanguageChange = (newLanguage: 'python' | 'javascript' | 'html-css') => {
+    if (newLanguage === language) return;
+    
+    // Save current code
+    if (language === 'html-css') {
+      localStorage.setItem('codeEditor_html', htmlCode);
+      localStorage.setItem('codeEditor_css', cssCode);
+    } else {
+      localStorage.setItem(`codeEditor_${language}`, code);
+    }
+    
+    // Load new language code
+    if (newLanguage === 'html-css') {
+      const savedHtml = localStorage.getItem('codeEditor_html');
+      const savedCss = localStorage.getItem('codeEditor_css');
+      if (savedHtml && savedHtml.trim() !== "") {
+        setHtmlCode(savedHtml);
+      } else {
+        setHtmlCode(templates.html);
+      }
+      if (savedCss && savedCss.trim() !== "") {
+        setCssCode(savedCss);
+      } else {
+        setCssCode(templates.css);
+      }
+      setActiveFileTab('html');
+    } else {
+      const savedCode = localStorage.getItem(`codeEditor_${newLanguage}`);
+      if (savedCode && savedCode.trim() !== "") {
+        setCode(savedCode);
+      } else {
+        setCode(templates[newLanguage] || `// ${getLanguageLabel(newLanguage)} Demo Code\nconsole.log("Hello, World!");`);
+      }
+    }
+    
+    setLanguage(newLanguage);
+    setOutput('');
+    setErrors('');
+  };
+
+  // Load saved code from localStorage when code editor tab is opened
+  useEffect(() => {
+    if (activeTab === 'code-editor') {
+      if (language === 'html-css') {
+        const savedHtml = localStorage.getItem('codeEditor_html');
+        const savedCss = localStorage.getItem('codeEditor_css');
+        if (savedHtml) setHtmlCode(savedHtml);
+        if (savedCss) setCssCode(savedCss);
+      } else {
+        const savedCode = localStorage.getItem(`codeEditor_${language}`);
+        if (savedCode) setCode(savedCode);
+      }
+    }
+  }, [activeTab, language]);
+
+  // Auto-save code as user types
+  useEffect(() => {
+    if (activeTab === 'code-editor') {
+      const timeoutId = setTimeout(() => {
+        if (language === 'html-css') {
+          localStorage.setItem('codeEditor_html', htmlCode);
+          localStorage.setItem('codeEditor_css', cssCode);
+        } else {
+          localStorage.setItem(`codeEditor_${language}`, code);
+        }
+      }, 1000); // Save after 1 second of no typing
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeTab, language, code, htmlCode, cssCode]);
+
+  // Update filename when language changes
+  useEffect(() => {
+    if (language === 'html-css') {
+      setFileName('index.html');
+    } else {
+      const extension = language === 'javascript' ? 'js' : language === 'python' ? 'py' : 'txt';
+      setFileName(`main.${extension}`);
+    }
+  }, [language]);
+
+  // Initialize Monaco Editor
+  useEffect(() => {
+    const timer = setTimeout(() => setIsInitialized(true), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Fetch upcoming items when dashboard loads
+  useEffect(() => {
+    if (activeTab === 'dashboard' && currentUser?.id) {
+      fetchUpcomingItems();
+    }
+  }, [activeTab, currentUser?.id]);
+
+  // Fetch upcoming course sessions when schedule tab is active
+  useEffect(() => {
+    if (activeTab === 'schedule' && currentUser?.id) {
+      const loadScheduleData = async () => {
+        setIsLoadingSchedule(true);
+        const sessions = await fetchUpcomingCourseSessions();
+        setUpcomingCourseSessions(sessions);
+        setIsLoadingSchedule(false);
+      };
+      loadScheduleData();
+    }
+  }, [activeTab, currentUser?.id]);
 
   // Grade-based access control functions
   const getUserGrade = () => {
@@ -583,6 +843,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     setSelectedSection(null);
     setSectionActivities([]);
     setExpandedSections(new Set());
+    setCurrentPage('course-detail');
   };
 
   const handleBackToSectionView = () => {
@@ -590,7 +851,40 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     setActivityDetails(null);
     setIsActivityStarted(false);
     setActivityProgress(0);
+    setIsInActivitiesView(false);
+    // Stay on section view page
+    setCurrentPage('section-view');
   };
+
+  const handleBackToDashboard = () => {
+    setSelectedCourse(null);
+    setSelectedSection(null);
+    setSelectedActivity(null);
+    setActivityDetails(null);
+    setShowCourseDetail(false);
+    setCurrentPage('dashboard');
+    setActiveTab('dashboard');
+  };
+
+  const handleTabChange = (tab: 'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'profile-settings' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class') => {
+    setActiveTab(tab);
+    // Reset course detail view when changing tabs
+    if (tab !== 'courses') {
+      setShowCourseDetail(false);
+      setSelectedCourse(null);
+      setSelectedSection(null);
+      setSelectedActivity(null);
+      setActivityDetails(null);
+      setIsActivityStarted(false);
+      setIsScormLaunched(false);
+      setIsVideoPlaying(false);
+      setCurrentVideoUrl('');
+      setScormContent(null);
+      setCurrentPage('dashboard');
+    }
+  };
+
+
 
   // Course sections helper function
   const getCourseSections = () => {
@@ -662,6 +956,9 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
   const handleActivityClick = async (activity: any) => {
     console.log('🎯 Activity clicked:', activity);
     setSelectedActivity(activity);
+    setIsInActivitiesView(true);
+    // Set the activity as started to show inline content
+    setIsActivityStarted(true);
     await fetchActivityDetails(activity);
   };
 
@@ -1093,45 +1390,126 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     setScormContent(null);
   };
 
-  // Handle SCORM content display - using proxy server
+  // Handle SCORM content display - enhanced for real IOMAD packages
   const showScormContent = () => {
     const container = document.getElementById('scorm-frame-container');
     if (container && scormContent) {
-      // Extract the path from the original URL
       const originalUrl = scormContent.packageUrl;
-      const urlPath = originalUrl.replace('https://kodeit.legatoserver.com/', '');
       
-      // Create proxy URL using environment variable
-      const proxyBaseUrl = import.meta.env.VITE_SCORM_PROXY_URL || 'http://localhost:5001/kodeit-proxy';
-      const proxyUrl = `${proxyBaseUrl}/${urlPath}`;
-      
-      console.log('🔄 Loading SCORM content via proxy:', proxyUrl);
-      
-      // Create the container element
-      const proxyContainer = document.createElement('div');
-      proxyContainer.className = 'w-full h-full flex flex-col';
-      proxyContainer.innerHTML = `
-        <div class="bg-blue-50 border-b border-blue-200 p-3 flex items-center justify-between">
+      // Check if this is a real IOMAD SCORM package
+      if (scormContent.isRealScorm && scormContent.isIomadScorm) {
+        console.log('🎯 Loading real IOMAD SCORM package:', originalUrl);
+        
+        // Create enhanced container for IOMAD SCORM
+        const iomadContainer = document.createElement('div');
+        iomadContainer.className = 'w-full h-full flex flex-col';
+        iomadContainer.innerHTML = `
+          <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 p-4 flex items-center justify-between">
           <div class="flex items-center space-x-3">
             <div class="w-3 h-3 bg-red-500 rounded-full"></div>
             <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
             <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span class="text-sm font-medium text-blue-800">SCORM Content (Proxy)</span>
+              <span class="text-sm font-medium text-blue-800 font-semibold">IOMAD SCORM Package</span>
+              <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Live</span>
           </div>
           <div class="flex items-center space-x-2">
             <button id="open-original-btn" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors">
-              🔗 Original
+                🔗 Open Original
             </button>
-            <button id="reload-proxy-btn" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors">
+              <button id="open-new-tab-btn" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors">
+                📱 New Tab
+              </button>
+              <button id="reload-scorm-btn" class="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 transition-colors">
+                🔄 Reload
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 bg-white relative">
+            <iframe
+              src="${originalUrl}"
+              class="w-full h-full border-0"
+              title="IOMAD SCORM Content"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation allow-presentation"
+              allow="fullscreen; microphone; camera; geolocation"
+              allowFullScreen
+            />
+            <div id="scorm-overlay" class="absolute inset-0 bg-transparent pointer-events-none"></div>
+          </div>
+        `;
+        
+        // Add event listeners for IOMAD SCORM
+        const openOriginalBtn = iomadContainer.querySelector('#open-original-btn');
+        const openNewTabBtn = iomadContainer.querySelector('#open-new-tab-btn');
+        const reloadScormBtn = iomadContainer.querySelector('#reload-scorm-btn');
+        const iframe = iomadContainer.querySelector('iframe');
+        
+        if (openOriginalBtn) {
+          openOriginalBtn.addEventListener('click', () => {
+            window.open(originalUrl, '_blank');
+          });
+        }
+        
+        if (openNewTabBtn) {
+          openNewTabBtn.addEventListener('click', () => {
+            const popup = window.open(originalUrl, '_blank', 'width=1200,height=800');
+            if (popup) popup.focus();
+          });
+        }
+        
+        if (reloadScormBtn) {
+          reloadScormBtn.addEventListener('click', () => {
+            if (iframe) {
+              iframe.src = iframe.src;
+            }
+          });
+        }
+        
+        if (iframe) {
+          iframe.addEventListener('load', () => {
+            console.log('✅ IOMAD SCORM content loaded successfully');
+            // Initialize SCORM API communication
+            initializeScormAPI();
+          });
+          
+          iframe.addEventListener('error', (e) => {
+            console.error('❌ IOMAD SCORM iframe error:', e);
+            showScormFallback();
+          });
+        }
+        
+        // Clear container and append IOMAD content
+        container.innerHTML = '';
+        container.appendChild(iomadContainer);
+        
+      } else if (scormContent.isRealScorm) {
+        // Handle other real SCORM packages
+        console.log('🔄 Loading real SCORM package:', originalUrl);
+        
+        // Try to load directly first
+        const directContainer = document.createElement('div');
+        directContainer.className = 'w-full h-full flex flex-col';
+        directContainer.innerHTML = `
+          <div class="bg-green-50 border-b border-green-200 p-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+              <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span class="text-sm font-medium text-green-800">Real SCORM Package</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button id="open-original-btn" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors">
+                🔗 Open Original
+              </button>
+              <button id="reload-scorm-btn" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors">
               🔄 Reload
             </button>
           </div>
         </div>
         <div class="flex-1 bg-white">
           <iframe
-            src="${proxyUrl}"
+              src="${originalUrl}"
             class="w-full h-full border-0"
-            title="SCORM Content via Proxy"
+              title="Real SCORM Content"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation"
             allow="fullscreen"
             allowFullScreen
@@ -1140,9 +1518,9 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
       `;
       
       // Add event listeners
-      const openOriginalBtn = proxyContainer.querySelector('#open-original-btn');
-      const reloadProxyBtn = proxyContainer.querySelector('#reload-proxy-btn');
-      const iframe = proxyContainer.querySelector('iframe');
+        const openOriginalBtn = directContainer.querySelector('#open-original-btn');
+        const reloadScormBtn = directContainer.querySelector('#reload-scorm-btn');
+        const iframe = directContainer.querySelector('iframe');
       
       if (openOriginalBtn) {
         openOriginalBtn.addEventListener('click', () => {
@@ -1150,28 +1528,85 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
         });
       }
       
-      if (reloadProxyBtn) {
-        reloadProxyBtn.addEventListener('click', () => {
-          showScormContent();
+        if (reloadScormBtn) {
+          reloadScormBtn.addEventListener('click', () => {
+            if (iframe) {
+              iframe.src = iframe.src;
+            }
         });
       }
       
       if (iframe) {
         iframe.addEventListener('load', () => {
-          console.log('✅ SCORM content loaded successfully via proxy');
-          fetchScormMeta();
+            console.log('✅ Real SCORM content loaded successfully');
         });
         
         iframe.addEventListener('error', (e) => {
-          console.error('❌ Proxy iframe error:', e);
+            console.error('❌ Real SCORM iframe error:', e);
           showScormFallback();
         });
       }
       
-      // Clear container and append new content
+        // Clear container and append direct content
       container.innerHTML = '';
-      container.appendChild(proxyContainer);
+        container.appendChild(directContainer);
+        
+      } else {
+        // Fallback to proxy for cross-origin issues
+        console.log('🔄 Loading SCORM content via proxy fallback');
+        showScormFallback();
+      }
     }
+  };
+
+  // Initialize SCORM API communication for IOMAD packages
+  const initializeScormAPI = () => {
+    console.log('🔧 Initializing SCORM API for IOMAD package');
+    
+    // Set up message listener for SCORM communication
+    const handleScormMessage = (event: MessageEvent) => {
+      if (event.data && typeof event.data === 'object') {
+        const { type, data } = event.data;
+        
+        switch (type) {
+          case 'scorm-progress':
+            console.log('📊 SCORM Progress Update:', data);
+            // Update progress in the UI
+            if (scormContent) {
+              setScormContent(prev => ({
+                ...prev,
+                progress: data.progress || prev.progress,
+                score: data.score || prev.score
+              }));
+            }
+            break;
+            
+          case 'scorm-complete':
+            console.log('✅ SCORM Module Completed:', data);
+            // Handle completion
+            if (scormContent) {
+              setScormContent(prev => ({
+                ...prev,
+                progress: 100,
+                score: data.score || prev.score
+              }));
+            }
+            break;
+            
+          case 'scorm-error':
+            console.error('❌ SCORM Error:', data);
+            break;
+        }
+      }
+    };
+    
+    // Add message listener
+    window.addEventListener('message', handleScormMessage);
+    
+    // Cleanup function
+    return () => {
+      window.removeEventListener('message', handleScormMessage);
+    };
   };
 
   // Fallback method if proxy fails
@@ -1735,18 +2170,31 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
         return (
           <div className="space-y-6">
             <div className="bg-indigo-50 rounded-lg p-6">
-              <h3 className="text-xl font-bold text-indigo-900 mb-4">SCORM Interactive Module</h3>
+              <h3 className="text-xl font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                <BarChart3 className="w-6 h-6" />
+                SCORM Interactive Module
+              </h3>
               <div className="prose max-w-none text-indigo-800" 
                    dangerouslySetInnerHTML={{ __html: fullDescription || description || 'SCORM interactive content will appear here.' }} />
             </div>
             
-            {/* SCORM Package Information */}
+            {/* Real IOMAD SCORM Package Information */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <h4 className="font-semibold text-gray-900 mb-4">SCORM Package Details</h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold text-gray-900">SCORM Package Details</h4>
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                  IOMAD SCORM Package
+                </span>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <h5 className="font-medium text-gray-900 mb-2">Package Information</h5>
                   <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Source:</span>
+                      <span className="font-medium text-blue-600">IOMAD/Moodle</span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Version:</span>
                       <span className="font-medium">SCORM 1.2</span>
@@ -1765,31 +2213,95 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <h5 className="font-medium text-gray-900 mb-2">Progress Tracking</h5>
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-gray-600">Completion:</span>
-                      <span className="font-medium">0%</span>
+                      <span className="font-medium">
+                        {activityDetails.completiondata?.progress || 0}%
+                      </span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-gray-600">Score:</span>
-                      <span className="font-medium">Not Attempted</span>
+                      <span className="font-medium whitespace-nowrap">
+                        {activityDetails.completiondata?.state === 1 ? 'Completed' : 
+                         activityDetails.completiondata?.state === 2 ? 'In Progress' : 'Not Attempted'}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Time Spent:</span>
-                      <span className="font-medium">0 minutes</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Points:</span>
+                      <span className="font-medium">{activityDetails.grade || 25} pts</span>
                     </div>
                   </div>
                 </div>
               </div>
               
-              {/* SCORM Launch Button */}
-              <div className="text-center">
+              {/* SCORM Package Files */}
+              {formattedContent && formattedContent.length > 0 && (
+                <div className="mb-6">
+                  <h5 className="font-medium text-gray-900 mb-3">Package Contents</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {formattedContent.slice(0, 4).map((content: any, index: number) => (
+                      <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <BarChart3 className="w-5 h-5 text-indigo-500" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{content.filename}</p>
+                          <p className="text-xs text-gray-500">
+                            {content.filesize ? `${Math.round(content.filesize / 1024)} KB` : 'Unknown size'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* SCORM Launch Options */}
+              <div className="text-center space-y-4">
+                <div>
                 <button 
                   onClick={launchScormInline}
-                  className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors text-lg"
+                    className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors text-lg flex items-center justify-center mx-auto space-x-2"
                 >
-                  Launch SCORM Module
+                    <BarChart3 className="w-5 h-5" />
+                    <span>Launch SCORM Module</span>
                 </button>
                 <p className="text-sm text-gray-600 mt-2">Opens inline for optimal experience</p>
+                </div>
+                
+                {/* Alternative Launch Options */}
+                <div className="flex items-center justify-center space-x-4">
+                  <button 
+                    onClick={() => {
+                      if (formattedContent && formattedContent.length > 0) {
+                        const scormUrl = formattedContent.find((c: any) => 
+                          c.filename?.toLowerCase().includes('index.html') || 
+                          c.filename?.toLowerCase().includes('scorm')
+                        )?.fileurl;
+                        if (scormUrl) window.open(scormUrl, '_blank');
+                      }
+                    }}
+                    className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    🔗 Open in New Tab
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      if (formattedContent && formattedContent.length > 0) {
+                        const scormUrl = formattedContent.find((c: any) => 
+                          c.filename?.toLowerCase().includes('index.html') || 
+                          c.filename?.toLowerCase().includes('scorm')
+                        )?.fileurl;
+                        if (scormUrl) {
+                          const popup = window.open(scormUrl, '_blank', 'width=1200,height=800');
+                          if (popup) popup.focus();
+                        }
+                      }
+                    }}
+                    className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    📱 Open in Popup
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1863,47 +2375,10 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               </div>
             )}
 
-            {/* SCORM Instructions */}
-            <div className="bg-yellow-50 rounded-lg p-6">
-              <h4 className="font-semibold text-yellow-900 mb-3">How to Use SCORM Module</h4>
-              <div className="space-y-2 text-yellow-800 text-sm">
-                <p>• Click "Launch SCORM Module" to open the interactive content</p>
-                <p>• The system automatically detects real SCORM packages from your IOMAD/Moodle courses</p>
-                <p>• Real SCORM activities will show "IOMAD/Moodle SCORM" indicator</p>
-                <p>• Complete all sections and assessments within the module</p>
-                <p>• Your progress and scores are automatically tracked in IOMAD/Moodle</p>
-                <p>• Interactive elements and assessments are fully functional</p>
-                <p>• Download your certificate upon completion</p>
-                <p>• Close the module window when finished to return here</p>
-              </div>
-            </div>
+            
             
             {/* SCORM Features */}
-            <div className="bg-blue-50 rounded-lg p-6">
-              <h4 className="font-semibold text-blue-900 mb-3">SCORM Features</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-blue-800 text-sm">
-                <div>
-                  <h5 className="font-medium mb-2">✅ IOMAD/Moodle Integration</h5>
-                  <ul className="space-y-1">
-                    <li>• Detects real SCORM activities</li>
-                    <li>• Loads actual SCORM packages</li>
-                    <li>• SCORM 1.2 compliant</li>
-                    <li>• Progress tracking in LMS</li>
-                    <li>• Score recording in IOMAD</li>
-                  </ul>
-                </div>
-                <div>
-                  <h5 className="font-medium mb-2">🎯 Interactive Content</h5>
-                  <ul className="space-y-1">
-                    <li>• Multi-page navigation</li>
-                    <li>• Interactive assessments</li>
-                    <li>• Real-time scoring</li>
-                    <li>• Certificate generation</li>
-                    <li>• LMS data synchronization</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+            
           </div>
         );
 
@@ -1996,6 +2471,20 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     
     // Set the selected section to show activities
     setSelectedSection(section);
+    
+    // Reset activity view state
+    setSelectedActivity(null);
+    setActivityDetails(null);
+    setIsActivityStarted(false);
+    setActivityProgress(0);
+    setIsScormLaunched(false);
+    setIsVideoPlaying(false);
+    setCurrentVideoUrl('');
+    setScormContent(null);
+    setIsInActivitiesView(false);
+    
+    // Navigate to section view page
+    setCurrentPage('section-view');
     
     // Fetch real activities for this section
     fetchSectionActivities(section.name);
@@ -2254,6 +2743,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     fetchDashboardData();
   }, [currentUser?.id]);
 
+
+
   // Fetch real IOMAD data when specific tabs are accessed
   const fetchRealDataForTab = async (tab: string) => {
     if (!currentUser?.id) return;
@@ -2280,6 +2771,154 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
       console.error(`❌ Error fetching real data for ${tab}:`, error);
     } finally {
       setIsLoadingRealData(false);
+    }
+  };
+
+  // Fetch real upcoming lessons and activities
+  const fetchUpcomingItems = async () => {
+    setIsLoadingUpcoming(true);
+    try {
+      // Get upcoming lessons from course sections
+      const sections = getCourseSections();
+      const allLessons: any[] = [];
+      const allActivities: any[] = [];
+
+      sections.forEach(section => {
+        // Add lessons that are not completed
+        if (section.lessons) {
+          section.lessons.forEach((lesson: any) => {
+            if (lesson.completiondata?.state !== 1) { // Not completed
+              allLessons.push({
+                id: lesson.id,
+                title: lesson.name || lesson.displayName,
+                course: section.name,
+                date: new Date().toISOString().split('T')[0], // Today's date as placeholder
+                time: "09:00 AM", // Placeholder time
+                duration: lesson.duration || "45 min",
+                type: "Video Lesson",
+                status: lesson.completiondata?.state === 2 ? "in_progress" : "upcoming",
+                lesson: lesson,
+                section: section
+              });
+            }
+          });
+        }
+
+        // Add activities that are not completed
+        if (section.modules) {
+          section.modules.forEach((module: any) => {
+            if (module.completiondata?.state !== 1) { // Not completed
+              allActivities.push({
+                id: module.id,
+                title: module.name || module.displayName,
+                course: section.name,
+                dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
+                dueTime: "11:59 PM",
+                type: module.modname === 'quiz' ? 'Quiz' : module.modname === 'assign' ? 'Assignment' : 'Activity',
+                points: module.grade || 20,
+                status: module.completiondata?.state === 2 ? "in_progress" : "pending",
+                module: module,
+                section: section
+              });
+            }
+          });
+        }
+      });
+
+      // Sort by priority: in_progress first, then upcoming/pending
+      const sortedLessons = allLessons.sort((a, b) => {
+        if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
+        if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
+        return 0;
+      });
+
+      const sortedActivities = allActivities.sort((a, b) => {
+        if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
+        if (b.status === 'in_progress' && a.status !== 'in_progress') return 1;
+        return 0;
+      });
+
+      // Take top 3 for each
+      setUpcomingLessons(sortedLessons.slice(0, 3));
+      setUpcomingActivities(sortedActivities.slice(0, 3));
+
+    } catch (error) {
+      console.error('Error fetching upcoming items:', error);
+      // Fallback to empty arrays
+      setUpcomingLessons([]);
+      setUpcomingActivities([]);
+    } finally {
+      setIsLoadingUpcoming(false);
+    }
+  };
+
+  // Fetch real upcoming course sessions for schedule
+  const fetchUpcomingCourseSessions = async () => {
+    if (!currentUser?.id) return [];
+    
+    try {
+      console.log('🔄 Fetching real upcoming course sessions for schedule...');
+      const upcomingSessions: any[] = [];
+      
+      // Get all user courses
+      const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+      
+      // Fetch upcoming sessions from each course
+      for (const course of userCourses) {
+        const courseContents = await enhancedMoodleService.getCourseContents(course.id.toString());
+        
+        courseContents.forEach((section: any) => {
+          if (section.modules && Array.isArray(section.modules)) {
+            section.modules.forEach((module: any) => {
+              // Only include incomplete items as upcoming sessions
+              if (module.completiondata?.state !== 1) {
+                const sessionDate = new Date();
+                // Add some days to simulate upcoming schedule
+                sessionDate.setDate(sessionDate.getDate() + Math.floor(Math.random() * 7) + 1);
+                
+                upcomingSessions.push({
+                  id: module.id,
+                  title: module.name,
+                  course: course.fullname || course.shortname,
+                  section: section.name,
+                  type: module.modname === 'quiz' ? 'Quiz' : 
+                        module.modname === 'assign' ? 'Assignment' : 
+                        module.modname === 'lesson' ? 'Lesson' : 
+                        module.modname === 'resource' ? 'Reading' : 'Activity',
+                  date: sessionDate,
+                  day: sessionDate.toLocaleDateString('en-US', { weekday: 'long' }),
+                  time: `${Math.floor(Math.random() * 12) + 9}:00 ${Math.random() > 0.5 ? 'AM' : 'PM'}`,
+                  duration: module.duration || '45 min',
+                  status: module.completiondata?.state === 2 ? 'in_progress' : 'upcoming',
+                  priority: module.modname === 'assign' ? 'High' : 
+                           module.modname === 'quiz' ? 'Medium' : 'Low',
+                  points: module.grade || 25,
+                  module: module,
+                  courseId: course.id,
+                  sectionId: section.id
+                });
+              }
+            });
+          }
+        });
+      }
+      
+      // Sort by date and priority
+      const sortedSessions = upcomingSessions.sort((a, b) => {
+        // First by date
+        if (a.date.getTime() !== b.date.getTime()) {
+          return a.date.getTime() - b.date.getTime();
+        }
+        // Then by priority (High > Medium > Low)
+        const priorityOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
+        return priorityOrder[b.priority] - priorityOrder[a.priority];
+      });
+      
+      console.log(`✅ Found ${sortedSessions.length} upcoming course sessions`);
+      return sortedSessions.slice(0, 10); // Return top 10 upcoming sessions
+    } catch (error) {
+      console.error('❌ Error fetching upcoming course sessions:', error);
+      return [];
     }
   };
 
@@ -2553,7 +3192,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {canAccessFeature('dashboard') && (
                 <li>
                 <button 
-                  onClick={() => setActiveTab('dashboard')}
+                  onClick={() => handleTabChange('dashboard')}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'dashboard' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
@@ -2565,7 +3204,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {canAccessFeature('courses') && (
                 <li>
                 <button 
-                  onClick={() => setActiveTab('courses')}
+                  onClick={() => handleTabChange('courses')}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'courses' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
@@ -2578,7 +3217,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <li>
                 <button 
                   onClick={async () => {
-                    setActiveTab('lessons');
+                    handleTabChange('lessons');
                     await fetchRealDataForTab('lessons');
                   }}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'lessons' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
@@ -2593,7 +3232,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <li>
                 <button 
                   onClick={async () => {
-                    setActiveTab('activities');
+                    handleTabChange('activities');
                     await fetchRealDataForTab('activities');
                   }}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'activities' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
@@ -2607,7 +3246,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
           {canAccessFeature('achievements') && (
                 <li>
                 <button 
-                  onClick={() => setActiveTab('achievements')}
+                  onClick={() => handleTabChange('achievements')}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'achievements' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
@@ -2619,7 +3258,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 {canAccessFeature('schedule') && (
                   <li>
                 <button 
-                  onClick={() => setActiveTab('schedule')}
+                  onClick={() => handleTabChange('schedule')}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'schedule' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                 >
@@ -2642,7 +3281,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 <li>
                   <button 
                     onClick={async () => {
-                      setActiveTab('tree-view');
+                      handleTabChange('tree-view');
                       await fetchRealDataForTab('tree-view');
                     }}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'tree-view' ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
@@ -2653,18 +3292,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                   </button>
                 </li>
               )}
-              {canAccessFeature('code_editor') && (
-                <li>
-                  <button
-                    onClick={() => setActiveTab('code-editor')}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'code-editor' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
-                      }`}
-                  >
-                    <Code className="w-4 h-4" />
-                    <span>Code Editor</span>
-                  </button>
-                </li>
-              )}
+
             </ul>
           </div>
 
@@ -2676,7 +3304,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
             <ul className="space-y-2">
                 <li>
                   <button 
-                    onClick={() => setActiveTab('profile-settings')}
+                    onClick={() => handleTabChange('profile-settings')}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${activeTab === 'profile-settings' ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg transform scale-105' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:shadow-md'
                   }`}
                   >
@@ -2699,7 +3327,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {/* E-books Card */}
               {canAccessFeature('basic_tools') && (
                 <div className="group relative overflow-hidden bg-gradient-to-br from-blue-500 via-blue-600 to-cyan-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
-                     onClick={() => setActiveTab('ebooks')}>
+                     onClick={() => handleTabChange('ebooks')}>
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-cyan-600/20"></div>
                   <div className="relative flex items-center space-x-3">
                     <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
@@ -2722,7 +3350,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {/* Ask Teacher Card */}
               {canAccessFeature('basic_tools') && (
                 <div className="group relative overflow-hidden bg-gradient-to-br from-green-500 via-green-600 to-emerald-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
-                     onClick={() => setActiveTab('ask-teacher')}>
+                     onClick={() => handleTabChange('ask-teacher')}>
                   <div className="absolute inset-0 bg-gradient-to-br from-green-400/20 to-emerald-600/20"></div>
                   <div className="relative flex items-center space-x-3">
                     <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
@@ -2764,10 +3392,33 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                 </div>
               )}
 
+              {/* Code Editor Card */}
+              {canAccessFeature('code_editor') && (
+                <div className="group relative overflow-hidden bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
+                     onClick={() => handleTabChange('code-editor')}>
+                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-400/20 to-purple-600/20"></div>
+                  <div className="relative flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                      <Monitor className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-white mb-1">Code Editor</h4>
+                      <p className="text-xs text-indigo-100">Write and run JavaScript code</p>
+                    </div>
+                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                      <ArrowRight className="w-4 h-4 text-white" />
+                    </div>
+                  </div>
+                  {/* Decorative elements */}
+                  <div className="absolute top-2 right-2 w-8 h-8 bg-white/10 rounded-full"></div>
+                  <div className="absolute bottom-2 left-2 w-4 h-4 bg-white/10 rounded-full"></div>
+                </div>
+              )}
+
               {/* Share with Class Card */}
               {canAccessFeature('basic_tools') && (
                 <div className="group relative overflow-hidden bg-gradient-to-br from-pink-500 via-pink-600 to-rose-600 rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
-                     onClick={() => setActiveTab('share-class')}>
+                     onClick={() => handleTabChange('share-class')}>
                   <div className="absolute inset-0 bg-gradient-to-br from-pink-400/20 to-rose-600/20"></div>
                   <div className="relative flex items-center space-x-3">
                     <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
@@ -2790,7 +3441,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               {/* Scratch Editor Card */}
               {canAccessFeature('scratch_editor') && (
                 <div className="group relative overflow-hidden bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
-                     onClick={() => setActiveTab('scratch-editor')}>
+                     onClick={() => handleTabChange('scratch-editor')}>
                   <div className="absolute inset-0 bg-gradient-to-br from-indigo-400/20 to-purple-600/20"></div>
                   <div className="relative flex items-center space-x-3">
                     <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
@@ -2810,28 +3461,6 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                     </div>
           )}
 
-              {/* Code Editor Card */}
-              {canAccessFeature('code_editor') && (
-                <div className="group relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
-                  onClick={() => setActiveTab('code-editor')}>
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-teal-600/20"></div>
-                  <div className="relative flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                      <Code className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-sm font-semibold text-white mb-1">Code Editor</h4>
-                      <p className="text-xs text-emerald-100">Write and test your code</p>
-                    </div>
-                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                      <Zap className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                  {/* Decorative elements */}
-                  <div className="absolute top-2 right-2 w-8 h-8 bg-white/10 rounded-full"></div>
-                  <div className="absolute bottom-2 left-2 w-4 h-4 bg-white/10 rounded-full"></div>
-                </div>
-              )}
             </div>
           </div>
         </nav>
@@ -2858,6 +3487,28 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
               >
                 Retry Connection
               </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Page Navigation Header */}
+        {currentPage !== 'dashboard' && (
+          <div className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center space-x-4">
+              <button 
+                onClick={currentPage === 'section-view' ? handleBackToCourseView : handleBackToDashboard}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>
+                                                  {currentPage === 'section-view' ? 'Back to Course' : 'Back to Dashboard'}
+                </span>
+              </button>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <span className="text-sm text-gray-500">
+                {currentPage === 'course-detail' ? 'Course Details' : 
+                 currentPage === 'section-view' ? `Section: ${selectedSection?.name || ''}` : 'Dashboard'}
+              </span>
             </div>
           </div>
         )}
@@ -2955,6 +3606,9 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
 
               {/* Content when not loading */}
               {!isLoading && (
+                <>
+                  {/* Page-based Navigation System */}
+                  {currentPage === 'dashboard' && (
                 <>
                   {/* Dashboard Tab Content */}
                   {activeTab === 'dashboard' && (
@@ -3199,7 +3853,249 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                       </div>
                     ))}
                   </div>
+
+                        {/* Upcoming Lessons Section */}
+      {/* IOMAD Calendar Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                  {/* Calendar Sidebar */}
+                  <div className="lg:col-span-1">
+                    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                          <Calendar className="w-6 h-6 text-blue-600" />
+                           Learning Calendar
+                        </h3>
+                        <button 
+                          onClick={() => setActiveTab('schedule')}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        >
+                          View Full
+                        </button>
+                      </div>
+                      
+                      {/* Mini Calendar */}
+                      <div className="mb-4">
+                        {/* Month Header */}
+                        <div className="text-center mb-3">
+                          <h4 className="text-lg font-bold text-purple-600">
+                            {new Date().toLocaleDateString('en-US', { month: 'long' })}
+                          </h4>
+                          <p className="text-sm text-gray-600">{new Date().getFullYear()}</p>
+                        </div>
+                        
+                        {/* Day Headers */}
+                        <div className="grid grid-cols-7 gap-1 text-center text-xs mb-2">
+                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                            <div key={day} className={`p-2 font-bold rounded-lg ${
+                              index === 0 ? 'bg-red-100 text-red-600' : 
+                              index === 6 ? 'bg-blue-100 text-blue-600' : 
+                              'bg-purple-100 text-purple-600'
+                            }`}>
+                              {day}
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Calendar Grid */}
+                        <div className="grid grid-cols-7 gap-1">
+                          {Array.from({ length: 35 }, (_, i) => {
+                            const date = new Date();
+                            const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+                            const startDate = new Date(firstDay);
+                            startDate.setDate(startDate.getDate() - firstDay.getDay());
+                            const currentDate = new Date(startDate);
+                            currentDate.setDate(startDate.getDate() + i);
+                            
+                            const isToday = currentDate.toDateString() === new Date().toDateString();
+                            const isCurrentMonth = currentDate.getMonth() === date.getMonth();
+                            const hasEvents = upcomingCourseSessions.some(session => {
+                              const sessionDate = new Date(session.date);
+                              return sessionDate.toDateString() === currentDate.toDateString();
+                            });
+                            
+                            return (
+                              <div 
+                                key={i} 
+                                className={`p-2 rounded-lg cursor-pointer transition-all duration-200 transform hover:scale-110 ${
+                                  isToday 
+                                    ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white font-bold shadow-lg' 
+                                    : hasEvents 
+                                    ? 'bg-gradient-to-br from-green-400 to-teal-500 text-white font-bold' 
+                                    : isCurrentMonth 
+                                    ? 'bg-gradient-to-br from-blue-50 to-indigo-100 text-gray-700 hover:from-blue-100 hover:to-indigo-200' 
+                                    : 'bg-gray-50 text-gray-400'
+                                }`}
+                              >
+                                <div className="text-center">
+                                  <div className="text-sm font-bold">{currentDate.getDate()}</div>
+                                  {hasEvents && (
+                                    <div className="flex justify-center mt-1">
+                                      <div className="w-1.5 h-1.5 bg-white/80 rounded-full"></div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      
+                      {/* Today's Events */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                          <Target className="w-4 h-4 text-green-600" />
+                          Today's Learning Activities
+                        </h4>
+                        {(() => {
+                          const today = new Date().toDateString();
+                          const todaysEvents = upcomingCourseSessions.filter(session => {
+                            const sessionDate = new Date(session.date);
+                            return sessionDate.toDateString() === today;
+                          }).slice(0, 3);
+                          
+                          if (todaysEvents.length === 0) {
+                            return (
+                              <div className="text-center py-4 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg border-2 border-dashed border-yellow-300">
+                                <Target className="w-8 h-8 mx-auto mb-2 text-yellow-400" />
+                                <p className="text-sm font-medium text-yellow-800">No activities today!</p>
+                                <p className="text-xs text-yellow-600 mt-1">Time to explore new lessons!</p>
+                              </div>
+                            );
+                          }
+                          
+                          return todaysEvents.map(session => (
+                            <div key={session.id} className="flex items-center space-x-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{session.title}</p>
+                                <p className="text-xs text-gray-600">{session.time} • {session.type}</p>
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Upcoming Lessons & Activities */}
+                  <div className="lg:col-span-2 space-y-6">
+                    {/* Upcoming Lessons Section */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                          <Calendar className="w-5 h-5 text-blue-600" />
+                          Upcoming Lessons
+                        </h3>
+                        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                          View All
+                        </button>
+                      </div>
+                      
+                      {isLoadingUpcoming ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                          <span className="ml-3 text-gray-600">Loading lessons...</span>
+                        </div>
+                      ) : upcomingLessons.length > 0 ? (
+                        <div className="space-y-3">
+                          {upcomingLessons.slice(0, 3).map((lesson) => (
+                            <div key={lesson.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <BookOpen className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div>
+                                  <h4 className="font-medium text-gray-900 text-sm">{lesson.title}</h4>
+                                  <p className="text-xs text-gray-600">{lesson.course}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-medium text-gray-900">{lesson.date}</div>
+                                <div className="text-xs text-gray-600">{lesson.time} • {lesson.duration}</div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className={`text-xs px-2 py-1 rounded-full ${
+                                    lesson.status === 'in_progress' 
+                                      ? 'bg-yellow-100 text-yellow-800' 
+                                      : 'bg-blue-50 text-blue-600'
+                                  }`}>
+                                    {lesson.status === 'in_progress' ? 'In Progress' : lesson.type}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                          <p className="text-sm">No upcoming lessons available</p>
+                          <p className="text-xs text-gray-400 mt-1">Complete current lessons to see new ones</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Upcoming Activities Section */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                          <Target className="w-5 h-5 text-green-600" />
+                          Upcoming Activities
+                        </h3>
+                        <button className="text-sm text-green-600 hover:text-green-700 font-medium">
+                          View All
+                        </button>
+                      </div>
+                      
+                      {isLoadingUpcoming ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                          <span className="ml-3 text-gray-600">Loading activities...</span>
+                        </div>
+                      ) : upcomingActivities.length > 0 ? (
+                        <div className="space-y-3">
+                          {upcomingActivities.slice(0, 3).map((activity) => (
+                            <div key={activity.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                  <Target className="w-5 h-5 text-green-600" />
+                                </div>
+                                <div>
+                                  <h4 className="font-medium text-gray-900 text-sm">{activity.title}</h4>
+                                  <p className="text-xs text-gray-600">{activity.course}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-medium text-gray-900">{activity.date}</div>
+                                <div className="text-xs text-gray-600">{activity.time} • {activity.duration}</div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className={`text-xs px-2 py-1 rounded-full ${
+                                    activity.status === 'in_progress' 
+                                      ? 'bg-yellow-100 text-yellow-800' 
+                                      : 'bg-green-50 text-green-600'
+                                  }`}>
+                                    {activity.status === 'in_progress' ? 'In Progress' : activity.type}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <Target className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                          <p className="text-sm">No upcoming activities available</p>
+                          <p className="text-xs text-gray-400 mt-1">Complete current activities to see new ones</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
+
+                        {/* Upcoming Activities Section */}
+      
+                </div>
+                              </>
+                            )}
                               </>
                             )}
 
@@ -3269,13 +4165,13 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                           </div>
                             </div>
                           )}
-                          
 
 
                   {/* Course Detail View - Old Code Style */}
                   {activeTab === 'courses' && showCourseDetail && selectedCourse && (
                     <div className="space-y-8">
-                      {/* Course Header with Old Code Styling */}
+                      {/* Course Header with Old Code Styling - Only show when no section is selected */}
+                      {!selectedSection && (
                       <div className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl shadow-lg p-8 text-white">
                         <div className="flex items-center space-x-4 mb-6">
                       <button 
@@ -3312,6 +4208,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                             </div>
                         <p className="text-blue-100 text-sm">15/20 lessons completed • 3 assignments pending</p>
                           </div>
+                      )}
                           
                       {/* Loading State */}
                       {isLoadingCourseDetail && (
@@ -3323,8 +4220,8 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                               </div>
                             )}
 
-                      {/* Course Content - Old Code Layout */}
-                      {!isLoadingCourseDetail && (
+                      {/* Course Content - Only show when no section is selected */}
+                      {!isLoadingCourseDetail && !selectedSection && (
                         <div className="space-y-8">
                           {/* Course Overview Cards */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -3340,26 +4237,26 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                           </div>
                         </div>
                         
-                            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
+                            <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
                               <div className="flex items-center space-x-3">
-                                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                                  <BookOpen className="w-6 h-6 text-purple-600" />
+                                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                  <BookOpen className="w-5 h-5 text-purple-600" />
                           </div>
                                 <div>
-                                  <h3 className="text-lg font-semibold text-gray-900">Modules</h3>
-                                  <p className="text-2xl font-bold text-purple-600">{courseModules.length}</p>
+                                  <h3 className="text-base font-semibold text-gray-900">Modules</h3>
+                                  <p className="text-xl font-bold text-purple-600">{courseModules.length}</p>
                             </div>
                             </div>
                           </div>
                           
-                            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+                            <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500">
                                       <div className="flex items-center space-x-3">
-                                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                                  <Activity className="w-6 h-6 text-green-600" />
+                                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                  <Activity className="w-5 h-5 text-green-600" />
                                 </div>
               <div>
-                                  <h3 className="text-lg font-semibold text-gray-900">Activities</h3>
-                                  <p className="text-2xl font-bold text-green-600">{courseModules.length + courseLessons.length}</p>
+                                  <h3 className="text-base font-semibold text-gray-900">Activities</h3>
+                                  <p className="text-xl font-bold text-green-600">{courseModules.length + courseLessons.length}</p>
                                 </div>
                                 </div>
                             </div>
@@ -3379,15 +4276,15 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                 const sections = getCourseSections();
                                 
                                 return sections.length > 0 ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                                     {sections.map((section, sectionIndex) => (
                                   <div 
                                     key={sectionIndex} 
-                                        className="group relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-100 cursor-pointer"
+                                      className="group relative bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-100 cursor-pointer"
                                     onClick={() => handleSectionClick(section)}
                                   >
                                         {/* Section Header with Gradient Background */}
-                                        <div className="relative h-24 overflow-hidden">
+                                      <div className="relative h-20 overflow-hidden">
                                         <div className={`absolute inset-0 ${sectionIndex % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-cyan-600' :
                                             sectionIndex % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
                                             sectionIndex % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-teal-600' :
@@ -3397,7 +4294,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                           {/* Section Icon Overlay */}
                                           <div className="absolute inset-0 flex items-center justify-center">
                                             <div className="text-center">
-                                              <BookOpen className="w-10 h-10 text-white/80 mx-auto mb-1" />
+                                            <BookOpen className="w-8 h-8 text-white/80 mx-auto mb-1" />
                                               <span className="text-white/90 text-xs font-medium">Section {sectionIndex + 1}</span>
                                             </div>
                 </div>
@@ -3418,27 +4315,27 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                         </div>
 
                                         {/* Section Content */}
-                                        <div className="p-4">
-                                          <div className="mb-3">
-                                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors mb-1 line-clamp-2">
+                                      <div className="p-3">
+                                        <div className="mb-2">
+                                          <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors mb-1">
                                             {section.name}
                                           </h3>
-                                            <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">
+                                          <p className="text-xs text-gray-600 leading-relaxed">
                                               {section.description || `Complete all activities in this section to progress.`}
                                           </p>
                   </div>
                   
                                           {/* Section Stats */}
-                                          <div className="flex items-center justify-between mb-3">
-                                      <div className="flex items-center space-x-3">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center space-x-2">
                                               <div className="text-center">
-                                                <div className="text-lg font-bold text-blue-600">
+                                              <div className="text-sm font-bold text-blue-600">
                                                   {section.lessons.length}
                                                 </div>
                                                 <div className="text-xs text-gray-500">Lessons</div>
                                               </div>
                                               <div className="text-center">
-                                                <div className="text-lg font-bold text-purple-600">
+                                              <div className="text-sm font-bold text-purple-600">
                                                   {section.modules.length}
                                                 </div>
                                                 <div className="text-xs text-gray-500">Modules</div>
@@ -3447,8 +4344,11 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                           </div>
 
                                           {/* Action Button */}
-                                          <button className="w-full py-2.5 px-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-medium rounded-lg transition-all duration-300 transform group-hover:scale-105 shadow-md">
-                                            <div className="flex items-center justify-center space-x-2">
+                                        <button 
+                                          className="w-full py-2 px-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-xs font-medium rounded-md transition-all duration-300 transform group-hover:scale-105 shadow-sm"
+                                          onClick={() => handleSectionClick(section)}
+                                        >
+                                          <div className="flex items-center justify-center space-x-1">
                                               <BookOpen className="w-3 h-3" />
                                               <span>Explore</span>
                                               <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
@@ -3459,12 +4359,12 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                     ))}
                                   </div>
                                 ) : (
-                                  <div className="text-center py-16 text-gray-500">
-                                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                      <BookOpen className="w-12 h-12 text-gray-300" />
+                                <div className="text-center py-12 text-gray-500">
+                                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <BookOpen className="w-10 h-10 text-gray-300" />
                                     </div>
-                                    <h4 className="text-xl font-medium mb-3 text-gray-700">No Course Content Available</h4>
-                                    <p className="text-gray-500 max-w-md mx-auto">
+                                  <h4 className="text-lg font-medium mb-2 text-gray-700">No Course Content Available</h4>
+                                  <p className="text-gray-500 max-w-md mx-auto text-sm">
                                       Course sections and activities will appear here once they're added to your course.
                                     </p>
                     </div>
@@ -3477,48 +4377,51 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
             )}
 
                       {/* Section Activities View */}
-                      {selectedSection && (
+                      {selectedSection && !selectedActivity && (
                         console.log('🎯 Rendering section activities view for:', selectedSection.name, 'with', sectionActivities.length, 'activities'),
                 <div className="space-y-6">
+                  
                                              {/* Enhanced Section Header */}
                            <div className="relative h-40 bg-gradient-to-br from-blue-500 via-purple-600 to-indigo-700 rounded-xl overflow-hidden shadow-lg">
-                            {/* Background Pattern */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-purple-600 to-indigo-700" />
-                            <div className="absolute inset-0 bg-opacity-10 bg-white" />
-                        
-                        {/* Section Info Overlay */}
-                    <div className="absolute bottom-6 left-6 text-white">
+                            {/* Back to Course Button - Outside Container */}
                       <button 
                                 onClick={handleBackToCourseView}
-                        className="flex items-center space-x-2 text-blue-100 hover:text-white transition-all duration-300 mb-4 group"
+                      className="absolute top-6 left-6 flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition-all duration-300 group bg-white/90 backdrop-blur-sm px-3 py-2 rounded-full border border-gray-200 shadow-md"
                       >
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                             <span>Back to Course</span>
                       </button>
+                            {/* Background Pattern */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-purple-600 to-indigo-700" />
+                            
+                            <div className="absolute inset-0 bg-opacity-10 bg-white" />
+                        
+                        
+                    
+                    {/* Section Info Overlay - Inside Container */}
+                    <div className="absolute bottom-6 left-6 right-6 text-white">
                       
-                      <div className="mb-4">
-                                <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-white/20 backdrop-blur-sm mb-3 border border-white/30">
-                                  📚 Section Overview
-                        </span>
-                                <h1 className="text-2xl font-bold mb-2 text-white drop-shadow-lg">{selectedSection.name}</h1>
-                                <p className="text-blue-100 text-base font-medium">{sectionActivities.length} activities available</p>
-                      </div>
                       
                           {/* Enhanced Section Stats */}
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="text-center p-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
-                          <Clock className="w-5 h-5 text-blue-100 mx-auto mb-1" />
-                                  <div className="text-lg font-bold text-white">2-3h</div>
-                                  <div className="text-blue-100 text-xs">Duration</div>
+                      <div className="grid grid-cols-3 gap-2">
+                      <div className="mb-3">
+                                <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-white/20 backdrop-blur-sm mb-2 border border-white/30">
+                                  <BookOpen className="w-4 h-4 inline mr-2" />Section Overview
+                        </span>
+                                <h1 className="text-xl font-bold mb-2 text-white drop-shadow-lg break-words overflow-visible">
+                                  <Rocket className="w-5 h-5 inline mr-2" />
+                                  {selectedSection.name}
+                                </h1>
+                                 <p className="text-blue-100 text-sm font-medium"><Star className="w-4 h-4 inline mr-2" />{sectionActivities.length} activities available</p>
                         </div>
-                        <div className="text-center p-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
-                          <User className="w-5 h-5 text-blue-100 mx-auto mb-1" />
-                                  <div className="text-lg font-bold text-white">{sectionActivities.length}</div>
+                        <div className="text-center p-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+                          <span className="text-lg text-blue-100 mx-auto mb-1 block">🎯</span>
+                                  <div className="text-base font-bold text-white">{sectionActivities.length}</div>
                                   <div className="text-blue-100 text-xs">Activities</div>
                         </div>
-                            <div className="text-center p-3 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
-                              <CheckCircle className="w-5 h-5 text-blue-100 mx-auto mb-1" />
-                              <div className="text-lg font-bold text-white">
+                            <div className="text-center p-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+                                                              <Trophy className="w-4 h-4 text-blue-100 mx-auto mb-1 block" />
+                              <div className="text-base font-bold text-white">
                                     {sectionActivities.filter(a => a.status === 'completed').length}/{sectionActivities.length}
                               </div>
                                   <div className="text-blue-100 text-xs">Completed</div>
@@ -3531,28 +4434,34 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                           <div className="space-y-8">
                             
                             {/* Modules Section */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                              <div className="flex items-center space-x-3 mb-6">
-                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                                  <BookOpen className="w-5 h-5 text-white" />
+                            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg border-2 border-blue-200 p-6">
+                              <div className="flex items-center space-x-4 mb-6">
+                                <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+                                  <BookOpen className="w-6 h-6 text-white" />
                                 </div>
                                 <div>
-                                  <h2 className="text-2xl font-bold text-gray-900">Modules</h2>
-                                  <p className="text-sm text-gray-600">Structured learning content and resources</p>
+                                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"><Rocket className="w-8 h-8 inline mr-3" />Learning Adventures!</h2>
+                                  <p className="text-sm text-blue-700 font-medium"><Star className="w-4 h-4 inline mr-2" />Discover amazing new things to learn!</p>
                                 </div>
                               </div>
                             
                             {isLoadingSectionActivities ? (
                           <div className="flex items-center justify-center py-12">
                             <div className="text-center">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-                                    <p className="text-gray-600">Loading modules...</p>
+                                  <div className="relative">
+                                                                      <div className="w-16 h-16 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                    <Target className="w-8 h-8 text-white" />
+                                  </div>
+                                    <div className="absolute inset-0 w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                  </div>
+                                  <p className="text-blue-700 text-lg font-semibold"><Activity className="w-5 h-5 inline mr-2" />Loading your adventures...</p>
+                                  <p className="text-blue-600 text-sm">Get ready for some fun learning!</p>
                     </div>
                                       </div>
                         ) : (
                                 <div className="relative">
                                   {/* Timeline Line */}
-                                  <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                <div className="absolute left-6 top-0 bottom-0 w-1 bg-gradient-to-b from-yellow-400 via-orange-500 to-red-500 rounded-full"></div>
                                   
                                   {/* Modules List */}
                                   <div className="space-y-6">
@@ -3567,25 +4476,27 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                         
                                         {/* Timeline Indicator */}
                                         <div className="relative z-10 flex-shrink-0">
-                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm ${activity.status === 'completed'
-                                              ? 'bg-green-500' 
+                                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-lg transform group-hover:scale-110 transition-all duration-300 ${activity.status === 'completed'
+                                              ? 'bg-gradient-to-br from-green-400 to-emerald-600 animate-pulse' 
                                               : activity.status === 'in_progress'
-                                              ? 'bg-blue-500'
-                                              : 'bg-gray-400'
+                                              ? 'bg-gradient-to-br from-blue-400 to-cyan-600 animate-bounce'
+                                              : 'bg-gradient-to-br from-purple-400 to-pink-600 hover:animate-pulse'
                                           }`}>
                                             {activity.status === 'completed' ? (
-                                              <CheckCircle className="w-6 h-6" />
+                                              <CheckCircle className="w-6 h-6 text-white" />
+                                            ) : activity.status === 'in_progress' ? (
+                                              <Rocket className="w-6 h-6 text-white" />
                                             ) : (
-                                              index + 1
+                                              <Star className="w-6 h-6 text-white" />
                                           )}
                           </div>
                                         </div>
                                         
                                         {/* Module Card */}
-                                        <div className="flex-1 bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden group-hover:border-purple-200">
+                                        <div className="flex-1 bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-blue-200 overflow-hidden group-hover:border-purple-400 group-hover:scale-105 transform">
                                           <div className="flex">
                                             {/* Module Thumbnail */}
-                                            <div className="w-32 h-24 flex-shrink-0 overflow-hidden">
+                                            <div className="w-28 h-24 flex-shrink-0 overflow-hidden">
                                               {activity.thumbnail ? (
                                                 <img 
                                                   src={activity.thumbnail} 
@@ -3608,7 +4519,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                                   ) : activity.type === 'reading' ? (
                                                     <BookOpen className="w-8 h-8 text-white" />
                                                   ) : (
-                                                    <BookOpen className="w-8 h-8 text-white" />
+                                                    <Target className="w-8 h-8 text-white" />
                                                   )}
                                       </div>
                                               )}
@@ -3617,24 +4528,24 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                             {/* Module Content */}
                                             <div className="flex-1 p-4">
                                               <div className="mb-3">
-                                                <h3 className="text-lg font-bold text-gray-900 group-hover:text-purple-600 transition-colors mb-2">
-                                                  {activity.name}
+                                                                                                <h3 className="text-lg font-bold text-gray-800 group-hover:text-purple-600 transition-colors mb-2">
+                                                  <Target className="w-5 h-5 inline mr-2" />{activity.name}
                                                 </h3>
-                                                <p className="text-sm text-gray-600 leading-relaxed">
-                                                  {activity.description || 'Complete this module to progress in your learning journey.'}
+                                                <p className="text-sm text-gray-700 leading-relaxed">
+                                                  {activity.description || <><Star className="w-4 h-4 inline mr-1" />Complete this awesome module to unlock new skills!</>}
                                                 </p>
                                               </div>
                                               
                                               {/* Module Details */}
-                                              <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                                              <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
                                                 <div className="flex items-center space-x-4">
-                                          <span className="flex items-center">
+                                                  <span className="flex items-center bg-blue-100 px-2 py-1 rounded-full">
                                                     <Clock className="w-4 h-4 mr-1" />
-                                                    {activity.duration || '30 min'}
+                                                    <span className="font-medium text-blue-800">{activity.duration || '30 min'}</span>
                                           </span>
                                                   {activity.dueDate && (
-                                                    <span className="text-orange-600 font-medium">
-                                                      Due: {activity.dueDate}
+                                                    <span className="bg-orange-100 px-2 py-1 rounded-full font-medium text-orange-800">
+                                                      <Calendar className="w-4 h-4 inline mr-1" />Due: {activity.dueDate}
                                           </span>
                                                   )}
                                                 </div>
@@ -3643,23 +4554,23 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                               {/* Difficulty & Points */}
                                               <div className="flex items-center justify-between">
                                                 <div className="flex items-center space-x-3">
-                                                <span className={`px-2 py-1 rounded text-xs font-medium ${activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' :
-                                            activity.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
-                                            'bg-red-100 text-red-800'
-                                          }`}>
-                                            {activity.difficulty}
+                                                  <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${activity.difficulty === 'Easy' ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-md' :
+                                                      activity.difficulty === 'Medium' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-md' : 
+                                                      'bg-gradient-to-r from-red-400 to-pink-500 text-white shadow-md'
+                                                    }`}>
+                                                    {activity.difficulty === 'Easy' ? <CheckCircle className="w-4 h-4 inline mr-1" /> : activity.difficulty === 'Medium' ? <Circle className="w-4 h-4 inline mr-1" /> : <X className="w-4 h-4 inline mr-1" />}{activity.difficulty}
                                           </span>
-                                                  <span className="flex items-center text-sm text-gray-600">
-                                                    <Star className="w-4 h-4 mr-1 text-yellow-400 fill-current" />
-                                                    {activity.points || 25} points
+                                                  <span className="flex items-center bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1.5 rounded-full font-bold text-sm shadow-md">
+                                                    <Star className="w-4 h-4 mr-1" />
+                                                    {activity.points || 25} pts
                                           </span>
                                         </div>
                                                 
                                                 {/* Action Button */}
                                                 <button 
-                                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${activity.status === 'completed' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                                        activity.status === 'in_progress' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                                                    'bg-purple-600 hover:bg-purple-700 text-white'
+                                                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all duration-300 transform hover:scale-105 shadow-lg ${activity.status === 'completed' ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' :
+                                                      activity.status === 'in_progress' ? 'bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white' :
+                                                      'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white'
                                                   }`}
                                                   onClick={(e) => {
                                                     e.stopPropagation();
@@ -3682,28 +4593,34 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                             </div>
 
                             {/* Activities Section */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                              <div className="flex items-center space-x-3 mb-6">
-                                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
-                                  <Activity className="w-5 h-5 text-white" />
+                            <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-2xl shadow-lg border-2 border-green-200 p-6">
+                              <div className="flex items-center space-x-4 mb-6">
+                                <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-teal-500 rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
+                                  <Activity className="w-6 h-6 text-white" />
                                 </div>
                                 <div>
-                                  <h2 className="text-2xl font-bold text-gray-900">Activities</h2>
-                                  <p className="text-sm text-gray-600">Interactive tasks, quizzes, and assignments</p>
+                                  <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent"><Target className="w-8 h-8 inline mr-3" />Fun Activities!</h2>
+                                  <p className="text-sm text-green-700 font-medium"><Activity className="w-4 h-4 inline mr-2" />Interactive games, quizzes, and creative projects!</p>
                                 </div>
                               </div>
                               
                               {isLoadingSectionActivities ? (
                                 <div className="flex items-center justify-center py-12">
                                   <div className="text-center">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-                                    <p className="text-gray-600">Loading activities...</p>
+                                    <div className="relative">
+                                      <div className="w-16 h-16 bg-gradient-to-r from-green-400 to-teal-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                        <Target className="w-8 h-8 text-white" />
+                                      </div>
+                                      <div className="absolute inset-0 w-16 h-16 border-4 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                                    </div>
+                                    <p className="text-green-700 text-lg font-semibold"><Activity className="w-5 h-5 inline mr-2" />Loading your fun activities...</p>
+                                    <p className="text-green-600 text-sm">Get ready for some exciting challenges!</p>
                                   </div>
                                 </div>
                                                             ) : (
                                 <div className="relative">
                                   {/* Timeline Line */}
-                                  <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                                  <div className="absolute left-6 top-0 bottom-0 w-1 bg-gradient-to-b from-green-400 via-teal-500 to-blue-500 rounded-full"></div>
                                   
                                   {/* Activities List */}
                                   <div className="space-y-6">
@@ -3719,25 +4636,27 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                         
                                         {/* Timeline Indicator */}
                                         <div className="relative z-10 flex-shrink-0">
-                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm ${activity.status === 'completed'
-                                              ? 'bg-green-500' 
+                                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-lg transform group-hover:scale-110 transition-all duration-300 ${activity.status === 'completed'
+                                              ? 'bg-gradient-to-br from-green-400 to-emerald-600 animate-pulse' 
                                               : activity.status === 'in_progress'
-                                              ? 'bg-blue-500'
-                                              : 'bg-gray-400'
+                                              ? 'bg-gradient-to-br from-blue-400 to-cyan-600 animate-bounce'
+                                              : 'bg-gradient-to-br from-purple-400 to-pink-600 hover:animate-pulse'
                                       }`}>
                                         {activity.status === 'completed' ? (
-                                              <CheckCircle className="w-6 h-6" />
+                                              <Trophy className="w-6 h-6" />
+                                            ) : activity.status === 'in_progress' ? (
+                                              <Rocket className="w-6 h-6" />
                                             ) : (
-                                              index + 1
+                                              <Target className="w-6 h-6" />
                                             )}
                                           </div>
                                         </div>
                                         
                                         {/* Activity Card */}
-                                        <div className="flex-1 bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden group-hover:border-green-200">
+                                        <div className="flex-1 bg-gradient-to-br from-white to-green-50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-green-200 overflow-hidden group-hover:border-teal-400 group-hover:scale-105 transform">
                                           <div className="flex">
                                             {/* Activity Thumbnail */}
-                                            <div className="w-32 h-24 flex-shrink-0 overflow-hidden">
+                                            <div className="w-28 h-24 flex-shrink-0 overflow-hidden">
                                               {activity.thumbnail ? (
                                                 <img 
                                                   src={activity.thumbnail} 
@@ -3757,13 +4676,13 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                                   {activity.type === 'quiz' ? (
                                                     <FileText className="w-8 h-8 text-white" />
                                                   ) : activity.type === 'assignment' ? (
-                                                    <Code className="w-8 h-8 text-white" />
+                                                    <Monitor className="w-8 h-8 text-white" />
                                                   ) : activity.type === 'discussion' ? (
                                                     <MessageSquare className="w-8 h-8 text-white" />
                                                   ) : activity.type === 'project' ? (
                                                     <Star className="w-8 h-8 text-white" />
                                                   ) : (
-                                                    <Activity className="w-8 h-8 text-white" />
+                                                    <Target className="w-8 h-8 text-white" />
                                                   )}
                                                 </div>
                                               )}
@@ -3772,24 +4691,24 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                             {/* Activity Content */}
                                             <div className="flex-1 p-4">
                                               <div className="mb-3">
-                                                <h3 className="text-lg font-bold text-gray-900 group-hover:text-green-600 transition-colors mb-2">
-                                                  {activity.name}
+                                                                                                  <h3 className="text-lg font-bold text-gray-800 group-hover:text-green-600 transition-colors mb-2">
+                                                    <Target className="w-5 h-5 inline mr-2" />{activity.name}
                                                 </h3>
-                                                <p className="text-sm text-gray-600 leading-relaxed">
-                                                  {activity.description || 'Complete this activity to progress in your learning journey.'}
+                                                  <p className="text-sm text-gray-700 leading-relaxed">
+                                                    {activity.description || <><Star className="w-4 h-4 inline mr-2" />Complete this exciting activity to unlock new achievements!</>}
                                                 </p>
                                               </div>
                                               
                                               {/* Activity Details */}
-                                              <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                                              <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
                                                 <div className="flex items-center space-x-4">
-                                                  <span className="flex items-center">
+                                                  <span className="flex items-center bg-green-100 px-2 py-1 rounded-full">
                                                     <Clock className="w-4 h-4 mr-1" />
-                                                    {activity.duration || '30 min'}
+                                                    <span className="font-medium text-green-800">{activity.duration || '30 min'}</span>
                                                   </span>
                                                   {activity.dueDate && (
-                                                    <span className="text-orange-600 font-medium">
-                                                      Due: {activity.dueDate}
+                                                    <span className="bg-orange-100 px-2 py-1 rounded-full font-medium text-orange-800">
+                                                      <Calendar className="w-4 h-4 inline mr-1" />Due: {activity.dueDate}
                                                     </span>
                                                   )}
                                                 </div>
@@ -3798,30 +4717,30 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                               {/* Difficulty & Points */}
                                               <div className="flex items-center justify-between">
                                                 <div className="flex items-center space-x-3">
-                                                <span className={`px-2 py-1 rounded text-xs font-medium ${activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' :
-                                                    activity.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
-                                                    'bg-red-100 text-red-800'
-                                                  }`}>
-                                                    {activity.difficulty}
+                                                  <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${activity.difficulty === 'Easy' ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-md' :
+                                                      activity.difficulty === 'Medium' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-md' : 
+                                                      'bg-gradient-to-r from-red-400 to-pink-500 text-white shadow-md'
+                                                    }`}>
+                                                    {activity.difficulty === 'Easy' ? <CheckCircle className="w-4 h-4 inline mr-1" /> : activity.difficulty === 'Medium' ? <Circle className="w-4 h-4 inline mr-1" /> : <X className="w-4 h-4 inline mr-1" />}{activity.difficulty}
                                                   </span>
-                                                  <span className="flex items-center text-sm text-gray-600">
-                                                    <Star className="w-4 h-4 mr-1 text-yellow-400 fill-current" />
-                                                    {activity.points || 25} points
+                                                  <span className="flex items-center bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1.5 rounded-full font-bold text-sm shadow-md">
+                                                    <Star className="w-4 h-4 mr-1" />
+                                                    {activity.points || 25} pts
                                                   </span>
                                                 </div>
                                                 
                                                 {/* Action Button */}
                                                 <button 
-                                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${activity.status === 'completed' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                                                    activity.status === 'in_progress' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                                                    'bg-green-600 hover:bg-green-700 text-white'
+                                                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all duration-300 transform hover:scale-105 shadow-lg ${activity.status === 'completed' ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' :
+                                                      activity.status === 'in_progress' ? 'bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white' :
+                                                      'bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white'
                                                   }`}
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleActivityClick(activity);
                                                   }}
                                                 >
-                                                  {activity.status === 'completed' ? 'Review' :
+                                                  {                                        activity.status === 'completed' ? 'Review' :
                                                    activity.status === 'in_progress' ? 'Continue' : 
                                                    'Start'}
                       </button>
@@ -3840,43 +4759,62 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                              )}
 
                        {/* Detailed Activity View */}
-                       {selectedActivity && activityDetails && (
+                        {selectedActivity && activityDetails && !isActivityStarted && (
                     <div className="space-y-6">
+                            {/* Back Button - Only show when in activities view */}
+                            {isInActivitiesView && (
+                              <div className="flex justify-start mb-4">
+                                <button 
+                                  onClick={handleBackToSectionView}
+                                  className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400 text-gray-700 hover:text-gray-900 rounded-full font-medium transition-all duration-300 transform hover:scale-105 shadow-md border border-gray-200"
+                                >
+                                  <ArrowLeft className="w-4 h-4" />
+                                  <span>Back to Section</span>
+                                </button>
+                              </div>
+                            )}
+                            
                            {/* Activity Header */}
-                           <div className="relative h-48 bg-gradient-to-br from-green-400 to-blue-600 rounded-xl overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-green-400 to-blue-600" />
+                            <div className="relative h-64 bg-gradient-to-br from-green-200 via-teal-200 to-blue-200 rounded-2xl overflow-visible shadow-lg border border-green-100">
+                             <div className="absolute inset-0 bg-gradient-to-br from-green-200 via-teal-200 to-blue-200" />
                         
                              {/* Activity Info Overlay */}
                         <div className="absolute bottom-6 left-6 text-white">
                           <button 
                                  onClick={handleBackToSectionView}
-                            className="flex items-center space-x-2 text-blue-100 hover:text-white transition-colors mb-4"
+                                 className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition-colors mb-4 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-full border border-white/50"
                           >
-                            <ArrowLeft className="w-4 h-4" />
+                                 <ArrowLeft className="w-4 h-2" />
                                  <span>Back to Section</span>
                           </button>
                           
                           <div className="mb-4">
-                            <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-500 mb-3">
-                                   {activityDetails.type?.toUpperCase() || 'ACTIVITY'}
+                                 <span className="inline-block px-4 py-2 rounded-full text-sm font-bold bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-800 mb-3 shadow-sm border border-orange-200">
+                                   <Target className="w-4 h-4 inline mr-2" />{activityDetails.type?.toUpperCase() || 'ACTIVITY'}
                             </span>
-                                 <h1 className="text-3xl font-bold mb-2">{activityDetails.name}</h1>
-                                 <p className="text-blue-100 text-lg">Real IOMAD Data</p>
+                                 <h1 className="text-3xl font-bold mb-2 text-gray-800 break-words overflow-visible leading-tight">
+                                   <Rocket className="w-6 h-6 inline mr-2" />
+                                   {activityDetails.name}
+                                 </h1>
+                                 <p className="text-gray-700 text-lg"><Star className="w-4 h-4 inline mr-2" />Real IOMAD Adventure!</p>
                           </div>
                           
                                {/* Activity Stats */}
                           <div className="flex items-center space-x-8 mb-4">
-                            <div className="flex items-center space-x-2">
-                                   <Clock className="w-5 h-5 text-blue-100" />
-                                   <span className="text-blue-100">{activityDetails.estimatedTime}</span>
+                                 <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-full border border-white/50">
+                                   <Clock className="w-5 h-5 text-gray-700" />
+                                   <span className="text-gray-700 font-medium">{activityDetails.estimatedTime}</span>
                             </div>
-                            <div className="flex items-center space-x-2">
-                                   <Star className="w-5 h-5 text-blue-100" />
-                                   <span className="text-blue-100">{activityDetails.points} points</span>
+                                 <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-full border border-white/50">
+                                   <Star className="w-5 h-5 text-gray-700" />
+                                   <span className="text-gray-700 font-medium">{activityDetails.points} points</span>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <CheckCircle className="w-5 h-5 text-blue-100" />
-                              <span className="text-blue-100">
+                                 <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-full border border-white/50">
+                                   <span className="text-xl text-gray-700">
+                                     {activityDetails.status === 'completed' ? '' :
+                                      activityDetails.status === 'in_progress' ? <Rocket className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+                                   </span>
+                                   <span className="text-gray-700 font-medium">
                                      {activityDetails.status === 'completed' ? 'Completed' :
                                       activityDetails.status === 'in_progress' ? 'In Progress' : 'Pending'}
                               </span>
@@ -3886,7 +4824,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                       </div>
 
                            {/* Activity Content */}
-                           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 overflow-visible">
                              {isLoadingActivityDetails ? (
                                <div className="flex items-center justify-center py-12">
                                  <div className="text-center">
@@ -3901,8 +4839,11 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                    {/* Left Column - Description */}
                                    <div className="space-y-6">
                                      <div>
-                                       <h3 className="text-xl font-bold text-gray-900 mb-4">Description</h3>
-                                       <div className="bg-gray-50 rounded-lg p-6">
+                                       <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                                         <BookOpen className="w-5 h-5 mr-2" />
+                                         What You'll Learn
+                                       </h3>
+                                       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border-2 border-blue-200 overflow-visible">
                                          <p className="text-gray-700 leading-relaxed">
                                            {activityDetails.fullDescription}
                                          </p>
@@ -3910,8 +4851,11 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                           </div>
                           
                                      <div>
-                                       <h3 className="text-xl font-bold text-gray-900 mb-4">Learning Objectives</h3>
-                                       <div className="bg-blue-50 rounded-lg p-6">
+                                       <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                                         <Target className="w-5 h-5 mr-2" />
+                                         Learning Goals
+                                       </h3>
+                                       <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-2xl p-6 border-2 border-green-200 overflow-visible">
                                          <p className="text-gray-700 leading-relaxed">
                                            {activityDetails.learningObjectives}
                                          </p>
@@ -3919,8 +4863,11 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                       </div>
                                       
                                      <div>
-                                       <h3 className="text-xl font-bold text-gray-900 mb-4">Requirements</h3>
-                                       <div className="bg-yellow-50 rounded-lg p-6">
+                                       <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                                         <Settings className="w-5 h-5 mr-2" />
+                                         What You Need
+                                       </h3>
+                                       <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6 border-2 border-yellow-200 overflow-visible">
                                          <p className="text-gray-700 leading-relaxed">
                                            {activityDetails.requirements}
                                          </p>
@@ -3931,8 +4878,11 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                    {/* Right Column - Details */}
                                    <div className="space-y-6">
                                      <div>
-                                       <h3 className="text-xl font-bold text-gray-900 mb-4">Activity Details</h3>
-                                       <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+                                       <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                                         <FileText className="w-5 h-5 mr-2" />
+                                         Activity Info
+                                       </h3>
+                                       <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl p-6 space-y-4 overflow-visible">
                                          <div className="flex justify-between items-center">
                                            <span className="text-gray-600">Type:</span>
                                            <span className="font-medium text-gray-900">{activityDetails.type}</span>
@@ -3978,8 +4928,11 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                      {/* Moodle Module Info */}
                                      {activityDetails.modname && (
                                        <div>
-                                         <h3 className="text-xl font-bold text-gray-900 mb-4">Moodle Module Info</h3>
-                                         <div className="bg-purple-50 rounded-lg p-6 space-y-4">
+                                         <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                                           <span className="mr-2">🌐</span>
+                                           Moodle Adventure
+                                         </h3>
+                                         <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-2xl p-6 space-y-4">
                                            <div className="flex justify-between items-center">
                                              <span className="text-gray-600">Module Type:</span>
                                              <span className="font-medium text-gray-900">{activityDetails.modname}</span>
@@ -4006,8 +4959,11 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                      {/* Module Contents */}
                                      {activityDetails.formattedContent && activityDetails.formattedContent.length > 0 && (
                                        <div>
-                                         <h3 className="text-xl font-bold text-gray-900 mb-4">Files & Resources</h3>
-                                         <div className="bg-gray-50 rounded-lg p-6 space-y-3">
+                                         <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                                           <span className="mr-2">📁</span>
+                                           Files & Resources
+                                         </h3>
+                                         <div className="bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200 rounded-2xl p-6 space-y-3">
                                            {activityDetails.formattedContent.map((content: any, index: number) => (
                                              <div key={index} className="flex items-center justify-between p-3 bg-white rounded border">
                                                <div className="flex items-center space-x-3">
@@ -4037,15 +4993,15 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                   <div className="flex items-center justify-center space-x-4 pt-6 border-t border-gray-200">
                                     <button 
                                       onClick={handleBackToSectionView}
-                                      className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+                                       className="px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-full font-bold transition-all duration-300 transform hover:scale-105 shadow-lg"
                                     >
-                                      Back to Section
+                                       <ArrowLeft className="w-4 h-4 inline mr-2" />Back to Section
                                     </button>
                                     <button 
                                       onClick={startActivity}
-                                className={`px-6 py-3 rounded-lg font-medium transition-colors ${activityDetails.status === 'completed' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                                        activityDetails.status === 'in_progress' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                                        'bg-gray-600 hover:bg-gray-700 text-white'
+                                       className={`px-6 py-3 rounded-full font-bold transition-all duration-300 transform hover:scale-105 shadow-lg ${activityDetails.status === 'completed' ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' :
+                                           activityDetails.status === 'in_progress' ? 'bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white' :
+                                           'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white'
                                       }`}
                                     >
                                       {activityDetails.status === 'completed' ? 'Review Activity' :
@@ -4061,43 +5017,59 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                        {/* Inline Activity Content View */}
                        {selectedActivity && activityDetails && isActivityStarted && (
                     <div className="space-y-6">
+                           {/* Back Button - Only show when in activities view */}
+                           {isInActivitiesView && (
+                             <div className="flex justify-start mb-4">
+                               <button 
+                                 onClick={handleBackToSectionView}
+                                 className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400 text-gray-700 hover:text-gray-900 rounded-full font-medium transition-all duration-300 transform hover:scale-105 shadow-md border border-gray-200"
+                               >
+                                 <ArrowLeft className="w-4 h-4" />
+                                 <span>Back to Section</span>
+                               </button>
+                             </div>
+                           )}
+                           
                            {/* Activity Progress Header */}
-                           <div className="relative h-32 bg-gradient-to-br from-green-400 to-blue-600 rounded-xl overflow-hidden">
-                             <div className="absolute inset-0 bg-gradient-to-br from-green-400 to-blue-600" />
+                           <div className="relative h-32 bg-gradient-to-br from-green-200 to-blue-200 rounded-xl overflow-hidden border border-green-100">
+                             <div className="absolute inset-0 bg-gradient-to-br from-green-200 to-blue-200" />
                              
                              {/* Progress Info Overlay */}
-                        <div className="absolute bottom-6 left-6 text-white">
+                             <div className="absolute bottom-6 left-6 right-6 text-white">
                           <button 
                                  onClick={() => setIsActivityStarted(false)}
-                            className="flex items-center space-x-2 text-blue-100 hover:text-white transition-colors mb-4"
+                                 className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition-colors mb-4 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-full border border-white/50"
                           >
                             <ArrowLeft className="w-4 h-4" />
                                  <span>Back to Details</span>
                           </button>
                           
-                          <div className="mb-4">
-                                 <h1 className="text-2xl font-bold mb-2">{activityDetails.name}</h1>
-                                 <p className="text-blue-100 text-lg">Activity in Progress</p>
+                          <div className="">
+                                 <h1 className="text-2xl font-bold mb-2 text-gray-800 break-words overflow-visible leading-tight">
+                                   <Rocket className="w-5 h-5 inline mr-2" />
+                                   {activityDetails.name}
+                                 </h1>
+                                 <p className="text-gray-700 text-lg"><Star className="w-4 h-4 inline mr-2" />Activity in Progress</p>
                           </div>
                           
                                {/* Progress Bar */}
-                               <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+                               <div className="w-full bg-blue-100 rounded-full h-2 mb-2">
                                  <div 
-                                   className="bg-white h-2 rounded-full transition-all duration-500"
+                                   className="bg-blue-300 h-2 rounded-full transition-all duration-500"
                                    style={{ width: `${activityProgress}%` }}
                                  />
                             </div>
-                               <p className="text-blue-100 text-sm">{activityProgress}% Complete</p>
+                               <p className="text-gray-700 text-sm font-medium">{activityProgress}% Complete</p>
                             </div>
                           </div>
                           
                            {/* Activity Content */}
-                           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 overflow-visible">
                              <div className="mb-6">
                                <div className="flex items-center justify-between">
                                  <h2 className="text-2xl font-bold text-gray-900">Activity Content</h2>
-                                 <div className="flex items-center space-x-4">
-                              <span className={`px-3 py-1 rounded-full text-sm font-medium ${activityDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                 <div className="flex items-center space-x-3">
+                                   <span className={`px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap ${activityDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
                                      activityDetails.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
                                      'bg-gray-100 text-gray-800'
                                    }`}>
@@ -4106,7 +5078,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                    </span>
                                    <button 
                                      onClick={handleBackToSectionView}
-                                     className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+                                     className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 hover:text-gray-900 rounded-lg font-medium transition-colors whitespace-nowrap min-w-fit border border-gray-200"
                                    >
                                      Exit Activity
                                    </button>
@@ -4129,10 +5101,10 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                    </span>
                             </div>
                                  <div className="flex items-center space-x-3">
-                                   <button className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors">
+                                   <button className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 hover:text-gray-900 rounded-lg font-medium transition-colors border border-gray-200">
                                      Save Progress
                                    </button>
-                                   <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+                                   <button className="px-4 py-2 bg-green-300 hover:bg-green-400 text-green-800 hover:text-green-900 rounded-lg font-medium transition-colors border border-green-200">
                                      Complete Activity
                                    </button>
                           </div>
@@ -4149,7 +5121,17 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                              <div className="bg-white rounded-lg overflow-hidden">
                                {/* Video Player Header */}
                                <div className="flex items-center justify-between p-4 bg-gray-100 border-b">
+                                 <div className="flex items-center space-x-4">
                                  <h3 className="text-lg font-semibold text-gray-900">Video Player</h3>
+                                   {isInActivitiesView && (
+                                     <button 
+                                       onClick={handleBackToSectionView}
+                                       className="px-3 py-1 bg-blue-200 text-blue-800 rounded text-sm hover:bg-blue-300 transition-colors border border-blue-300"
+                                     >
+                                       <ArrowLeft className="w-4 h-4 inline mr-2" />Back to Section
+                                     </button>
+                                   )}
+                                 </div>
                                  <button 
                                    onClick={closeVideo}
                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
@@ -4237,6 +5219,14 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                          : 'Real SCORM Package'
                                        }
                                      </span>
+                                   )}
+                                   {isInActivitiesView && (
+                                     <button 
+                                       onClick={handleBackToSectionView}
+                                       className="px-3 py-1 bg-indigo-500 text-white rounded text-sm hover:bg-indigo-700 transition-colors"
+                                     >
+                                       <ArrowLeft className="w-4 h-4 inline mr-2" />Back to Section
+                                     </button>
                                    )}
                                  </div>
                                  <button 
@@ -4368,259 +5358,158 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                        )}
 
                        {/* Detailed Lesson View */}
-                      {selectedLessonForDetail && (
-                    <div className="space-y-6">
-                      {/* Lesson Header */}
-                      <div className="relative h-64 bg-gradient-to-br from-blue-400 to-purple-600 rounded-xl overflow-hidden">
-                        {/* Background Image */}
-                        <div 
-                          className="absolute inset-0 bg-cover bg-center opacity-20"
-                          style={{ 
-                            backgroundImage: `url('https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1200&h=400&fit=crop')` 
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-purple-600" />
-                        
-                        {/* Lesson Info Overlay */}
-                        <div className="absolute bottom-6 left-6 text-white">
-                          <button 
-                            onClick={() => {
-                              setSelectedLessonForDetail(null);
-                              // If we came from a section, go back to modules view
-                              if (selectedSectionForModules) {
-                                // Keep the section selected for modules view
-                              } else {
-                                setSelectedSectionForModules(null);
-                              }
-                            }}
-                            className="flex items-center space-x-2 text-blue-100 hover:text-white transition-colors mb-4"
-                          >
-                            <ArrowLeft className="w-4 h-4" />
-                            <span>Back to {selectedSectionForModules ? 'Modules' : 'Course'}</span>
-                                                </button>
-                          
-                          <div className="mb-4">
-                            <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-blue-500 mb-3">
-                              In Progress
-                            </span>
-                            <h1 className="text-3xl font-bold mb-2">{selectedLessonForDetail.name}</h1>
-                            <p className="text-blue-100 text-lg">{selectedLessonForDetail.description}</p>
-                                              </div>
-                          
-                          {/* Lesson Stats */}
-                          <div className="flex items-center space-x-8 mb-4">
-                            <div className="flex items-center space-x-2">
-                              <Clock className="w-5 h-5 text-blue-100" />
-                              <span className="text-blue-100">{selectedLessonForDetail.duration}</span>
-                                            </div>
-                            <div className="flex items-center space-x-2">
-                              <User className="w-5 h-5 text-blue-100" />
-                              <span className="text-blue-100">{lessonActivities.length} total</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <CheckCircle className="w-5 h-5 text-blue-100" />
-                              <span className="text-blue-100">{selectedLessonForDetail.progress}%</span>
-                            </div>
-                          </div>
-                          
-                          {/* Progress Bar */}
-                          <div>
-                            <div className="flex justify-between text-sm mb-2">
-                              <span className="text-blue-100">Lesson Progress</span>
-                              <span className="text-white font-medium">{selectedLessonForDetail.progress}%</span>
-                            </div>
-                            <div className="w-full bg-blue-300 bg-opacity-30 rounded-full h-3">
-                              <div 
-                                className="bg-white h-3 rounded-full transition-all duration-300"
-                                style={{ width: `${selectedLessonForDetail.progress}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Lesson Activities Section */}
-                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Lesson Activities</h2>
-                        
-                        {isLoadingActivities ? (
-                          <div className="flex items-center justify-center py-12">
-                            <div className="text-center">
-                              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                              <p className="text-gray-600">Loading activities...</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {/* Activity Progress Indicator */}
-                            <div className="flex items-center justify-center mb-8">
-                              <div className="flex space-x-2">
-                                {lessonActivities.map((activity, index) => (
-                                  <div
-                                    key={activity.id}
-                                    className={`w-3 h-3 rounded-full ${activity.status === 'completed' ? 'bg-green-500' :
-                                      activity.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300'
-                                    }`}
-                                  />
-                                ))}
-                                          </div>
-                            </div>
-                            
-                            {/* Activity List (Vertical Timeline) */}
-                            <div className="space-y-6">
-                              {lessonActivities.map((activity, index) => (
-                                <div key={activity.id} className="relative">
-                                  {/* Connecting Line */}
-                                  {index < lessonActivities.length - 1 && (
-                                    <div className="absolute left-6 top-16 w-0.5 h-8 bg-gray-200" />
-                                  )}
-                                  
-                                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-start space-x-3">
-                                      {/* Status Indicator */}
-                                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.status === 'completed'
-                                          ? 'bg-green-500' 
-                                          : activity.status === 'in_progress'
-                                          ? 'bg-blue-500'
-                                          : 'bg-gray-400'
-                                      }`}>
-                                        {activity.status === 'completed' ? (
-                                          <CheckCircle className="w-5 h-5 text-white" />
-                                        ) : (
-                                          <span className="text-white font-bold text-xs">{activity.order}</span>
-                                        )}
-                                      </div>
-                                      
-                                      {/* Activity Thumbnail */}
-                                      <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-blue-100 rounded-lg flex items-center justify-center overflow-hidden">
-                                        {activity.thumbnail ? (
-                                          <img 
-                                            src={activity.thumbnail} 
-                                            alt={activity.name}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => {
-                                              e.currentTarget.style.display = 'none';
-                                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                            }}
-                                          />
-                                        ) : null}
-                                        <div className={`w-full h-full flex items-center justify-center ${activity.thumbnail ? 'hidden' : ''}`}>
-                                          {activity.type === 'quiz' ? (
-                                            <FileText className="w-6 h-6 text-purple-600" />
-                                          ) : activity.type === 'video' ? (
-                                            <Video className="w-6 h-6 text-purple-600" />
-                                          ) : activity.type === 'assignment' ? (
-                                            <Code className="w-6 h-6 text-purple-600" />
-                                          ) : activity.type === 'reading' ? (
-                                            <BookOpen className="w-6 h-6 text-purple-600" />
-                                          ) : (
-                                            <Play className="w-6 h-6 text-purple-600" />
-                                          )}
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Activity Content */}
-                                      <div className="flex-1">
-                                        <h5 className="text-lg font-semibold text-gray-900 mb-2">{activity.name}</h5>
-                                        <p className="text-gray-600 text-sm mb-3">{activity.description}</p>
-                                        
-                                        <div className="flex items-center space-x-3 text-xs text-gray-500 mb-2">
-                                          <div className="flex items-center space-x-1">
-                                            <Clock className="w-3 h-3" />
-                                            <span>{activity.duration}</span>
-                                          </div>
-                                          {activity.dueDate && (
-                                            <div className="text-red-500 font-medium text-xs">
-                                              Due: {new Date(activity.dueDate).toLocaleDateString()}
-                                    </div>
-                                  )}
-                                          <div className="flex items-center space-x-1">
-                                            <Award className="w-3 h-3" />
-                                            <span>{activity.points} pts</span>
-                                </div>
-                                          <span className={`px-2 py-1 rounded-full text-xs ${activity.difficulty === 'Easy' ? 'bg-green-100 text-green-800' :
-                                            activity.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
-                                            'bg-red-100 text-red-800'
-                                          }`}>
-                                            {activity.difficulty}
-                                          </span>
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Action Button */}
-                                      <button className={`px-4 py-2 rounded-md text-xs font-medium transition-colors ${activity.status === 'completed'
-                                          ? 'bg-green-600 text-white hover:bg-green-700'
-                                          : activity.status === 'in_progress'
-                                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                          : 'bg-purple-600 text-white hover:bg-purple-700'
-                                      }`}>
-                                        {activity.status === 'completed' ? 'Review' : 
-                                         activity.status === 'in_progress' ? 'Continue' : 'Start'}
-                                      </button>
-                                    </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                          </>
-                        )}
-                  </div>
-                </div>
-              )}
+                      
 
                   {/* Lessons Tab Content */}
                   {activeTab === 'lessons' && (
                     <div className="space-y-8">
-                <div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">My Lessons</h2>
-                        <p className="text-gray-600">Track your lesson progress and continue learning</p>
+                          <div>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Course Sections</h2>
+                        <p className="text-gray-600">Browse lessons organized by course sections</p>
                       </div>
 
                       {isLoadingRealData ? (
-                        <div className="flex items-center justify-center py-12">
+                          <div className="flex items-center justify-center py-12">
                           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                          <span className="ml-3 text-gray-600">Loading real lessons from IOMAD...</span>
+                          <span className="ml-3 text-gray-600">Loading course sections from IOMAD...</span>
+                          </div>
+                        ) : (
+                            <div className="space-y-6">
+                          {getCourseSections().map((section, sectionIndex) => (
+                            <div key={section.id || sectionIndex} className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                              {/* Section Header */}
+                              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                      <BookOpen className="w-5 h-5 text-blue-600" />
+                                      </div>
+                                    <div>
+                                      <h3 className="text-lg font-semibold text-gray-900">{section.name}</h3>
+                                      <p className="text-sm text-gray-600">{section.description || 'Course section'}</p>
+                                        </div>
+                                      </div>
+                                  <div className="text-right">
+                                    <div className="text-sm text-gray-600">
+                                      {section.lessons?.length || 0} lessons
+                                          </div>
+                                    <div className="text-xs text-gray-500">
+                                      {section.modules?.length || 0} activities
+                                    </div>
+                                </div>
+                                        </div>
+                                      </div>
+                                      
+                              {/* Section Content */}
+                              <div className="p-6">
+                                {/* Lessons in this section */}
+                                {section.lessons && section.lessons.length > 0 && (
+                                  <div className="mb-6">
+                                    <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
+                                      <Video className="w-4 h-4 text-blue-600" />
+                                      Lessons
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {section.lessons.map((lesson, lessonIndex) => (
+                                        <div key={lesson.id || lessonIndex} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-gray-100 transition-colors">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <h5 className="font-medium text-gray-900 text-sm">{lesson.name || lesson.displayName}</h5>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                              lesson.completiondata?.state === 1 ? 'bg-green-100 text-green-800' :
+                                              lesson.completiondata?.state === 2 ? 'bg-yellow-100 text-yellow-800' :
+                                              'bg-gray-100 text-gray-800'
+                                            }`}>
+                                              {lesson.completiondata?.state === 1 ? 'Completed' :
+                                               lesson.completiondata?.state === 2 ? 'In Progress' : 'Pending'}
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-gray-600 mb-3">{lesson.description || 'Complete this lesson to progress'}</p>
+                                          <button 
+                                            onClick={() => handleLessonClickFromCourse(lesson)}
+                                            className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+                                              lesson.completiondata?.state === 1 ? 'bg-green-600 hover:bg-green-700 text-white' :
+                                              lesson.completiondata?.state === 2 ? 'bg-blue-600 hover:bg-blue-700 text-white' :
+                                              'bg-gray-600 hover:bg-gray-700 text-white'
+                                            }`}
+                                          >
+                                            {lesson.completiondata?.state === 1 ? 'Review Lesson' :
+                                             lesson.completiondata?.state === 2 ? 'Continue Lesson' : 'Start Lesson'}
+                                      </button>
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {realLessons.length > 0 ? realLessons.slice(0, 6).map((lesson, index) => (
-                            <div key={lesson.id || index} className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100">
-                        <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                  <Video className="w-6 h-6 text-blue-600" />
-                              </div>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${lesson.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                  lesson.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                      ))}
+                  </div>
+                </div>
+              )}
+
+                                {/* Activities in this section */}
+                                {section.modules && section.modules.length > 0 && (
+                <div>
+                                    <h4 className="text-md font-medium text-gray-900 mb-3 flex items-center gap-2">
+                                      <Target className="w-4 h-4 text-green-600" />
+                                      Activities
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {section.modules.map((module, moduleIndex) => (
+                                        <div key={module.id || moduleIndex} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-gray-100 transition-colors">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <h5 className="font-medium text-gray-900 text-sm">{module.name || module.displayName}</h5>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                              module.completiondata?.state === 1 ? 'bg-green-100 text-green-800' :
+                                              module.completiondata?.state === 2 ? 'bg-yellow-100 text-yellow-800' :
                                   'bg-gray-100 text-gray-800'
                                 }`}>
-                                  {lesson.status === 'completed' ? 'Completed' :
-                                   lesson.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                                              {module.completiondata?.state === 1 ? 'Completed' :
+                                               module.completiondata?.state === 2 ? 'In Progress' : 'Pending'}
                                 </span>
                               </div>
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.name}</h3>
-                              <p className="text-gray-600 text-sm mb-2">{lesson.courseName}</p>
-                              <p className="text-gray-600 text-sm mb-4">{lesson.description}</p>
-                              <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                                <span>Duration: {lesson.duration}</span>
-                                <span>Points: {lesson.points}</span>
+                                          <p className="text-xs text-gray-600 mb-2">{module.description || module.intro || 'Complete this activity'}</p>
+                                          <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                                            <span>{module.modname === 'quiz' ? 'Quiz' : module.modname === 'assign' ? 'Assignment' : 'Activity'}</span>
+                                            <span>{module.grade || 20} points</span>
                           </div>
                           <button 
-                                onClick={() => handleLessonClickFromCourse(lesson)}
-                                className={`w-full py-2 rounded-lg font-medium transition-colors ${lesson.status === 'completed' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                                  lesson.status === 'in_progress' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
+                                            onClick={() => handleLessonClickFromCourse({
+                                              id: module.id,
+                                              name: module.name,
+                                              description: module.description || module.intro,
+                                              duration: module.duration || '30 min',
+                                              progress: module.completiondata?.progress || 0,
+                                              status: module.completiondata?.state === 1 ? 'completed' : 
+                                                     module.completiondata?.state === 2 ? 'in_progress' : 'pending'
+                                            })}
+                                            className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+                                              module.completiondata?.state === 1 ? 'bg-green-600 hover:bg-green-700 text-white' :
+                                              module.completiondata?.state === 2 ? 'bg-blue-600 hover:bg-blue-700 text-white' :
                                   'bg-gray-600 hover:bg-gray-700 text-white'
                                 }`}
                               >
-                                {lesson.status === 'completed' ? 'Review Lesson' :
-                                 lesson.status === 'in_progress' ? 'Continue Lesson' : 'Start Lesson'}
+                                            {module.completiondata?.state === 1 ? 'Review Activity' :
+                                             module.completiondata?.state === 2 ? 'Continue Activity' : 'Start Activity'}
                           </button>
                         </div>
-                          )) : (
-                            <div className="col-span-full text-center py-12 text-gray-500">
-                              <Video className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                              <h4 className="text-lg font-medium mb-2">No Real Lessons Available</h4>
-                              <p>Lessons from your IOMAD courses will appear here</p>
+                                      ))}
+                                    </div>
                                       </div>
+                          )}
+
+                                {/* No content message */}
+                                {(!section.lessons || section.lessons.length === 0) && (!section.modules || section.modules.length === 0) && (
+                                  <div className="text-center py-8 text-gray-500">
+                                    <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                    <p className="text-sm">No lessons or activities in this section yet</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* No sections message */}
+                          {getCourseSections().length === 0 && (
+                            <div className="text-center py-12 text-gray-500">
+                              <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                              <h4 className="text-lg font-medium mb-2">No Course Sections Available</h4>
+                              <p>Course sections from your IOMAD courses will appear here</p>
+                            </div>
                           )}
                         </div>
                       )}
@@ -4747,77 +5636,275 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                         <p className="text-gray-600">Plan your learning journey and track upcoming activities</p>
                           </div>
 
+                      {/* Compact IOMAD Calendar View - Matching Reference Image */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-4">
+                        {/* Calendar Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-gray-900">Calendar</h3>
+                            <div className="flex items-center gap-2">
+                              <select className="text-sm border border-gray-300 rounded px-2 py-1 bg-white">
+                                <option>All courses</option>
+                                {courses.map(course => (
+                                  <option key={course.id} value={course.id}>
+                                    {course.fullname || course.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors">
+                            New event
+                          </button>
+                        </div>
+                        
+                        {/* Month Navigation */}
+                        <div className="flex items-center justify-between mb-4">
+                          <button 
+                            onClick={() => {
+                              const newDate = new Date(currentMonth);
+                              newDate.setMonth(newDate.getMonth() - 1);
+                              setCurrentMonth(newDate);
+                            }}
+                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            {new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1).toLocaleDateString('en-US', { month: 'long' })}
+                          </button>
+                          <h4 className="text-base font-semibold text-gray-900">
+                            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                          </h4>
+                          <button 
+                            onClick={() => {
+                              const newDate = new Date(currentMonth);
+                              newDate.setMonth(newDate.getMonth() + 1);
+                              setCurrentMonth(newDate);
+                            }}
+                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                          >
+                            {new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1).toLocaleDateString('en-US', { month: 'long' })}
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                        
+                        {/* Compact Calendar Grid */}
+                        <div className="grid grid-cols-7 gap-px bg-gray-200 rounded overflow-hidden">
+                          {/* Day Headers */}
+                          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                            <div key={day} className="p-2 text-center text-xs font-medium text-gray-600 bg-gray-50">
+                              {day}
+                            </div>
+                          ))}
+                          
+                          {/* Calendar Days */}
+                          {Array.from({ length: 42 }, (_, i) => {
+                            const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                            const startDate = new Date(firstDay);
+                            startDate.setDate(startDate.getDate() - firstDay.getDay());
+                            const currentDate = new Date(startDate);
+                            currentDate.setDate(startDate.getDate() + i);
+                            
+                            const isToday = currentDate.toDateString() === new Date().toDateString();
+                            const isCurrentMonth = currentDate.getMonth() === currentMonth.getMonth();
+                            
+                            // Fetch real IOMAD activities for this date
+                            const dayActivities = upcomingCourseSessions.filter(session => {
+                              const sessionDate = new Date(session.date);
+                              return sessionDate.toDateString() === currentDate.toDateString();
+                            });
+                            
+                            return (
+                              <div 
+                                key={i} 
+                                className={`min-h-[80px] p-1 bg-white ${
+                                  isToday ? 'bg-blue-50' : ''
+                                } ${!isCurrentMonth ? 'bg-gray-50' : ''}`}
+                              >
+                                {/* Date Number */}
+                                <div className={`text-xs font-medium mb-1 ${
+                                  isToday ? 'text-blue-600' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                                }`}>
+                                  {currentDate.getDate()}
+                                </div>
+                                
+                                {/* IOMAD Activities - Display like reference image */}
+                                {dayActivities.slice(0, 3).map((activity, index) => (
+                                  <div 
+                                    key={index} 
+                                    className="flex items-center gap-1 mb-1"
+                                  >
+                                    <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
+                                    <span className="text-xs text-gray-700 truncate leading-tight">
+                                      {activity.title.length > 20 ? activity.title.substring(0, 20) + '...' : activity.title}
+                                    </span>
+                                  </div>
+                                ))}
+                                
+                                {/* Show more indicator if there are more activities */}
+                                {dayActivities.length > 3 && (
+                                  <div className="text-xs text-gray-500 text-center">
+                                    +{dayActivities.length - 3} more
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
+                        {/* Calendar Footer */}
+                        <div className="mt-4 flex items-center gap-4 text-sm text-blue-600">
+                          <button className="hover:text-blue-700">Full calendar</button>
+                          <button className="hover:text-blue-700">Import or export calendars</button>
+                        </div>
+                          </div>
+
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2">
                           <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h3 className="text-xl font-semibold text-gray-900 mb-4">This Week's Schedule</h3>
+                            <h3 className="text-xl font-semibold text-gray-900 mb-4">Upcoming Course Sessions</h3>
+                            
+                            {isLoadingSchedule ? (
+                              <div className="flex items-center justify-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                <span className="ml-3 text-gray-600">Loading your course schedule...</span>
+                              </div>
+                            ) : upcomingCourseSessions.length > 0 ? (
                             <div className="space-y-4">
-                              {[
-                                { day: 'Monday', time: '9:00 AM', activity: 'Python Basics - Lesson 1', type: 'Lesson' },
-                                { day: 'Tuesday', time: '2:00 PM', activity: 'HTML Quiz', type: 'Quiz' },
-                                { day: 'Wednesday', time: '10:00 AM', activity: 'CSS Project Due', type: 'Assignment' },
-                                { day: 'Thursday', time: '3:00 PM', activity: 'JavaScript Fundamentals', type: 'Lesson' },
-                                { day: 'Friday', time: '1:00 PM', activity: 'Portfolio Review', type: 'Meeting' }
-                              ].map((item, index) => (
-                                <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                    <Calendar className="w-6 h-6 text-blue-600" />
+                                {upcomingCourseSessions.slice(0, 5).map((session) => (
+                                  <div key={session.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                                      session.status === 'in_progress' ? 'bg-yellow-100' : 'bg-blue-100'
+                                    }`}>
+                                      <Calendar className={`w-6 h-6 ${
+                                        session.status === 'in_progress' ? 'text-yellow-600' : 'text-blue-600'
+                                      }`} />
                           </div>
                                   <div className="flex-1">
-                                    <h4 className="font-semibold text-gray-900">{item.activity}</h4>
-                                    <p className="text-sm text-gray-600">{item.day} • {item.time} • {item.type}</p>
+                                      <h4 className="font-semibold text-gray-900 text-sm">{session.title}</h4>
+                                      <p className="text-xs text-gray-600 mb-1">{session.course} • {session.section}</p>
+                                      <p className="text-sm text-gray-600">{session.day} • {session.time} • {session.type}</p>
+                                      <div className="flex items-center gap-2 mt-2">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                          session.status === 'in_progress' 
+                                            ? 'bg-yellow-100 text-yellow-800' 
+                                            : 'bg-blue-50 text-blue-600'
+                                        }`}>
+                                          {session.status === 'in_progress' ? 'In Progress' : 'Upcoming'}
+                                        </span>
+                                        <span className="text-xs text-gray-500">{session.duration}</span>
+                                        <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                                          {session.points} pts
+                                        </span>
                           </div>
-                                  <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                    View
+                                    </div>
+                                    <button 
+                                      onClick={() => handleLessonClickFromCourse({
+                                        id: session.module.id,
+                                        name: session.title,
+                                        description: session.module.description || `Complete this ${session.type.toLowerCase()}`,
+                                        duration: session.duration,
+                                        progress: session.module.completiondata?.progress || 0,
+                                        status: session.status
+                                      })}
+                                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                      Start
                                   </button>
                       </div>
                     ))}
                       </div>
+                            ) : (
+                              <div className="text-center py-12 text-gray-500">
+                                <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                                <h4 className="text-lg font-medium mb-2">No Upcoming Sessions</h4>
+                                <p className="text-sm">Complete current activities to see new upcoming sessions</p>
+                              </div>
+                            )}
                   </div>
                 </div>
 
                     <div className="space-y-6">
                           <div className="bg-white rounded-xl shadow-lg p-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Deadlines</h3>
+                            
+                            {isLoadingSchedule ? (
+                              <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+                                <span className="ml-2 text-gray-600">Loading...</span>
+                              </div>
+                            ) : upcomingCourseSessions.filter(s => s.type === 'Assignment' || s.type === 'Quiz').length > 0 ? (
                         <div className="space-y-3">
-                              {[
-                                { title: 'CSS Project', due: 'Tomorrow', priority: 'High' },
-                                { title: 'JavaScript Quiz', due: '3 days', priority: 'Medium' },
-                                { title: 'Portfolio Website', due: '1 week', priority: 'High' }
-                              ].map((item, index) => (
-                                <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                                {upcomingCourseSessions
+                                  .filter(s => s.type === 'Assignment' || s.type === 'Quiz')
+                                  .slice(0, 3)
+                                  .map((session) => (
+                                    <div key={session.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
                       <div>
-                                    <h4 className="font-medium text-gray-900">{item.title}</h4>
-                                    <p className="text-sm text-gray-600">Due: {item.due}</p>
+                                        <h4 className="font-medium text-gray-900 text-sm">{session.title}</h4>
+                                        <p className="text-xs text-gray-600 mb-1">{session.course}</p>
+                                        <p className="text-sm text-gray-600">Due: {session.day}</p>
                           </div>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${item.priority === 'High' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                                  }`}>
-                                    {item.priority}
+                                      <div className="text-right">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                          session.priority === 'High' ? 'bg-red-100 text-red-800' : 
+                                          session.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
+                                          'bg-blue-100 text-blue-800'
+                                        }`}>
+                                          {session.priority}
                                   </span>
+                                        <div className="text-xs text-orange-600 mt-1">{session.points} pts</div>
+                                      </div>
                           </div>
                               ))}
                         </div>
+                            ) : (
+                              <div className="text-center py-6 text-gray-500">
+                                <Target className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                <p className="text-sm">No upcoming deadlines</p>
+                                <p className="text-xs text-gray-400">All assignments and quizzes are completed!</p>
+                              </div>
+                            )}
                       </div>
 
                           <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Study Goals</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Study Progress</h3>
                             <div className="space-y-4">
                       <div>
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-sm font-medium text-gray-700">Daily Study Time</span>
-                                  <span className="text-sm text-gray-600">2/3 hours</span>
+                                  <span className="text-sm font-medium text-gray-700">Course Progress</span>
+                                  <span className="text-sm text-gray-600">
+                                    {upcomingCourseSessions.filter(s => s.status === 'in_progress').length} in progress
+                                  </span>
                             </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '67%' }}></div>
+                                  <div 
+                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                                    style={{ 
+                                      width: `${Math.min(100, (upcomingCourseSessions.filter(s => s.status === 'in_progress').length / Math.max(upcomingCourseSessions.length, 1)) * 100)}%` 
+                                    }}
+                                  ></div>
                           </div>
                         </div>
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-sm font-medium text-gray-700">Weekly Lessons</span>
-                                  <span className="text-sm text-gray-600">4/5 completed</span>
+                                  <span className="text-sm font-medium text-gray-700">Upcoming Sessions</span>
+                                  <span className="text-sm text-gray-600">{upcomingCourseSessions.length} scheduled</span>
                             </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '80%' }}></div>
+                                  <div 
+                                    className="bg-green-600 h-2 rounded-full transition-all duration-300" 
+                                    style={{ 
+                                      width: `${Math.min(100, (upcomingCourseSessions.filter(s => s.type === 'Assignment' || s.type === 'Quiz').length / Math.max(upcomingCourseSessions.length, 1)) * 100)}%` 
+                                    }}
+                                  ></div>
+                                </div>
+                              </div>
+                              <div className="pt-2 border-t border-gray-200">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-600">Total Points Available:</span>
+                                  <span className="font-medium text-gray-900">
+                                    {upcomingCourseSessions.reduce((sum, s) => sum + (s.points || 0), 0)} pts
+                                  </span>
                           </div>
                         </div>
                       </div>
@@ -4830,40 +5917,54 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                   {/* Tree View Tab Content */}
                   {activeTab === 'tree-view' && (
                     <div className="space-y-8">
-                      <div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
-                          <BookOpen className="w-8 h-8 text-blue-600 mr-3" />
-                          Learning Path Explorer
-                        </h2>
-                        <p className="text-gray-600">Expand courses to explore lessons and activities</p>
+                      {/* Enhanced Header */}
+                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                              <BookOpen className="w-8 h-8" />
+                            </div>
+                            <div>
+                              <h2 className="text-3xl font-bold mb-2">Learning Path Explorer</h2>
+                              <p className="text-blue-100 text-lg">Discover and navigate through your learning journey</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold">{realTreeData.length}</div>
+                            <div className="text-blue-100">Active Courses</div>
+                          </div>
+                        </div>
                       </div>
 
                       {isLoadingRealData ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-center">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Learning Path Explorer</h3>
-                            <p className="text-gray-600">Fetching your IOMAD courses and activities...</p>
-                            <div className="mt-4 flex items-center justify-center space-x-2">
-                              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
-                              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="flex items-center justify-center py-16">
+                          <div className="text-center max-w-md">
+                            <div className="relative">
+                              <div className="w-20 h-20 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
+                              <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-purple-600 rounded-full animate-spin mx-auto" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                            </div>
+                            <h3 className="text-xl font-semibold text-gray-900 mb-3">Loading Your Learning Path</h3>
+                            <p className="text-gray-600 mb-6">Fetching your IOMAD courses and activities...</p>
+                            <div className="flex items-center justify-center space-x-2">
+                              <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+                              <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                              <div className="w-3 h-3 bg-green-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-white rounded-xl shadow-lg p-6">
-                            <div className="space-y-4">
-                            {/* Real IOMAD Tree Data - Structure: Course > Sections > Activities */}
-                            {(realTreeData.length > 0 ? realTreeData : []).map((course, courseIndex) => (
-                              <div key={course.id || courseIndex} className="border border-gray-200 rounded-lg overflow-hidden">
-                                {/* Course Header */}
-                                <div className="bg-gray-50 p-4">
+                        <div className="space-y-6">
+                          {/* Real IOMAD Tree Data - Enhanced Structure */}
+                          {(realTreeData.length > 0 ? realTreeData : []).map((course, courseIndex) => (
+                            <div key={course.id || courseIndex} className="group">
+                              {/* Enhanced Course Card */}
+                              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                                {/* Course Header with Gradient */}
+                                <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 border-b border-gray-100">
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
+                                    <div className="flex items-center space-x-4">
                                       <button
                                         onClick={() => {
-                                          // Toggle course expansion
                                           const courseId = course.id || courseIndex.toString();
                                           const newExpandedCourses = new Set(expandedCourses);
                                           if (newExpandedCourses.has(courseId)) {
@@ -4873,151 +5974,204 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                                           }
                                           setExpandedCourses(newExpandedCourses);
                                         }}
-                                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                        className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
                                       >
-                                        <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${expandedCourses.has(course.id || courseIndex.toString()) ? 'rotate-0' : '-rotate-90'
-                                          }`} />
+                                        <ChevronDown className={`w-5 h-5 text-blue-600 transition-all duration-300 ${expandedCourses.has(course.id || courseIndex.toString()) ? 'rotate-0' : '-rotate-90'}`} />
                                       </button>
-                                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                        <BookOpen className="w-5 h-5 text-blue-600" />
+                                      
+                                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                                        <BookOpen className="w-8 h-8 text-white" />
                                       </div>
-                                      <div>
-                                        <h3 className="text-lg font-semibold text-gray-900">
+                                      
+                                      <div className="flex-1">
+                                        <h3 className="text-xl font-bold text-gray-900 mb-2">
                                           {course.name}
                                         </h3>
-                                        <p className="text-sm text-gray-600">
-                                          {course.completedSections}/{course.totalSections} sections • {course.progress}% complete
-                                        </p>
+                                        <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                          <div className="flex items-center space-x-1">
+                                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                            <span>{course.completedSections}/{course.totalSections} sections</span>
+                                          </div>
+                                          <div className="flex items-center space-x-1">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                            <span>{course.progress}% complete</span>
+                                          </div>
+                                        </div>
                                         {course.description && (
-                                          <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                          <p className="text-sm text-gray-500 mt-2">
                                             {course.description}
                                           </p>
-                              )}
-                            </div>
-                          </div>
-                                    <button
-                                      onClick={() => alert(`Viewing course: ${course.name}\n\nSections: ${course.sections?.length || 0}\nProgress: ${course.progress}%`)}
-                                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                    >
-                                      View Course
-                                    </button>
-                        </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-3">
+                                      {/* Progress Circle */}
+                                      <div className="relative w-16 h-16">
+                                        <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 36 36">
+                                          <path className="text-gray-200" stroke="currentColor" strokeWidth="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                          <path className="text-blue-600" stroke="currentColor" strokeWidth="3" strokeDasharray={`${course.progress}, 100`} fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                        </svg>
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                          <span className="text-sm font-bold text-gray-900">{course.progress}%</span>
+                                        </div>
+                                      </div>
+                                      
+                                      <button
+                                        onClick={() => alert(`Viewing course: ${course.name}\n\nSections: ${course.sections?.length || 0}\nProgress: ${course.progress}%`)}
+                                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                                      >
+                                        View Course
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
 
-                                {/* Course Content - Expanded */}
+                                {/* Enhanced Course Content - Expanded */}
                                 {expandedCourses.has(course.id || courseIndex.toString()) && (
-                                  <div className="p-4 space-y-4">
-                                    {course.sections.map((section, sectionIndex) => (
-                                      <div key={section.id || sectionIndex} className="border-l-2 border-gray-200 pl-4">
-                                        {/* Section Header */}
-                                        <div className="flex items-center justify-between mb-3">
-                                          <div className="flex items-center space-x-3">
-                                            <button
-                                              onClick={() => {
-                                                // Toggle section expansion
-                                                const sectionId = section.id || `${course.id}-${sectionIndex}`;
-                                                const newExpandedTreeSections = new Set(expandedTreeSections);
-                                                if (newExpandedTreeSections.has(sectionId)) {
-                                                  newExpandedTreeSections.delete(sectionId);
-                                                } else {
-                                                  newExpandedTreeSections.add(sectionId);
-                                                }
-                                                setExpandedTreeSections(newExpandedTreeSections);
-                                              }}
-                                              className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                            >
-                                              <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${expandedTreeSections.has(section.id || `${course.id}-${sectionIndex}`) ? 'rotate-0' : '-rotate-90'
-                                                }`} />
-                                            </button>
-                                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                                              <BookOpen className="w-4 h-4 text-green-600" />
-                                            </div>
-                                            <div>
-                                              <h4 className="text-md font-medium text-gray-900">
-                                                {section.name}
-                                              </h4>
-                                              <p className="text-sm text-gray-600">
-                                                {section.activityCount} activities • {section.progress}% complete
-                                              </p>
-                                            </div>
-                                          </div>
-                                          <button
-                                            onClick={() => handleTreeViewSectionClick(section)}
-                                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
-                                          >
-                                            View Section
-                                          </button>
-                                        </div>
-
-                                        {/* Section Activities - Expanded */}
-                                        {expandedTreeSections.has(section.id || `${course.id}-${sectionIndex}`) && section.activities && (
-                                          <div className="ml-8 space-y-3">
-                                            {(section.activities as any[]).map((activity: any, activityIndex: number) => (
-                                              <div key={activity.id || activityIndex} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                                <div className="flex items-center space-x-3">
-                                                  {/* Activity Badge */}
-                                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${activity.status === 'completed'
-                                                      ? 'bg-green-100 text-green-600'
-                                                      : 'bg-orange-100 text-orange-600'
-                                                    }`}>
-                                                    {activity.status === 'completed' ? (
-                                                      <CheckCircle className="w-4 h-4" />
-                                                    ) : (
-                                                      activity.order
-                                                    )}
+                                  <div className="p-6 bg-gray-50/50">
+                                    <div className="space-y-4">
+                                      {course.sections.map((section, sectionIndex) => (
+                                        <div key={section.id || sectionIndex} className="group/section">
+                                          {/* Enhanced Section Card */}
+                                          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200">
+                                            <div className="p-4">
+                                              <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-4">
+                                                  <button
+                                                    onClick={() => {
+                                                      const sectionId = section.id || `${course.id}-${sectionIndex}`;
+                                                      const newExpandedTreeSections = new Set(expandedTreeSections);
+                                                      if (newExpandedTreeSections.has(sectionId)) {
+                                                        newExpandedTreeSections.delete(sectionId);
+                                                      } else {
+                                                        newExpandedTreeSections.add(sectionId);
+                                                      }
+                                                      setExpandedTreeSections(newExpandedTreeSections);
+                                                    }}
+                                                    className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center hover:bg-green-100 transition-all duration-200"
+                                                  >
+                                                    <ChevronDown className={`w-4 h-4 text-green-600 transition-all duration-300 ${expandedTreeSections.has(section.id || `${course.id}-${sectionIndex}`) ? 'rotate-0' : '-rotate-90'}`} />
+                                                  </button>
+                                                  
+                                                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-md">
+                                                    <BookOpen className="w-6 h-6 text-white" />
                                                   </div>
-
-                                                  {/* Activity Icon */}
-                                                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                                                    <span className="text-lg">{activity.icon}</span>
-                                                  </div>
-
-                                                  {/* Activity Details */}
-                                                  <div>
-                                                    <h5 className="text-sm font-medium text-gray-900">
-                                                      {activity.name}
-                                                    </h5>
-                                                    <p className="text-xs text-gray-600">
-                                                      {activity.type} • {activity.duration} • {activity.points} pts
-                                                    </p>
+                                                  
+                                                  <div className="flex-1">
+                                                    <h4 className="text-lg font-semibold text-gray-900 mb-1">
+                                                      {section.name}
+                                                    </h4>
+                                                    <div className="flex items-center space-x-3 text-sm text-gray-600">
+                                                      <div className="flex items-center space-x-1">
+                                                        <Activity className="w-4 h-4 text-green-500" />
+                                                        <span>{section.activityCount} activities</span>
+                                                      </div>
+                                                      <div className="flex items-center space-x-1">
+                                                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                        <span>{section.progress}% complete</span>
+                                                      </div>
+                                                    </div>
                                                   </div>
                                                 </div>
-
-                                                {/* Start Button */}
+                                                
                                                 <button
-                                                  onClick={() => handleTreeViewActivityClick(activity, course)}
-                                                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+                                                  onClick={() => handleTreeViewSectionClick(section)}
+                                                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
                                                 >
-                                                  Start
+                                                  View Section
                                                 </button>
                                               </div>
-                                            ))}
-                    </div>
-                  )}
-                                      </div>
-                                    ))}
+                                            </div>
+
+                                            {/* Enhanced Section Activities - Expanded */}
+                                            {expandedTreeSections.has(section.id || `${course.id}-${sectionIndex}`) && section.activities && (
+                                              <div className="border-t border-gray-100 bg-gray-50/30">
+                                                <div className="p-4 space-y-3">
+                                                  {(section.activities as any[]).map((activity: any, activityIndex: number) => (
+                                                    <div key={activity.id || activityIndex} className="group/activity bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all duration-200 transform hover:-translate-y-1 border border-gray-100">
+                                                      <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-4">
+                                                          {/* Enhanced Activity Badge */}
+                                                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${activity.status === 'completed'
+                                                              ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white'
+                                                              : 'bg-gradient-to-br from-orange-500 to-red-600 text-white'
+                                                            }`}>
+                                                            {activity.status === 'completed' ? (
+                                                              <CheckCircle className="w-6 h-6" />
+                                                            ) : (
+                                                              <span className="text-sm font-bold">{activity.order}</span>
+                                                            )}
+                                                          </div>
+
+                                                          {/* Enhanced Activity Icon */}
+                                                          <div className="w-12 h-12 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl flex items-center justify-center shadow-sm border border-gray-100">
+                                                            <span className="text-xl">{activity.icon}</span>
+                                                          </div>
+
+                                                          {/* Enhanced Activity Details */}
+                                                          <div className="flex-1">
+                                                            <h5 className="text-base font-semibold text-gray-900 mb-1">
+                                                              {activity.name}
+                                                            </h5>
+                                                            <div className="flex items-center space-x-3 text-sm text-gray-600">
+                                                              <span className="flex items-center space-x-1">
+                                                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                                                <span>{activity.type}</span>
+                                                              </span>
+                                                              <span className="flex items-center space-x-1">
+                                                                <Clock className="w-3 h-3" />
+                                                                <span>{activity.duration}</span>
+                                                              </span>
+                                                              <span className="flex items-center space-x-1">
+                                                                <Star className="w-3 h-3 text-yellow-500" />
+                                                                <span>{activity.points} pts</span>
+                                                              </span>
+                                                            </div>
+                                                          </div>
+                                                        </div>
+
+                                                        {/* Enhanced Start Button */}
+                                                        <button
+                                                          onClick={() => handleTreeViewActivityClick(activity, course)}
+                                                          className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
+                                                        >
+                                                          Start
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
                               </div>
-                            ))}
+                            </div>
+                          ))}
 
-                            {/* Fallback for when no real data is available */}
-                            {realTreeData.length === 0 && (
-                              <div className="text-center py-12 text-gray-500">
-                                <BarChart3 className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                                <h4 className="text-lg font-medium mb-2">No IOMAD Courses Available</h4>
-                                <p>Your enrolled courses from IOMAD/Moodle will appear here once loaded</p>
-                                <div className="mt-4">
-                                  <button
-                                    onClick={() => fetchRealDataForTab('tree-view')}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                  >
-                                    Refresh Data
-                                  </button>
+                          {/* Enhanced Fallback for when no real data is available */}
+                          {realTreeData.length === 0 && (
+                            <div className="text-center py-16">
+                              <div className="max-w-md mx-auto">
+                                <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                                  <BarChart3 className="w-12 h-12 text-gray-400" />
                                 </div>
+                                <h4 className="text-xl font-semibold text-gray-900 mb-3">No IOMAD Courses Available</h4>
+                                <p className="text-gray-600 mb-6">Your enrolled courses from IOMAD/Moodle will appear here once loaded</p>
+                                <button
+                                  onClick={() => fetchRealDataForTab('tree-view')}
+                                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                                >
+                                  Refresh Data
+                                </button>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -5042,86 +6196,115 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
                     </div>
                   )}
 
-                  {/* Code Editor Tab Content */}
+                  {/* Code Editor Tab Content - Real Monaco Editor */}
                   {activeTab === 'code-editor' && (
                     <div className="space-y-8">
                       <div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Code Editor</h2>
-                        <p className="text-gray-600">Write, test, and run your code in a professional development environment</p>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Professional Code Editor</h2>
+                        <p className="text-gray-600">Write, test, and run your code with Monaco Editor - Professional development environment</p>
                       </div>
 
                       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                         <div className="h-[calc(100vh-200px)]">
-                          <div className="flex flex-col h-full">
+                          {/* Real Monaco Editor Integration */}
+                          <div className="vscode-editor h-full">
                             {/* Code Editor Header */}
-                            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
-                              <div className="flex items-center space-x-4">
+                            <div className="vscode-header bg-gray-800 text-white p-3 border-b border-gray-700">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
                                 <div className="flex items-center space-x-2">
                                   <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                                   <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                                 </div>
-                                <span className="text-sm font-medium text-gray-600">main.js</span>
+                                  <span className="text-sm font-medium">{fileName}</span>
                               </div>
                               <div className="flex items-center space-x-2">
-                                <select className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                  <select 
+                                    className="px-2 py-1 bg-gray-700 text-white text-sm rounded border border-gray-600"
+                                    value={language}
+                                    onChange={(e) => handleLanguageChange(e.target.value as any)}
+                                  >
                                   <option value="javascript">JavaScript</option>
                                   <option value="python">Python</option>
-                                  <option value="html">HTML</option>
-                                  <option value="css">CSS</option>
+                                    <option value="html-css">HTML & CSS</option>
                                 </select>
-                                <button className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition-colors">
-                                  Run Code
+                                  <button 
+                                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                                    onClick={runCode}
+                                    disabled={isRunning}
+                                  >
+                                    {isRunning ? 'Running...' : '▶ Run'}
                                 </button>
-                                <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors">
-                                  Save
+                                  <button 
+                                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                    onClick={saveCode}
+                                  >
+                                    💾 Save
                                 </button>
+                                </div>
                               </div>
                             </div>
 
                             {/* Code Editor Area */}
-                            <div className="flex-1 bg-gray-900 p-4">
-                              <pre className="text-green-400 text-sm font-mono leading-relaxed">
-{`// Welcome to KODEIT Code Editor!
-// Start coding here...
-
-console.log("Hello, World!");
-
-// Example: Simple calculator
-function add(a, b) {
-  return a + b;
-}
-
-function subtract(a, b) {
-  return a - b;
-}
-
-// Test your functions
-console.log("5 + 3 =", add(5, 3));
-console.log("10 - 4 =", subtract(10, 4));
-
-// Try writing your own code below:
-// Your code will appear here when you start typing...
-
-`}
-                              </pre>
+                            <div className="flex-1 bg-gray-900 h-[calc(100%-60px)]">
+                              {language === 'html-css' ? (
+                                <div className="h-full">
+                                  <div className="flex border-b border-gray-700">
+                                    <button 
+                                      className={`px-4 py-2 text-sm ${activeFileTab === 'html' ? 'bg-gray-800 text-white' : 'text-gray-400'}`}
+                                      onClick={() => setActiveFileTab('html')}
+                                    >
+                                      HTML
+                                    </button>
+                                    <button 
+                                      className={`px-4 py-2 text-sm ${activeFileTab === 'css' ? 'bg-gray-800 text-white' : 'text-gray-400'}`}
+                                      onClick={() => setActiveFileTab('css')}
+                                    >
+                                      CSS
+                                    </button>
+                                  </div>
+                                  <EditorPane
+                                    language={activeFileTab === 'html' ? 'html' : 'css'}
+                                    code={activeFileTab === 'html' ? htmlCode : cssCode}
+                                    onChange={activeFileTab === 'html' ? setHtmlCode : setCssCode}
+                                    markers={[]}
+                                  />
+                                </div>
+                              ) : (
+                                <EditorPane
+                                  language={language}
+                                  code={code}
+                                  onChange={setCode}
+                                  markers={[]}
+                                />
+                              )}
                             </div>
 
                             {/* Output Console */}
                             <div className="bg-gray-800 p-4 border-t border-gray-700">
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-sm font-medium text-gray-300">Output Console</span>
-                                <button className="text-xs text-gray-400 hover:text-white transition-colors">
+                                <button 
+                                  className="text-xs text-gray-400 hover:text-white transition-colors"
+                                  onClick={clearOutput}
+                                >
                                   Clear
                                 </button>
                               </div>
-                              <div className="bg-black rounded p-3">
-                                <pre className="text-green-400 text-sm font-mono">
-{`> Hello, World!
-> 5 + 3 = 8
-> 10 - 4 = 6
-> Ready for your code!`}
-                                </pre>
+                              <div className="bg-black rounded p-3 max-h-32 overflow-y-auto">
+                                {language === 'html-css' ? (
+                                  <PreviewPane html={htmlCode} css={cssCode} />
+                                ) : (
+                                  <OutputPane 
+                                    output={output} 
+                                    isWaitingForInput={false}
+                                    inputValue=""
+                                    onInputChange={() => {}}
+                                    onInputSubmit={() => {}}
+                                    status=""
+                                  />
+                                )}
                               </div>
                             </div>
                           </div>

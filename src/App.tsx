@@ -107,12 +107,6 @@ const StudentMessages = lazy(() => import("./pages/student/Messages"));
 const StudentProgress = lazy(() => import("./pages/student/Progress"));
 const StudentCommunity = lazy(() => import("./pages/student/Community"));
 const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
-const StudentEbooks = lazy(() => import("./pages/student/Ebooks"));
-const StudentAskTeacher = lazy(() => import("./pages/student/AskTeacher"));
-const StudentAiBuddy = lazy(() => import("./pages/student/AiBuddy"));
-const StudentShare = lazy(() => import("./pages/student/Share"));
-const StudentCurrentLessons = lazy(() => import("./pages/student/CurrentLessons"));
-const StudentActivities = lazy(() => import("./pages/student/Activities"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
@@ -583,6 +577,13 @@ const App = () => {
                     </Suspense>
                   </ProtectedRoute>
                 } />
+                {/* Simple Code Editor Route - No Dashboard Wrapper */}
+                <Route path="/code-editor" element={
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <CodeEditor />
+                  </Suspense>
+                } />
+                
                 <Route path="/dashboard/student/code-editor" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
@@ -615,51 +616,6 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentEnrollments />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-
-                <Route path="/dashboard/student/ebooks" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <StudentEbooks />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/ask-teacher" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <StudentAskTeacher />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/ai-buddy" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <StudentAiBuddy />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/share" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <StudentShare />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-
-
-                <Route path="/dashboard/student/current-lessons" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <StudentCurrentLessons />
-                    </Suspense>
-                  </ProtectedRoute>
-                } />
-                <Route path="/dashboard/student/activities" element={
-                  <ProtectedRoute requiredRole="student">
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <StudentActivities />
                     </Suspense>
                   </ProtectedRoute>
                 } />
