@@ -19,23 +19,78 @@ app.use(express.json({ limit: '1mb' }));
 const PORT = process.env.PORT || 5000;
 const JUDGE0_URL = process.env.JUDGE0_URL?.replace(/\/+$/, '') || 'https://judge0-ce.p.rapidapi.com';
 
-// Security middleware
-app.use(helmet());
-app.use(express.json({ limit: "200kb" }));
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'No origin'} - User-Agent: ${req.headers['user-agent']?.substring(0, 50) || 'No user-agent'}`);
+  next();
+});
 
-// CORS middleware - Allow any localhost port dynamically
+// CORS middleware - Allow specific localhost ports (must come before helmet)
 app.use(cors({ 
-  origin: true, // Allow all origins for development
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow specific localhost ports
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:8080',
+      'http://localhost:5173',
+      'http://localhost:4173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:8080',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:4173'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('✅ CORS allowed origin:', origin);
+      callback(null, true);
+    } else {
+      console.log('🚫 CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cache-Control']
 }));
+
+// Fallback CORS middleware for development - more permissive
+app.use((req, res, next) => {
+  // Only apply fallback CORS if the main CORS middleware didn't set headers
+  if (!res.getHeader('Access-Control-Allow-Origin')) {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  next();
+});
+
+// Security middleware with CORS-friendly settings
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: false
+}));
+app.use(express.json({ limit: "200kb" }));
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 60_000,
   limit: Number(process.env.RATE_LIMIT_PER_MINUTE || 60)
 });
 app.use(limiter);
+
+// Test endpoint to verify CORS is working
+app.get('/api/test-cors', (req, res) => {
+  console.log('🧪 Test CORS endpoint hit - Origin:', req.headers.origin);
+  res.json({ 
+    message: 'CORS test successful', 
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Language ID cache and helper
 let cachedLangIds = { python3: null };
@@ -1898,5 +1953,5 @@ const server = app.listen(PORT, () => {
   console.log(`📡 Ready to communicate with Ollama at http://localhost:11434`);
   console.log(`💻 Legacy Code Editor API available at http://localhost:${actualPort}/api/run`);
   console.log(`⚡ Judge0 Proxy API available at http://localhost:${actualPort}/api/run`);
-  console.log(`🌐 CORS enabled for any localhost port (dynamic port detection)`);
+  console.log(`🌐 CORS enabled for localhost ports: 3000, 8080, 5173, 4173`);
 }); 
