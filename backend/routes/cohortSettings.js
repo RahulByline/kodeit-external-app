@@ -8,6 +8,27 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+// Handle preflight OPTIONS requests for CORS
+router.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  res.sendStatus(200);
+});
+
+// Test endpoint to verify CORS is working for this route
+router.get('/test', (req, res) => {
+  console.log('🧪 Cohort settings CORS test - Origin:', req.headers.origin);
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.json({ 
+    message: 'Cohort settings CORS test successful', 
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Path to the JSON file
 const SETTINGS_FILE_PATH = path.join(__dirname, '../data/cohort-navigation-settings.json');
 
@@ -37,8 +58,15 @@ async function writeSettingsFile(settings) {
 // GET /api/cohort-settings/:cohortId - Get settings for a specific cohort
 router.get('/:cohortId', async (req, res) => {
   try {
+    // Add CORS headers specifically for this route
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
     const { cohortId } = req.params;
     console.log('📋 Fetching settings for cohort:', cohortId);
+    console.log('🌐 Request origin:', req.headers.origin);
     
     const settings = await readSettingsFile();
     const cohortSettings = settings[cohortId];
@@ -71,7 +99,14 @@ router.get('/:cohortId', async (req, res) => {
 // GET /api/cohort-settings - Get all cohort settings
 router.get('/', async (req, res) => {
   try {
+    // Add CORS headers specifically for this route
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
     console.log('📋 Fetching all cohort settings');
+    console.log('🌐 Request origin:', req.headers.origin);
     
     const settings = await readSettingsFile();
     
@@ -93,10 +128,17 @@ router.get('/', async (req, res) => {
 // POST /api/cohort-settings/:cohortId - Save settings for a specific cohort
 router.post('/:cohortId', async (req, res) => {
   try {
+    // Add CORS headers specifically for this route
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
     const { cohortId } = req.params;
     const newSettings = req.body;
     
     console.log('💾 Saving settings for cohort:', cohortId);
+    console.log('🌐 Request origin:', req.headers.origin);
     console.log('⚙️ Settings to save:', JSON.stringify(newSettings, null, 2));
     
     // Validate settings structure
@@ -143,8 +185,15 @@ router.post('/:cohortId', async (req, res) => {
 // DELETE /api/cohort-settings/:cohortId - Reset settings for a cohort to defaults
 router.delete('/:cohortId', async (req, res) => {
   try {
+    // Add CORS headers specifically for this route
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
     const { cohortId } = req.params;
     console.log('🔄 Resetting settings for cohort:', cohortId);
+    console.log('🌐 Request origin:', req.headers.origin);
     
     // Default settings structure
     const defaultSettings = {

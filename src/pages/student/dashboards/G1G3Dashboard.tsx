@@ -671,7 +671,7 @@ const G1G3Dashboard: React.FC<G1G3DashboardProps> = ({
     console.log('🚀 Navigating to course lessons for:', courseId);
     
     // Navigate to the course lessons page
-    navigate(`/dashboard/student/course-lessons/${courseId}`);
+    // navigate(`/dashboard/student/course-lessons/${courseId}`);
   };
 
   // Fetch lesson activities for integrated view

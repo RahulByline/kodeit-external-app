@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Building,
@@ -14,8 +14,6 @@ import {
   Clock,
   Activity,
   Play,
-
-  
   Calendar,
   Target,
   TrendingUp,
@@ -36,10 +34,22 @@ import {
   ExternalLink,
   Download,
   BarChart3 as BarChart3Icon,
-  Lock
+  Lock,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import moodleService from '../../../services/moodleApi';
+import lazyLoadingLessonService from '../../../services/optimizedLessonService';
+import { 
+  getCacheKey, 
+  getCachedData, 
+  setCachedData, 
+  getDashboardCacheKey,
+  clearDashboardCache,
+  CACHE_KEYS, 
+  CACHE_DURATION
+} from '../../../utils/cache';
 
 // Helper functions for course data processing
 const getCourseImageFallback = (categoryname?: string, fullname?: string): string => {
@@ -266,101 +276,42 @@ interface G4G7DashboardProps {
   userAssignments: any[];
 }
 
-// API service functions
+// Optimized API service functions using the new optimized lesson service
 const dashboardService = {
-  // Fetch student's courses from Moodle API with real progress data
+  // Fetch student's courses using optimized service with advanced caching
   async fetchStudentCourses(studentId: string): Promise<Course[]> {
     try {
-      console.log('🎓 Fetching courses from Moodle API with real progress data for student:', studentId);
-
-      // Use the enhanced Moodle API that includes real progress data
-      const moodleCourses = await moodleService.getUserCourses(studentId);
-
-      console.log('📚 Moodle courses with real progress data fetched:', moodleCourses);
-
-      // Transform Moodle course data to match our Course interface with real data
-      return moodleCourses.map((course: any) => ({
-        id: course.id,
-        title: course.fullname,
-        description: course.summary || 'No description available',
-        instructor: 'Instructor TBD', // Moodle doesn't provide instructor info in this API
-        progress: course.progress || 0, // Use real progress from API
-        totalLessons: course.totalLessons || course.activitiesData?.totalActivities || 0,
-        completedLessons: course.completedLessons || course.activitiesData?.completedActivities || 0,
-        duration: course.duration || `${Math.floor(Math.random() * 8) + 4} weeks`,
-        category: course.categoryname || 'General',
-        image: course.courseimage || getCourseImageFallback(course.categoryname, course.fullname),
-        isActive: course.visible !== 0,
-        lastAccessed: course.lastAccess ? new Date(course.lastAccess * 1000).toLocaleDateString() : 'Recently',
-        difficulty: getCourseDifficulty(course.categoryname, course.fullname),
-        // Additional real data
-        completionStatus: course.completionStatus || 'not_started',
-        enrollmentCount: course.enrollmentCount || 0,
-        averageGrade: course.averageGrade || 0,
-        timeSpent: course.timeSpent || 0,
-        certificates: course.certificates || 0,
-        type: course.type || 'Self-paced',
-        tags: course.tags || [],
-        // Real completion data
-        completionData: course.completionData,
-        activitiesData: course.activitiesData
-      }));
+      console.log('🎓 Fetching courses using optimized service for student:', studentId);
+      
+      // Set user ID for the lazy loading service
+      lazyLoadingLessonService.setUserId(studentId);
+      
+      // Use the lazy loading service to fetch only courses
+      const courses = await lazyLoadingLessonService.fetchUserCourses();
+      
+      console.log('📚 Courses fetched with optimization:', courses.length);
+      return courses;
     } catch (error) {
-      console.error('❌ Error fetching courses from Moodle:', error);
+      console.error('❌ Error fetching courses with optimized service:', error);
       return [];
     }
   },
 
-  // Fetch student's lessons from Moodle API (optimized)
+  // Fetch student's lessons using optimized service with intelligent batching
   async fetchStudentLessons(studentId: string): Promise<Lesson[]> {
     try {
-      console.log('📚 Fetching lessons from Moodle API for student:', studentId);
-
-      // First get all user courses
-      const userCourses = await moodleService.getUserCourses(studentId);
-
-      // Limit to first 3 courses to reduce API calls and improve performance
-      const limitedCourses = userCourses.slice(0, 3);
-      console.log(`🔍 Fetching activities for ${limitedCourses.length} courses (limited for performance)`);
-
-      // Fetch activities for limited courses in parallel
-      const courseActivitiesPromises = limitedCourses.map(async (course) => {
-        try {
-          console.log(`🔍 Fetching activities for course: ${course.fullname}`);
-          const courseActivities = await moodleService.getCourseActivities(course.id);
-
-          // Transform Moodle activities to lessons
-          return courseActivities.map((activity: any) => ({
-            id: activity.id.toString(),
-            title: activity.name,
-            courseId: course.id,
-            courseTitle: course.fullname,
-            duration: getActivityDuration(activity.type),
-            type: mapActivityType(activity.type),
-            status: getActivityStatus(activity.completion),
-            progress: getActivityProgress(activity.completion),
-            isNew: isNewActivity(activity.dates),
-            dueDate: getActivityDueDate(activity.dates),
-            prerequisites: activity.availabilityinfo,
-            image: getActivityImage(activity.type, course.courseimage)
-          }));
-        } catch (courseError) {
-          console.warn(`Failed to fetch activities for course ${course.fullname}:`, courseError);
-          return [];
-        }
-      });
-
-      // Wait for all course activities to be fetched in parallel
-      const allCourseLessons = await Promise.all(courseActivitiesPromises);
-
-      // Flatten the results
-      const allLessons = allCourseLessons.flat();
-
-      console.log(`✅ Fetched ${allLessons.length} lessons from Moodle API (optimized)`);
-      return allLessons;
-
+      console.log('📚 Fetching lessons using optimized service for student:', studentId);
+      
+      // Set user ID for the lazy loading service
+      lazyLoadingLessonService.setUserId(studentId);
+      
+      // Use the lazy loading service to fetch lessons for specific course
+      const lessons = await lazyLoadingLessonService.fetchCourseLessons(studentId);
+      
+      console.log(`✅ Fetched ${lessons.length} lessons with optimization`);
+      return lessons;
     } catch (error) {
-      console.error('Error fetching lessons from Moodle:', error);
+      console.error('Error fetching lessons with optimized service:', error);
       return [];
     }
   },
@@ -491,52 +442,29 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const navigate = useNavigate();
   const location = useLocation();
 
-  // State for fetched data with persistence
+  // State for fetched data with advanced caching
   const [courses, setCourses] = useState<Course[]>(() => {
-    // Initialize with cached data if available
-    const cached = localStorage.getItem('dashboard_courses');
-    if (cached) {
-      try {
-        const { data, timestamp } = JSON.parse(cached);
-        // Cache for 5 minutes
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          return data;
-        }
-      } catch (error) {
-        console.warn('Failed to parse cached courses:', error);
-      }
-    }
-    return [];
+    if (!currentUser?.id) return [];
+    
+    // Initialize with cached data using advanced cache utility
+          const cached = getCachedData(getCacheKey(CACHE_KEYS.USER_COURSES, currentUser.id));
+    return cached || [];
   });
 
   const [lessons, setLessons] = useState<Lesson[]>(() => {
-    const cached = localStorage.getItem('dashboard_lessons');
-    if (cached) {
-      try {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          return data;
-        }
-      } catch (error) {
-        console.warn('Failed to parse cached lessons:', error);
-      }
-    }
-    return [];
+    if (!currentUser?.id) return [];
+    
+    // Initialize with cached data using advanced cache utility
+          const cached = getCachedData(getCacheKey(CACHE_KEYS.CURRENT_LESSONS, currentUser.id));
+    return cached || [];
   });
 
   const [activities, setActivities] = useState<Activity[]>(() => {
-    const cached = localStorage.getItem('dashboard_activities');
-    if (cached) {
-      try {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          return data;
-        }
-      } catch (error) {
-        console.warn('Failed to parse cached activities:', error);
-      }
-    }
-    return [];
+    if (!currentUser?.id) return [];
+    
+    // Initialize with cached data using advanced cache utility
+          const cached = getCachedData(getCacheKey(CACHE_KEYS.COURSE_ACTIVITIES, currentUser.id));
+    return cached || [];
   });
 
   const [exams, setExams] = useState<Exam[]>([]);
@@ -550,9 +478,19 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     coins: 0
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(90);
   const [error, setError] = useState<string | null>(null);
   const [hasInitialized, setHasInitialized] = useState(false);
+  
+  // Performance monitoring and cache management
+  const [cacheStats, setCacheStats] = useState<any>(null);
+  const [performanceMetrics, setPerformanceMetrics] = useState<any>(null);
+  const [showCacheInfo, setShowCacheInfo] = useState(false);
+  
+  // Refs for performance tracking
+  const loadStartTime = useRef<number>(0);
+  const cacheHitCount = useRef<number>(0);
+  const apiCallCount = useRef<number>(0);
 
   // Modal state
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
@@ -576,6 +514,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   // Track activities for each lesson
   const [lessonActivities, setLessonActivities] = useState<Record<string, Activity[]>>({});
   const [loadingActivities, setLoadingActivities] = useState<Record<string, boolean>>({});
+  const [loadingCourseLessons, setLoadingCourseLessons] = useState<Record<string, boolean>>({});
+  const [loadingAllLessons, setLoadingAllLessons] = useState(false);
+  const [loadingFromCache, setLoadingFromCache] = useState(true);
+  const [cacheHit, setCacheHit] = useState(false);
 
   // Memoized top navigation items to prevent re-creation
   const topNavItems = useMemo(() => [
@@ -610,9 +552,44 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   }, [navigate]);
 
   // Expand/collapse handlers for Tree View
-  const toggleCourseExpanded = useCallback((courseId: string) => {
+  const toggleCourseExpanded = useCallback(async (courseId: string) => {
+    const isCurrentlyExpanded = !!expandedCourses[courseId];
+    
+    if (!isCurrentlyExpanded) {
+      // Course is being expanded - fetch lessons if not already loaded
+      if (!lazyLoadingLessonService.isCourseLessonsLoaded(courseId)) {
+        setLoadingCourseLessons(prev => ({ ...prev, [courseId]: true }));
+        
+        try {
+          console.log(`📖 Fetching lessons for course ${courseId}...`);
+          const courseLessons = await lazyLoadingLessonService.fetchCourseLessons(courseId);
+          
+          console.log(`📚 Course lessons received:`, courseLessons);
+          
+          // Update lessons state with the new course lessons
+          setLessons(prev => {
+            // Remove existing lessons for this course
+            const otherLessons = prev.filter(l => l.courseId !== courseId);
+            // Add new lessons for this course
+            const updatedLessons = [...otherLessons, ...courseLessons];
+            console.log(`🔄 Updated lessons state:`, updatedLessons);
+            return updatedLessons;
+          });
+          
+          console.log(`✅ Loaded ${courseLessons.length} lessons for course ${courseId}`);
+        } catch (error) {
+          console.error(`❌ Error fetching lessons for course ${courseId}:`, error);
+        } finally {
+          setLoadingCourseLessons(prev => ({ ...prev, [courseId]: false }));
+        }
+      } else {
+        console.log(`⚡ Lessons already loaded for course ${courseId}`);
+      }
+    }
+    
+    // Toggle expansion state
     setExpandedCourses(prev => ({ ...prev, [courseId]: !prev[courseId] }));
-  }, []);
+  }, [expandedCourses]);
 
   const toggleLessonExpanded = useCallback(async (lessonId: string) => {
     const isCurrentlyOpen = !!expandedLessons[lessonId];
@@ -625,31 +602,22 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           // Find the lesson to get courseId
           const lesson = lessons.find(l => l.id === lessonId);
           if (lesson) {
-            // Fetch activities for this specific lesson from Moodle API
-            const lessonActivitiesData = await moodleService.getCourseActivities(lesson.courseId);
+            // Use lazy loading service to fetch activities
+            const lessonActivitiesData = await lazyLoadingLessonService.fetchLessonActivities(lessonId, lesson.courseId);
 
-            // Filter activities that belong to this lesson (you may need to adjust this logic based on your API structure)
-            const filteredActivities: Activity[] = lessonActivitiesData
-              .filter((activity: any) => {
-                // This is a placeholder - you'll need to adjust based on how your API links activities to lessons
-                // For now, we'll show all activities for the course
-                return true;
-              })
-              .map((activity: any) => ({
-                id: activity.id.toString(),
-                title: activity.name,
-                type: mapActivityType(activity.type) === 'video' ? 'quiz' :
-                  mapActivityType(activity.type) === 'practice' ? 'discussion' :
-                    mapActivityType(activity.type) === 'assignment' ? 'assignment' : 'quiz',
-                courseId: lesson.courseId,
-                courseTitle: lesson.courseTitle,
-                dueDate: getActivityDueDate(activity.dates) || 'No due date',
-                status: getActivityStatus(activity.completion) === 'completed' ? 'submitted' :
-                  getActivityStatus(activity.completion) === 'in-progress' ? 'pending' : 'pending',
-                points: Math.floor(Math.random() * 100) + 25, // Mock points for now
-                difficulty: Math.random() > 0.7 ? 'hard' : Math.random() > 0.4 ? 'medium' : 'easy',
-                timeRemaining: 'Due soon'
-              }));
+            // Transform activities to match the expected format
+            const filteredActivities: Activity[] = lessonActivitiesData.map((activity: any) => ({
+              id: activity.id.toString(),
+              title: activity.title,
+              type: activity.type || 'practice',
+              courseId: lesson.courseId,
+              courseTitle: lesson.courseTitle || '',
+              dueDate: activity.dueDate || 'No due date',
+              status: activity.status || 'pending',
+              points: activity.points || Math.floor(Math.random() * 100) + 25,
+              difficulty: activity.difficulty || (Math.random() > 0.7 ? 'hard' : Math.random() > 0.4 ? 'medium' : 'easy'),
+              timeRemaining: activity.timeRemaining || 'Due soon'
+            }));
 
             setLessonActivities(prev => ({ ...prev, [lessonId]: filteredActivities }));
           }
@@ -722,87 +690,91 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       try {
         console.log('🎓 Fetching dashboard data for student:', currentUser.id);
 
-        // First, try to load cached data for immediate display
-        const cachedCourses = localStorage.getItem('dashboard_courses');
-        const cachedLessons = localStorage.getItem('dashboard_lessons');
-        const cachedActivities = localStorage.getItem('dashboard_activities');
+        // Set user ID for lazy loading service
+        lazyLoadingLessonService.setUserId(currentUser.id.toString());
 
-        // If we have recent cached data, show it immediately
+        // 2. Check advanced cache for immediate display
+        const coursesCacheKey = getCacheKey(CACHE_KEYS.USER_COURSES, currentUser.id);
+        const lessonsCacheKey = getCacheKey(CACHE_KEYS.CURRENT_LESSONS, currentUser.id);
+        const activitiesCacheKey = getCacheKey(CACHE_KEYS.COURSE_ACTIVITIES, currentUser.id);
+
+        const cachedCourses = getCachedData(coursesCacheKey);
+        const cachedLessons = getCachedData(lessonsCacheKey);
+        const cachedActivities = getCachedData(activitiesCacheKey);
+
+        // If we have valid cached data, show it immediately
         if (cachedCourses && cachedLessons && cachedActivities) {
-          try {
-            const { data: coursesData, timestamp: coursesTime } = JSON.parse(cachedCourses);
-            const { data: lessonsData, timestamp: lessonsTime } = JSON.parse(cachedLessons);
-            const { data: activitiesData, timestamp: activitiesTime } = JSON.parse(cachedActivities);
+          console.log('⚡ INSTANT: Loading dashboard from advanced cache...');
+          cacheHitCount.current += 3;
+          setLoadingProgress(100);
+          setCourses(cachedCourses);
+          setLessons(cachedLessons);
+          setActivities(cachedActivities);
+          setHasInitialized(true);
+          setIsLoading(false);
 
-            // Check if cache is still valid (10 minutes)
-            const cacheValid = Date.now() - Math.max(coursesTime, lessonsTime, activitiesTime) < 10 * 60 * 1000;
+          // Update performance metrics
+          const loadTime = performance.now() - loadStartTime.current;
+          setPerformanceMetrics({
+            loadTime: Math.round(loadTime),
+            cacheHitRate: 100,
+            apiCallCount: 0,
+            cacheHits: cacheHitCount.current
+          });
 
-            if (cacheValid) {
-              console.log('📦 Using cached dashboard data');
-              setLoadingProgress(100);
-              setCourses(coursesData);
-              setLessons(lessonsData);
-              setActivities(activitiesData);
-              setHasInitialized(true);
-              setIsLoading(false);
-
-              // Fetch fresh data in background
-              fetchFreshDataInBackground();
-              return;
-            }
-          } catch (cacheError) {
-            console.warn('Failed to parse cached data:', cacheError);
-          }
+          // Fetch fresh data in background for next time
+          fetchFreshDataInBackground();
+          return;
         }
 
-        // Fetch essential data first (courses only) with timeout
-        console.log('🚀 Fetching essential data first...');
+        // 3. Progressive loading: Show what we have, fetch what we need
+        console.log('📊 Progressive loading: Fetching essential data first...');
         setLoadingProgress(20);
 
-        // Add timeout to prevent hanging
-        const coursesData = await Promise.race([
-          dashboardService.fetchStudentCourses(currentUser.id.toString()),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Courses fetch timeout')), 10000)
-          )
-        ]);
-
-        // Show courses immediately
-        setLoadingProgress(50);
+        // Fetch courses first (most important)
+        const coursesData = await dashboardService.fetchStudentCourses(currentUser.id.toString());
+        apiCallCount.current++;
+        setLoadingProgress(40);
         setCourses(coursesData);
-        cacheData('dashboard_courses', coursesData);
 
-        // Fetch other data in parallel (non-blocking)
-        Promise.all([
-          dashboardService.fetchStudentLessons(currentUser.id.toString()),
-          dashboardService.fetchStudentActivities(currentUser.id.toString()),
+        // Fetch all lessons for all courses to populate the Current Lessons section
+        setLoadingProgress(60);
+        await fetchAllLessons();
+        setLoadingProgress(80);
+
+        // Fetch activities (mock data for performance)
+        const activitiesData = await dashboardService.fetchStudentActivities(currentUser.id.toString());
+        apiCallCount.current += 1;
+        setActivities(activitiesData);
+
+        // Fetch remaining data in background (non-blocking)
+        Promise.allSettled([
           dashboardService.fetchStudentExams(currentUser.id.toString()),
           dashboardService.fetchStudentSchedule(currentUser.id.toString()),
           dashboardService.fetchStudentStats(currentUser.id.toString())
-        ]).then(([lessonsData, activitiesData, examsData, scheduleData, statsData]) => {
-          console.log('📊 Background data fetched:', {
-            lessons: lessonsData.length,
-            activities: activitiesData.length,
-            exams: examsData.length,
-            schedule: scheduleData.length
-          });
-
-          // Update state with fresh data
-          setLessons(lessonsData);
-          setActivities(activitiesData);
-          setExams(examsData);
-          setScheduleEvents(scheduleData);
-          setStudentStats(statsData);
-
-          // Cache the data
-          cacheData('dashboard_lessons', lessonsData);
-          cacheData('dashboard_activities', activitiesData);
-        }).catch((error) => {
-          console.warn('Background data fetch failed:', error);
+        ]).then((results) => {
+          const [examsResult, scheduleResult, statsResult] = results;
+          
+          if (examsResult.status === 'fulfilled') setExams(examsResult.value);
+          if (scheduleResult.status === 'fulfilled') setScheduleEvents(scheduleResult.value);
+          if (statsResult.status === 'fulfilled') setStudentStats(statsResult.value);
+          
+          apiCallCount.current += results.filter(r => r.status === 'fulfilled').length;
         });
 
         setLoadingProgress(100);
         setHasInitialized(true);
+
+        // Update performance metrics
+        const loadTime = performance.now() - loadStartTime.current;
+        setPerformanceMetrics({
+          loadTime: Math.round(loadTime),
+          cacheHitRate: Math.round((cacheHitCount.current / (cacheHitCount.current + apiCallCount.current)) * 100),
+          apiCallCount: apiCallCount.current,
+          cacheHits: cacheHitCount.current
+        });
+
+
 
       } catch (error) {
         console.error('❌ Error fetching dashboard data:', error);
@@ -815,31 +787,24 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     // Helper function to fetch fresh data in background
     const fetchFreshDataInBackground = async () => {
       try {
-        const [lessonsData, activitiesData, examsData, scheduleData, statsData] = await Promise.all([
-          dashboardService.fetchStudentLessons(currentUser.id.toString()),
-          dashboardService.fetchStudentActivities(currentUser.id.toString()),
-          dashboardService.fetchStudentExams(currentUser.id.toString()),
-          dashboardService.fetchStudentSchedule(currentUser.id.toString()),
-          dashboardService.fetchStudentStats(currentUser.id.toString())
-        ]);
-
-        // Update state with fresh data
-        setLessons(lessonsData);
-        setActivities(activitiesData);
-        setExams(examsData);
-        setScheduleEvents(scheduleData);
-        setStudentStats(statsData);
-
-        // Cache the fresh data
-        cacheData('dashboard_lessons', lessonsData);
-        cacheData('dashboard_activities', activitiesData);
+        console.log('🔄 Background refresh started...');
+        
+        // Use lazy loading service for background refresh
+        await lazyLoadingLessonService.backgroundRefresh();
+        
+        // Also refresh all lessons
+        await fetchAllLessons();
+        
+        console.log('✅ Background refresh completed');
       } catch (error) {
         console.warn('Background refresh failed:', error);
       }
     };
 
+
+
     fetchDashboardData();
-  }, [currentUser?.id, hasInitialized, cacheData]);
+  }, [currentUser?.id, hasInitialized]);
 
   // Memoized helper functions for status colors
   const getStatusColor = useCallback((status: string) => {
@@ -878,6 +843,113 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     }
   }, []);
 
+  // Load dashboard data from cache
+  const loadDashboardFromCache = useCallback(async () => {
+    if (!currentUser?.id) return false;
+    
+    try {
+      console.log('🔍 Loading dashboard data from cache...');
+      
+      const userId = currentUser.id.toString();
+      
+      // Try to load all dashboard data from cache
+      const cachedCourses = getCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_COURSES, userId), CACHE_DURATION.DASHBOARD);
+      const cachedLessons = getCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_LESSONS, userId), CACHE_DURATION.DASHBOARD);
+      const cachedActivities = getCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_ACTIVITIES, userId), CACHE_DURATION.DASHBOARD);
+      const cachedExams = getCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_EXAMS, userId), CACHE_DURATION.DASHBOARD);
+      const cachedSchedule = getCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_SCHEDULE, userId), CACHE_DURATION.DASHBOARD);
+      const cachedStats = getCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_STATS, userId), CACHE_DURATION.DASHBOARD);
+      
+      // Check if we have all the data
+      if (cachedCourses && cachedLessons && cachedActivities && cachedExams && cachedSchedule && cachedStats) {
+        console.log('✅ All dashboard data loaded from cache');
+        
+        // Set all cached data
+        setCourses(cachedCourses);
+        setLessons(cachedLessons);
+        setActivities(cachedActivities);
+        setExams(cachedExams);
+        setScheduleEvents(cachedSchedule);
+        setStudentStats(cachedStats);
+        
+        setCacheHit(true);
+        setLoadingFromCache(false);
+        return true;
+      } else {
+        console.log('⚠️ Incomplete cache data, will fetch fresh data');
+        return false;
+      }
+      
+    } catch (error) {
+      console.error('❌ Error loading from cache:', error);
+      return false;
+    }
+  }, [currentUser?.id]);
+
+  // Fetch all lessons for all courses to populate the Current Lessons section
+  const fetchAllLessons = useCallback(async () => {
+    if (!currentUser?.id) return;
+    
+    setLoadingAllLessons(true);
+    
+    try {
+      console.log('📚 Fetching all lessons for Current Lessons section...');
+      
+      // Get all courses first
+      const allCourses = await lazyLoadingLessonService.fetchUserCourses();
+      
+      // Fetch lessons for all courses in parallel
+      const lessonPromises = allCourses.map(async (course) => {
+        try {
+          const courseLessons = await lazyLoadingLessonService.fetchCourseLessons(course.id);
+          return courseLessons;
+        } catch (error) {
+          console.warn(`Failed to fetch lessons for course ${course.id}:`, error);
+          return [];
+        }
+      });
+      
+      const allLessonsArrays = await Promise.allSettled(lessonPromises);
+      const allLessons = allLessonsArrays
+        .filter(result => result.status === 'fulfilled')
+        .flatMap(result => (result as PromiseFulfilledResult<any[]>).value);
+      
+      console.log(`✅ Fetched ${allLessons.length} total lessons from all courses`);
+      
+      // Update lessons state with all lessons
+      setLessons(allLessons);
+      
+    } catch (error) {
+      console.error('❌ Error fetching all lessons:', error);
+    } finally {
+      setLoadingAllLessons(false);
+    }
+  }, [currentUser?.id]);
+
+  // Cache dashboard data
+  const cacheDashboardData = useCallback(async () => {
+    if (!currentUser?.id) return;
+    
+    try {
+      console.log('💾 Caching dashboard data...');
+      
+      const userId = currentUser.id.toString();
+      
+      // Cache all dashboard data
+      setCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_COURSES, userId), courses);
+      setCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_LESSONS, userId), lessons);
+      setCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_ACTIVITIES, userId), activities);
+      setCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_EXAMS, userId), exams);
+      setCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_SCHEDULE, userId), scheduleEvents);
+      setCachedData(getDashboardCacheKey(CACHE_KEYS.DASHBOARD_STATS, userId), studentStats);
+      
+      console.log('✅ Dashboard data cached successfully');
+      
+    } catch (error) {
+      console.error('❌ Error caching dashboard data:', error);
+    }
+  }, [currentUser?.id, courses, lessons, activities, exams, scheduleEvents, studentStats]);
+
   // Memoized computed values with real data
   const activeCoursesCount = useMemo(() => courses.filter(c => c.isActive).length, [courses]);
   const completedLessonsCount = useMemo(() => {
@@ -905,47 +977,6 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const totalCertificates = useMemo(() => {
     return courses.reduce((sum, course) => sum + (course.certificates || 0), 0);
   }, [courses]);
-
-  if (isLoading && !hasInitialized) {
-    return (
-      <div className="bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100 min-h-screen">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 mb-2">Loading your dashboard...</p>
-            <div className="w-64 bg-gray-200 rounded-full h-2 mx-auto">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${loadingProgress}%` }}
-              ></div>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">{loadingProgress}% complete</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !hasInitialized) {
-    return (
-      <div className="bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100 min-h-screen">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="text-red-500 text-6xl mb-4">⚠️</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className='bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6'>
       {/* Top Navigation Bar */}
@@ -971,12 +1002,42 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       </div>
 
       <div className=" mx-auto space-y-8">
-        {/* Welcome Section */}
+        {/* Welcome Section with Performance Indicator */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold mb-2">Welcome back, {currentUser?.fullname || "Student"}! 👋</h1>
               <p className="text-blue-100">Continue your learning journey today</p>
+              
+              {/* Performance Indicator */}
+              {isLoading && (
+                <div className="mt-3">
+                  <div className="flex items-center space-x-2 text-blue-100 text-sm">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Loading with optimizations... {loadingProgress}%</span>
+                  </div>
+                  <div className="w-full bg-blue-200/30 rounded-full h-2 mt-2">
+                    <div 
+                      className="bg-white h-2 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${loadingProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Cache Status Indicator */}
+              {!isLoading && performanceMetrics && (
+                <div className="mt-3 flex items-center space-x-4 text-blue-100 text-sm">
+                  <div className="flex items-center space-x-1">
+                    <Zap className="w-4 h-4" />
+                    <span>{performanceMetrics.loadTime}ms load time</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Database className="w-4 h-4" />
+                    <span>{performanceMetrics.cacheHitRate}% cache hit rate</span>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-center">
@@ -991,9 +1052,30 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           </div>
         </div>
 
-        {/* View Mode Toggle (Card / Tree) - specific to G4G7 only */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-3 flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-700">View</div>
+        {/* View Mode Toggle and Performance Monitoring */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-3">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-medium text-gray-700">View Mode</div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowCacheInfo(!showCacheInfo)}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Cache & Performance Info"
+              >
+                <Database className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  // Cache cleanup functionality removed for lazy loading
+                }}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Clean Cache"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          
           <div className="flex items-center bg-gray-100 rounded-xl p-1">
             <button
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow' : 'text-gray-700 hover:text-gray-900'}`}
@@ -1008,6 +1090,46 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               Tree View
             </button>
           </div>
+
+          {/* Performance & Cache Info Panel */}
+          {showCacheInfo && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                {performanceMetrics && (
+                  <>
+                    <div>
+                      <span className="font-medium text-gray-700">Load Time:</span>
+                      <span className="ml-2 text-green-600">{performanceMetrics.loadTime}ms</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Cache Hit Rate:</span>
+                      <span className="ml-2 text-blue-600">{performanceMetrics.cacheHitRate}%</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">API Calls:</span>
+                      <span className="ml-2 text-orange-600">{performanceMetrics.apiCallCount}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Cache Hits:</span>
+                      <span className="ml-2 text-purple-600">{performanceMetrics.cacheHits}</span>
+                    </div>
+                  </>
+                )}
+                {cacheStats && (
+                  <>
+                    <div>
+                      <span className="font-medium text-gray-700">Cache Entries:</span>
+                      <span className="ml-2 text-gray-600">{cacheStats.totalEntries}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Storage Used:</span>
+                      <span className="ml-2 text-gray-600">{cacheStats.storageUsage}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Summary Statistics Cards */}
@@ -1190,6 +1312,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                       {courses.map(course => {
                         const isExpanded = !!expandedCourses[course.id];
                         const courseLessons = lessons.filter(l => l.courseId === course.id);
+                        console.log(`🌳 Course ${course.id} (${course.title}): expanded=${isExpanded}, lessons=${courseLessons.length}`, courseLessons);
                         return (
                           <li key={course.id} className="p-4">
                             <div className="flex items-center justify-between">
@@ -1198,20 +1321,35 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                                   className={`w-7 h-7 rounded-md flex items-center justify-center bg-gray-100 ${isExpanded ? 'text-blue-600' : 'text-gray-600'}`}
                                   onClick={() => toggleCourseExpanded(course.id)}
                                   aria-label={isExpanded ? 'Collapse course' : 'Expand course'}
+                                  disabled={loadingCourseLessons[course.id]}
                                 >
-                                  <ChevronRight className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                  {loadingCourseLessons[course.id] ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b border-blue-600"></div>
+                                  ) : (
+                                    <ChevronRight className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                  )}
                                 </button>
                                 {/* <img src={course.image} alt={course.title} className="w-2 h-2 rounded-md object-cover" /> */}
                                 <button className="text-left" onClick={() => handleCourseClick(course)}>
                                   <div className="font-semibold text-gray-900">{course.title}</div>
-                                  <div className="text-xs text-gray-500">{course.completedLessons}/{course.totalLessons} lessons • {course.progress}%</div>
+                                  <div className="text-xs text-gray-500">
+                                    {course.completedLessons}/{course.totalLessons} lessons • {course.progress}%
+                                    {loadingCourseLessons[course.id] && (
+                                      <span className="ml-2 text-blue-600">(Loading...)</span>
+                                    )}
+                                  </div>
                                 </button>
                               </div>
                             </div>
                             {isExpanded && (
                               <div className="mt-3 ml-10">
-                                {courseLessons.length === 0 ? (
-                                  <div className="text-sm text-gray-500">No lessons found.</div>
+                                {loadingCourseLessons[course.id] ? (
+                                  <div className="text-sm text-gray-500 flex items-center space-x-2">
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
+                                    <span>Loading lessons...</span>
+                                  </div>
+                                ) : courseLessons.length === 0 ? (
+                                  <div className="text-sm text-gray-500">No lessons found for this course.</div>
                                 ) : (
                                   <ul className="space-y-2">
                                     {courseLessons.map(lesson => {
@@ -1284,21 +1422,80 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             {/* Current Lessons Section */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Current Lessons</h2>
-                <button className="text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
-                  <span>View All</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center space-x-3">
+                  <h2 className="text-2xl font-bold text-gray-900">Current Lessons</h2>
+                  {!loadingAllLessons && lessons.length > 0 && (
+                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                      {lessons.length} lesson{lessons.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button 
+                    onClick={fetchAllLessons}
+                    disabled={loadingAllLessons}
+                    className="text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingAllLessons ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                  <button className="text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
+                    <span>View All</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              {lessons.length === 0 ? (
+              {loadingAllLessons ? (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Lessons...</h3>
+                  <p className="text-gray-600">Fetching all lessons from your courses...</p>
+                </div>
+              ) : lessons.length === 0 ? (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
                   <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">No Lessons Available</h3>
-                  <p className="text-gray-600">Start a course to see your lessons here.</p>
+                  <p className="text-gray-600 mb-4">Start a course to see your lessons here.</p>
+                  <button 
+                    onClick={fetchAllLessons}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Load Lessons
+                  </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {lessons.slice(0, 6).map((lesson) => (
+                <>
+                  {/* Lessons Summary */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-blue-600">{lessons.length}</div>
+                        <div className="text-sm text-gray-600">Total Lessons</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-green-600">
+                          {lessons.filter(l => l.status === 'completed').length}
+                        </div>
+                        <div className="text-sm text-gray-600">Completed</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-blue-600">
+                          {lessons.filter(l => l.status === 'in-progress').length}
+                        </div>
+                        <div className="text-sm text-gray-600">In Progress</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-gray-600">
+                          {lessons.filter(l => l.status === 'not-started').length}
+                        </div>
+                        <div className="text-sm text-gray-600">Not Started</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Lessons Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {lessons.map((lesson, index) => (
                     <div
                       key={lesson.id}
                       className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:scale-105 transition-all duration-300 cursor-pointer"
@@ -1321,7 +1518,12 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         </div>
                       </div>
                       <div className="p-4">
-                        <h3 className="font-semibold text-gray-900 mb-2">{lesson.title}</h3>
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-gray-900">{lesson.title}</h3>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                            #{index + 1}
+                          </span>
+                        </div>
                         <p className="text-gray-600 text-sm mb-3 line-clamp-2">{lesson.courseTitle}</p>
                         <div className="flex items-center space-x-2 mb-3">
                           <Clock className="w-3 h-3 text-gray-500" />
@@ -1351,6 +1553,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                     </div>
                   ))}
                 </div>
+                </>
               )}
             </div>
 
@@ -1543,6 +1746,48 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   <span className="text-xs text-gray-600">{studentStats.coins} Coins</span>
                 </div>
               </div>
+            </div>
+
+            {/* Cache Management Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <h3 className="font-semibold text-gray-900">Cache Management</h3>
+                <Database className="w-4 h-4 text-blue-500" />
+              </div>
+              
+              {cacheStats ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Cache Entries</span>
+                    <span className="font-medium text-gray-900">{cacheStats.totalEntries}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Storage Used</span>
+                    <span className="font-medium text-gray-900">{cacheStats.storageUsage}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Total Size</span>
+                    <span className="font-medium text-gray-900">{cacheStats.totalSizeKB}KB</span>
+                  </div>
+                  
+                  <div className="pt-2 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        // Cache cleanup functionality removed for lazy loading
+                      }}
+                      className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Clean Cache</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center text-gray-500 text-sm py-4">
+                  <Database className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p>Cache stats loading...</p>
+                </div>
+              )}
             </div>
 
             {/* Your Schedule Section */}
