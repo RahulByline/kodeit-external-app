@@ -112,6 +112,7 @@ const StudentAskTeacher = lazy(() => import("./pages/student/AskTeacher"));
 const StudentAiBuddy = lazy(() => import("./pages/student/AiBuddy"));
 const StudentShare = lazy(() => import("./pages/student/Share"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
+const TuxPaintEmulator = lazy(() => import("./components/TuxPaintEmulator"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
 const ScratchEditor = lazy(() => import("./pages/ScratchEditor"));
@@ -577,6 +578,13 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <Emulators />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/tux-paint" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TuxPaintEmulator />
                     </Suspense>
                   </ProtectedRoute>
                 } />

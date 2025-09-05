@@ -1,0 +1,107 @@
+# Tux Paint Emulator Dockerfile
+# This Dockerfile sets up Ubuntu with Tux Paint, X11, VNC, and noVNC
+
+FROM ubuntu:22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DISPLAY=:1
+ENV VNC_PORT=5901
+ENV NOVNC_PORT=6080
+ENV RESOLUTION=1024x768x24
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tuxpaint \
+    xvfb \
+    x11vnc \
+    fluxbox \
+    wget \
+    unzip \
+    python3 \
+    python3-pip \
+    net-tools \
+    curl \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a user for running Tux Paint
+RUN useradd -m -s /bin/bash tuxpaint && \
+    echo "tuxpaint:tuxpaint" | chpasswd
+
+# Install noVNC
+RUN cd /opt && \
+    wget https://github.com/novnc/noVNC/archive/refs/tags/v1.4.0.zip && \
+    unzip v1.4.0.zip && \
+    mv noVNC-1.4.0 noVNC && \
+    rm v1.4.0.zip && \
+    cd noVNC && \
+    wget https://github.com/novnc/websockify/archive/refs/tags/v0.10.0.zip && \
+    unzip v0.10.0.zip && \
+    mv websockify-0.10.0 websockify && \
+    rm v0.10.0.zip && \
+    chmod +x utils/launch.sh
+
+# Create supervisor configuration
+RUN mkdir -p /var/log/supervisor
+COPY <<EOF /etc/supervisor/conf.d/tuxpaint.conf
+[supervisord]
+nodaemon=true
+user=root
+
+[program:xvfb]
+command=Xvfb :1 -screen 0 %(ENV_RESOLUTION)s -ac +extension GLX +render -noreset
+autostart=true
+autorestart=true
+priority=100
+
+[program:fluxbox]
+command=fluxbox
+autostart=true
+autorestart=true
+priority=200
+environment=DISPLAY=":1"
+
+[program:x11vnc]
+command=x11vnc -display :1 -nopw -listen localhost -xkb -ncache 10 -ncache_cr -forever -shared
+autostart=true
+autorestart=true
+priority=300
+
+[program:novnc]
+command=python3 /opt/noVNC/utils/websockify/websockify.py --web /opt/noVNC 6080 localhost:5901
+autostart=true
+autorestart=true
+priority=400
+
+[program:tuxpaint]
+command=su - tuxpaint -c "DISPLAY=:1 tuxpaint"
+autostart=true
+autorestart=true
+priority=500
+environment=DISPLAY=":1"
+EOF
+
+# Create startup script
+RUN echo '#!/bin/bash\n\
+echo "Starting Tux Paint Emulator..."\n\
+echo "Display: $DISPLAY"\n\
+echo "Resolution: $RESOLUTION"\n\
+echo "VNC Port: $VNC_PORT"\n\
+echo "noVNC Port: $NOVNC_PORT"\n\
+\n\
+# Start supervisor\n\
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/tuxpaint.conf' > /start.sh && chmod +x /start.sh
+
+# Set proper permissions
+RUN chown -R tuxpaint:tuxpaint /home/tuxpaint && \
+    chmod -R 755 /opt/noVNC
+
+# Expose ports
+EXPOSE 5901 6080
+
+# Set working directory
+WORKDIR /opt
+
+# Start the services
+CMD ["/start.sh"]

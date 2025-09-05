@@ -71,6 +71,20 @@ interface RecentActivity {
   grade?: number;
 }
 
+interface CurrentLesson {
+  id: string;
+  name: string;
+  courseId: string;
+  courseName: string;
+  courseImage?: string;
+  status: 'completed' | 'in_progress' | 'not_started';
+  progress: number;
+  totalActivities: number;
+  completedActivities: number;
+  lastAccessed?: number;
+  dueDate?: number;
+}
+
 const StudentDashboard: React.FC = () => {
   const { currentUser } = useAuth();
   
@@ -98,6 +112,7 @@ const StudentDashboard: React.FC = () => {
   const [studentActivities, setStudentActivities] = useState<StudentActivity[]>([]);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [userCourses, setUserCourses] = useState<Course[]>([]);
+  const [currentLessons, setCurrentLessons] = useState<CurrentLesson[]>([]);
   const [userAssignments, setUserAssignments] = useState<any[]>([]);
 
   // Individual loading states for progressive loading
@@ -109,7 +124,8 @@ const StudentDashboard: React.FC = () => {
     recentActivities: false,
     userCourses: false,
     userAssignments: false,
-    profile: false
+    profile: false,
+    currentLessons: false
   });
 
   // Skeleton loader components
@@ -309,6 +325,63 @@ const StudentDashboard: React.FC = () => {
           }));
           
           setCourseProgress(realCourseProgress);
+          
+          // Fetch current lessons from enrolled courses
+          setLoadingStates(prev => ({ ...prev, currentLessons: true }));
+          try {
+            const currentLessonsData: CurrentLesson[] = [];
+            
+            // Get lessons from each enrolled course
+            for (const course of enhancedCourses) {
+              try {
+                const courseContents = await moodleService.getCourseContents(course.id);
+                if (courseContents && courseContents.length > 0) {
+                  // Take the first 2 lessons from each course as "current"
+                  const courseLessons = courseContents.slice(0, 2).map((section: any, index: number) => {
+                    const totalActivities = section.modules?.length || 0;
+                    const completedActivities = section.modules?.filter((module: any) => 
+                      module.completion?.state === 1
+                    ).length || 0;
+                    const progress = totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
+                    
+                                         return {
+                       id: `${course.id}-${section.id}`,
+                       name: section.name || `Lesson ${index + 1}`,
+                       courseId: course.id,
+                       courseName: course.fullname,
+                       courseImage: course.courseimage,
+                       status: (progress === 100 ? 'completed' : progress > 0 ? 'in_progress' : 'not_started') as 'completed' | 'in_progress' | 'not_started',
+                       progress,
+                       totalActivities,
+                       completedActivities,
+                       lastAccessed: (course as any).lastaccess || course.startdate,
+                       dueDate: undefined
+                     };
+                  });
+                  
+                  currentLessonsData.push(...courseLessons);
+                }
+              } catch (error) {
+                console.warn(`⚠️ Could not fetch lessons for course ${course.id}:`, error);
+              }
+            }
+            
+            // Sort by progress (in progress first, then not started, then completed)
+            const sortedLessons = currentLessonsData.sort((a, b) => {
+              if (a.status === 'in_progress' && b.status !== 'in_progress') return -1;
+              if (a.status === 'not_started' && b.status === 'completed') return -1;
+              return 0;
+            });
+            
+            setCurrentLessons(sortedLessons.slice(0, 6)); // Show top 6 current lessons
+            setLoadingStates(prev => ({ ...prev, currentLessons: false }));
+            
+            console.log('✅ Current lessons loaded:', sortedLessons.length);
+            
+          } catch (error) {
+            console.error('❌ Error loading current lessons:', error);
+            setLoadingStates(prev => ({ ...prev, currentLessons: false }));
+          }
           
         } catch (error) {
           console.error('❌ Error loading real course data:', error);
@@ -685,6 +758,7 @@ const StudentDashboard: React.FC = () => {
             {...dashboardProps}
             stats={stats}
             recentActivities={recentActivities}
+            currentLessons={currentLessons}
             loadingStates={loadingStates}
           />
         );

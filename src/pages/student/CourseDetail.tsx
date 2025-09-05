@@ -93,12 +93,16 @@ interface PopularCourse {
 
 const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
   const { currentUser } = useAuth();
+  
+  console.log('🎯 CourseDetail component mounted with courseId:', courseId);
+  console.log('🎯 CourseDetail component props:', { courseId, onBack: typeof onBack });
   const [course, setCourse] = useState<any>(null);
   const [courseContents, setCourseContents] = useState<any[]>([]);
   const [courseActivities, setCourseActivities] = useState<any[]>([]);
   const [courseCompletion, setCourseCompletion] = useState<any>(null);
   const [courseGrades, setCourseGrades] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('curriculum');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['1'])); // Default expand first section
@@ -112,7 +116,9 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
   
   // New state for lesson/activity navigation
   const [selectedLesson, setSelectedLesson] = useState<CourseSection | null>(null);
-  const [viewMode, setViewMode] = useState<'lessons' | 'activities'>('lessons');
+  const [viewMode, setViewMode] = useState<'lessons' | 'activity-detail'>('lessons');
+  const [selectedActivityDetail, setSelectedActivityDetail] = useState<CourseActivity | null>(null);
+  const [iframeLoading, setIframeLoading] = useState(false);
 
   useEffect(() => {
     fetchCourseDetails();
@@ -120,42 +126,122 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
 
   const fetchCourseDetails = async () => {
     try {
+      console.log('🚀 fetchCourseDetails called for courseId:', courseId);
       setLoading(true);
       setError('');
       
-      console.log('🔍 Fetching detailed course data for course ID:', courseId);
+      console.log('🔍 Fetching optimized course data for course ID:', courseId);
       
-      // Fetch all course data in parallel
-      const [
-        courseDetails,
-        contents,
-        activities,
-        completion,
-        grades,
-        userCourses
-      ] = await Promise.all([
-        moodleService.getCourseDetails(courseId),
-        moodleService.getCourseContents(courseId),
+      // Fetch only essential data first for faster loading
+      setLoadingProgress(20);
+      const [courseDetails, contents] = await Promise.all([
+        moodleService.getCourseDetailsOptimized(courseId),
+        moodleService.getCourseContents(courseId)
+      ]);
+      
+      setLoadingProgress(60);
+      // Set course and contents immediately for faster UI rendering
+      setCourse(courseDetails);
+      setCourseContents(contents || []);
+      
+      // Process course sections immediately
+      if (contents && contents.length > 0) {
+        const processedSections: CourseSection[] = contents.map((section: any, index: number) => {
+          const sectionActivities: CourseActivity[] = (section.modules || []).map((module: any) => {
+            // Determine activity type based on modname
+            let activityType: CourseActivity['type'] = 'reading';
+            switch (module.modname) {
+              case 'assign': activityType = 'assignment'; break;
+              case 'quiz': activityType = 'quiz'; break;
+              case 'url': 
+              case 'resource': 
+              case 'page': activityType = 'reading'; break;
+              case 'lesson': 
+              case 'scorm': 
+              case 'h5pactivity': activityType = 'interactive'; break;
+              default: activityType = 'reading';
+            }
+            
+            // Determine status based on completion data
+            let status: CourseActivity['status'] = 'not_started';
+            if (module.completion) {
+              if (module.completion.state === 1) {
+                status = 'completed';
+              } else if (module.completion.state === 0) {
+                status = 'in_progress';
+              }
+            }
+            
+            return {
+              id: module.id.toString(),
+              name: module.name || 'Unnamed Activity',
+              type: activityType,
+              status: status,
+              duration: module.duration || '5-10 min',
+              description: module.description || module.intro || 'Course activity',
+              dueDate: module.dates?.find((date: any) => date.label === 'Due date')?.timestamp,
+              grade: module.completion?.value || 0,
+              maxGrade: 100,
+              attempts: module.completion?.attempts || 0,
+              maxAttempts: 3,
+              sectionName: section.name
+            };
+          });
+          
+          const completedActivities = sectionActivities.filter(activity => activity.status === 'completed').length;
+          
+          return {
+            id: section.id.toString(),
+            name: section.name || `Lesson ${index + 1}`,
+            activities: sectionActivities,
+            completedActivities,
+            totalActivities: sectionActivities.length,
+            isExpanded: index === 0 // Expand first section by default
+          };
+        });
+        
+        setCourseSections(processedSections);
+        console.log(`✅ Processed ${processedSections.length} course sections with activities`);
+      }
+      
+      // Fetch additional data in background (non-blocking)
+      Promise.all([
         moodleService.getCourseActivities(courseId),
         moodleService.getCourseCompletion(courseId),
         moodleService.getCourseGrades(courseId),
         moodleService.getUserCourses(currentUser?.id || '1')
-      ]);
+      ]).then(([backgroundActivities, backgroundCompletion, backgroundGrades, backgroundUserCourses]) => {
+        setCourseActivities(backgroundActivities || []);
+        setCourseCompletion(backgroundCompletion);
+        setCourseGrades(backgroundGrades);
+        
+        // Generate popular courses from user courses
+        if (backgroundUserCourses && backgroundUserCourses.length > 0) {
+          const popularCoursesData: PopularCourse[] = backgroundUserCourses
+            .filter((userCourse: any) => userCourse.id !== courseId)
+            .slice(0, 2)
+            .map((userCourse: any) => ({
+              id: userCourse.id,
+              name: userCourse.fullname,
+              icon: getCourseIcon(userCourse.shortname),
+              rating: 4.8, // Fixed rating instead of random
+              price: `(${userCourse.progress || 0}% Complete)`,
+              category: userCourse.categoryname || 'General'
+            }));
+          
+          setPopularCourses(popularCoursesData);
+        }
+      }).catch(error => {
+        console.warn('⚠️ Background data fetch failed:', error);
+      });
       
       console.log('✅ Course data fetched:', {
         details: courseDetails ? 'Yes' : 'No',
-        contents: contents?.length || 0,
-        activities: activities?.length || 0,
-        completion: completion ? 'Yes' : 'No',
-        grades: grades ? 'Yes' : 'No',
-        userCourses: userCourses?.length || 0
+        contents: contents?.length || 0
       });
       
       setCourse(courseDetails);
       setCourseContents(contents || []);
-      setCourseActivities(activities || []);
-      setCourseCompletion(completion);
-      setCourseGrades(grades);
       
       // Process course sections and activities
       if (contents && contents.length > 0) {
@@ -217,27 +303,13 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
         console.log(`✅ Processed ${processedSections.length} course sections with activities`);
       }
       
-      // Generate popular courses from user courses
-      if (userCourses && userCourses.length > 0) {
-                 const popularCoursesData: PopularCourse[] = userCourses
-           .filter((userCourse: any) => userCourse.id !== courseId)
-           .slice(0, 2)
-           .map((userCourse: any) => ({
-             id: userCourse.id,
-             name: userCourse.fullname,
-             icon: getCourseIcon(userCourse.shortname),
-             rating: 4.8, // Fixed rating instead of random
-             price: `(${userCourse.progress || 0}% Complete)`,
-             category: userCourse.categoryname || 'General'
-           }));
-        
-        setPopularCourses(popularCoursesData);
-      }
+
       
     } catch (error) {
       console.error('❌ Error fetching course details:', error);
       setError('Failed to load course details. Please try again.');
     } finally {
+      setLoadingProgress(100);
       setLoading(false);
     }
   };
@@ -304,7 +376,11 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
 
   const handleLessonClick = (lesson: CourseSection) => {
     setSelectedLesson(lesson);
-    setViewMode('activities');
+    // Show activities within the lesson card
+    if (lesson.activities && lesson.activities.length > 0) {
+      // For now, just show the first activity
+      handleActivityClick(lesson.activities[0]);
+    }
   };
 
   const handleBackToLessons = () => {
@@ -315,7 +391,9 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
   const handleActivityClick = async (activity: CourseActivity) => {
     console.log('🎯 Activity clicked:', activity.name);
     setSelectedActivity(activity);
-    setLoadingActivity(true);
+    setViewMode('activity-detail');
+    setSelectedActivityDetail(activity); // Set initial activity detail
+    setIframeLoading(true); // Start loading state for iframe
     
     try {
       // Fetch detailed activity information
@@ -328,9 +406,35 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
         ).find((module: any) => module.id.toString() === activity.id);
         
         if (foundActivity) {
-          setSelectedActivity({
+          console.log('🔍 Found activity details:', foundActivity);
+          
+          // Determine the best URL for the iframe
+          let activityUrl = null;
+          
+          // For SCORM activities, look for the main SCORM URL
+          if (foundActivity.modname === 'scorm' && foundActivity.url) {
+            activityUrl = foundActivity.url;
+          }
+          // For other activities, try to get the first content file
+          else if (foundActivity.contents && foundActivity.contents.length > 0) {
+            const firstContent = foundActivity.contents[0];
+            if (firstContent.fileurl) {
+              activityUrl = firstContent.fileurl;
+            }
+          }
+          // For URL activities, use the URL directly
+          else if (foundActivity.modname === 'url' && foundActivity.url) {
+            activityUrl = foundActivity.url;
+          }
+          
+          console.log('🎯 Activity URL for iframe:', activityUrl);
+          
+          setSelectedActivityDetail({
             ...activity,
-            details: foundActivity,
+            details: {
+              ...foundActivity,
+              url: activityUrl // Add the determined URL
+            },
             content: foundActivity.contents || [],
             description: foundActivity.description || activity.description,
             htmlContent: foundActivity.descriptionhtml || foundActivity.description
@@ -339,8 +443,6 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
       }
     } catch (error) {
       console.error('❌ Error fetching activity details:', error);
-    } finally {
-      setLoadingActivity(false);
     }
   };
 
@@ -399,9 +501,18 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
      return (
        <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
          <div className="flex items-center justify-center min-h-[400px]">
-           <div className="flex items-center space-x-2">
-             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
-             <span className="text-gray-600">Loading course details...</span>
+           <div className="text-center space-y-4">
+             <div className="flex items-center justify-center space-x-2">
+               <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
+               <span className="text-gray-600">Loading course details...</span>
+             </div>
+             <div className="w-64 bg-gray-200 rounded-full h-2">
+               <div 
+                 className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
+                 style={{ width: `${loadingProgress}%` }}
+               ></div>
+             </div>
+             <p className="text-sm text-gray-500">Loading progress: {loadingProgress}%</p>
            </div>
          </div>
        </DashboardLayout>
@@ -456,6 +567,8 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                      course.overviewfiles?.[0]?.fileurl || 
                      '/card1.webp';
 
+  console.log('🎯 CourseDetail component rendering main content with course:', course?.fullname);
+
     return (
       <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
         <div className="space-y-6">
@@ -485,12 +598,21 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
           </div>
         {/* Course Banner */}
         <div className="relative h-80 bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-xl overflow-hidden">
-          {/* Background Image - Bookshelf style */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 to-purple-900/40">
-            <div className="absolute inset-0 opacity-20" style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Crect width='4' height='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-            }}></div>
+          {/* Course Image Background */}
+          <div className="absolute inset-0">
+            <img
+              src={courseImage}
+              alt={course.fullname}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
+            />
           </div>
+          
+          {/* Light overlay for text readability */}
+          <div className="absolute inset-0 bg-black/20"></div>
           
           {/* Back to Courses Link */}
           <div className="absolute top-6 left-6">
@@ -606,83 +728,128 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                 {activeTab === 'curriculum' && (
                   <div className="space-y-6">
                     {/* Breadcrumb Navigation */}
-                    {viewMode === 'activities' && selectedLesson && (
+                    {viewMode === 'activity-detail' && selectedActivityDetail && (
                       <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4">
                         <button
-                          onClick={handleBackToLessons}
+                          onClick={() => setViewMode('lessons')}
                           className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 transition-colors"
                         >
                           <ArrowLeft className="w-4 h-4" />
                           <span>Back to Lessons</span>
                         </button>
                         <span>/</span>
-                        <span className="text-gray-900 font-medium">{selectedLesson.name}</span>
+                        <span className="text-gray-900 font-medium">{selectedActivityDetail.name}</span>
                       </div>
                     )}
 
                     {/* Section Header */}
                     <div className="flex items-center justify-between">
                       <h2 className="text-2xl font-bold text-gray-900">
-                        {viewMode === 'lessons' ? 'Course Lessons' : `${selectedLesson?.name} - Activities`}
+                        Course Lessons
                       </h2>
-                      
-                      {viewMode === 'activities' && selectedLesson && (
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline" className="text-sm">
-                            {selectedLesson.completedActivities}/{selectedLesson.totalActivities} Completed
-                          </Badge>
-                        </div>
-                      )}
+                      <div className="text-sm text-gray-600">
+                        {courseSections.length} lessons available
+                      </div>
                     </div>
 
                     {/* Lessons View */}
                     {viewMode === 'lessons' && (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {courseSections.map((section, sectionIndex) => (
-                          <div key={section.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
+                          <div 
+                            key={section.id} 
+                            onClick={() => handleLessonClick(section)}
+                            className="bg-white rounded-xl shadow-sm border-2 border-gray-200 overflow-hidden hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer group"
+                          >
                             {/* Lesson Thumbnail */}
-                            <div className="relative h-48 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
+                            <div className={`relative h-48 overflow-hidden group-hover:scale-105 transition-transform duration-300 ${
+                              section.completedActivities === section.totalActivities 
+                                ? 'bg-gradient-to-br from-green-400 to-green-600' 
+                                : section.completedActivities > 0
+                                ? 'bg-gradient-to-br from-blue-400 to-purple-600'
+                                : 'bg-gradient-to-br from-gray-400 to-gray-600'
+                            }`}>
                               {/* Lesson Progress Badge */}
                               <div className="absolute top-3 right-3">
                                 <Badge className={`${
                                   section.completedActivities === section.totalActivities 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-blue-100 text-blue-800'
+                                    ? 'bg-white text-green-700 font-bold shadow-lg' 
+                                    : section.completedActivities > 0
+                                    ? 'bg-white text-blue-700 font-bold shadow-lg'
+                                    : 'bg-white text-gray-700 font-bold shadow-lg'
                                 }`}>
                                   {section.completedActivities}/{section.totalActivities}
                                 </Badge>
                               </div>
                               
+                              {/* Lesson Number Badge */}
+                              <div className="absolute top-3 left-3">
+                                <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
+                                  <span className="text-white font-bold text-sm">{sectionIndex + 1}</span>
+                                </div>
+                              </div>
+                              
                               {/* Lesson Icon */}
                               <div className="absolute inset-0 flex items-center justify-center">
                                 <div className="text-center">
-                                  <FolderOpen className="w-16 h-16 text-blue-500 mx-auto mb-2" />
-                                  <div className="text-sm text-gray-600">Lesson {sectionIndex + 1}</div>
+                                  <div className={`w-20 h-20 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/30 group-hover:scale-110 transition-transform duration-300`}>
+                                    {section.completedActivities === section.totalActivities ? (
+                                      <CheckCircle className="w-10 h-10 text-white" />
+                                    ) : (
+                                      <FolderOpen className="w-10 h-10 text-white" />
+                                    )}
+                                  </div>
+                                  <div className="text-white font-medium mt-3 text-sm">Lesson {sectionIndex + 1}</div>
                                 </div>
                               </div>
+                              
+                              {/* Hover Overlay */}
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300"></div>
                             </div>
                             
                             {/* Lesson Details */}
-                            <div className="p-4">
+                            <div className="p-6">
                               {/* Lesson Title */}
-                              <h3 className="font-bold text-gray-900 text-lg mb-2 line-clamp-2">
+                              <h3 className="font-bold text-gray-900 text-xl mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors duration-300">
                                 {section.name}
                               </h3>
                               
-                              {/* Lesson Description */}
-                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                                {section.totalActivities} activities • {section.completedActivities} completed
-                              </p>
+                              {/* Lesson Stats */}
+                              <div className="flex items-center space-x-4 mb-4">
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <BookOpen className="w-4 h-4 text-blue-600" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Activities</p>
+                                    <p className="font-bold text-gray-900">{section.totalActivities}</p>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Completed</p>
+                                    <p className="font-bold text-gray-900">{section.completedActivities}</p>
+                                  </div>
+                                </div>
+                              </div>
                               
                               {/* Progress Bar */}
-                              <div className="mb-3">
-                                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                              <div className="mb-4">
+                                <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
                                   <span>Progress</span>
                                   <span>{section.totalActivities > 0 ? Math.round((section.completedActivities / section.totalActivities) * 100) : 0}%</span>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                                   <div 
-                                    className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
+                                    className={`h-3 rounded-full transition-all duration-500 ${
+                                      section.completedActivities === section.totalActivities 
+                                        ? 'bg-gradient-to-r from-green-500 to-green-600' 
+                                        : 'bg-gradient-to-r from-blue-500 to-purple-600'
+                                    }`}
                                     style={{ 
                                       width: `${section.totalActivities > 0 ? (section.completedActivities / section.totalActivities) * 100 : 0}%` 
                                     }}
@@ -690,95 +857,248 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
                                 </div>
                               </div>
                               
-                              {/* Action Button */}
-                              <button
-                                onClick={() => handleLessonClick(section)}
-                                className={`w-full py-2 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center ${
-                                  section.completedActivities === section.totalActivities
-                                    ? 'bg-green-600 text-white hover:bg-green-700'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                              >
+                              {/* Status Indicator */}
+                              <div className={`w-full py-3 px-4 rounded-lg font-medium flex items-center justify-center ${
+                                section.completedActivities === section.totalActivities
+                                  ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                                  : section.completedActivities > 0
+                                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                                  : 'bg-gradient-to-r from-gray-500 to-gray-600 text-white'
+                              }`}>
                                 {section.completedActivities === section.totalActivities ? (
                                   <>
                                     <CheckCircle className="w-4 h-4 mr-2" />
-                                    Review Lesson
+                                    Lesson Completed
+                                  </>
+                                ) : section.completedActivities > 0 ? (
+                                  <>
+                                    <Play className="w-4 h-4 mr-2" />
+                                    Continue Activities
                                   </>
                                 ) : (
                                   <>
                                     <Play className="w-4 h-4 mr-2" />
-                                    Open Lesson
+                                    Start Activities
                                   </>
                                 )}
-                              </button>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {/* Activities View */}
-                    {viewMode === 'activities' && selectedLesson && (
-                      <div className="space-y-4">
-                        {/* Activities List */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {selectedLesson.activities.map((activity, activityIndex) => (
-                            <div key={activity.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
-                              {/* Activity Header */}
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center space-x-2">
-                                  {getActivityIcon(activity.type, "w-5 h-5 text-blue-600")}
-                                  <Badge variant="outline" className="text-xs">
-                                    {activity.type}
-                                  </Badge>
-                                </div>
-                                {getStatusIcon(activity.status)}
-                              </div>
-                              
-                              {/* Activity Title */}
-                              <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">
-                                {activity.name}
-                              </h4>
-                              
-                              {/* Activity Description */}
-                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                                {activity.description || `Activity ${activityIndex + 1}`}
-                              </p>
-                              
-                              {/* Activity Details */}
-                              <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-                                <div className="flex items-center space-x-1">
-                                  <Clock className="w-3 h-3" />
-                                  <span>{activity.duration || '5-10 min'}</span>
-                                </div>
-                                <span>#{activityIndex + 1}</span>
-                              </div>
-                              
-                              {/* Action Button */}
-                              <button
-                                onClick={() => handleActivityClick(activity)}
-                                className={`w-full py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
-                                  activity.status === 'completed'
-                                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                    : activity.status === 'in_progress'
-                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                              >
-                                {getActivityButtonText(activity)}
-                              </button>
-                            </div>
-                          ))}
+
+
+                    {/* Activity Detail View */}
+                    {viewMode === 'activity-detail' && selectedActivityDetail && (
+                      <div className="space-y-6">
+                        {/* Breadcrumb Navigation */}
+                        <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4">
+                          <button
+                            onClick={() => setViewMode('lessons')}
+                            className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 transition-colors"
+                          >
+                            <ArrowLeft className="w-4 h-4" />
+                            <span>Back to Lessons</span>
+                          </button>
+                          <span>/</span>
+                          <span className="text-gray-900 font-medium">{selectedActivityDetail.name}</span>
                         </div>
-                        
-                        {/* Empty State */}
-                        {selectedLesson.activities.length === 0 && (
-                          <div className="text-center py-12">
-                            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">No Activities</h3>
-                            <p className="text-gray-500">This lesson doesn't have any activities yet.</p>
+
+                        {/* Activity Detail Card */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                          {/* Activity Header */}
+                          <div className="relative h-48 bg-gradient-to-br from-blue-50 to-purple-50 overflow-hidden">
+                            {/* Status Badge */}
+                            <div className="absolute top-4 right-4">
+                              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                selectedActivityDetail.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                                selectedActivityDetail.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {selectedActivityDetail.status === 'completed' ? 'Completed' : 
+                                 selectedActivityDetail.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+                              </div>
+                            </div>
+                            
+                            {/* Activity Type Icon */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-20 h-20 bg-white/80 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg">
+                                {getActivityIcon(selectedActivityDetail.type, "w-10 h-10 text-gray-700")}
+                              </div>
+                            </div>
                           </div>
-                        )}
+                          
+                          {/* Activity Content */}
+                          <div className="p-6">
+                            {/* Activity Title */}
+                            <h2 className="font-bold text-gray-900 text-2xl mb-3">
+                              {selectedActivityDetail.name}
+                            </h2>
+                            
+                            {/* Activity Description */}
+                            <p className="text-gray-600 text-lg mb-6">
+                              {selectedActivityDetail.description || `Complete this ${selectedActivityDetail.type} activity to progress in your learning journey.`}
+                            </p>
+                            
+                            {/* Activity Details Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                                <Clock className="w-6 h-6 text-blue-600" />
+                                <div>
+                                  <p className="text-sm text-gray-600">Duration</p>
+                                  <p className="font-semibold text-gray-900">{selectedActivityDetail.duration || '15 min'}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                                <Award className="w-6 h-6 text-yellow-600" />
+                                <div>
+                                  <p className="text-sm text-gray-600">Points</p>
+                                  <p className="font-semibold text-gray-900">
+                                    {selectedActivityDetail.type === 'quiz' ? '50' :
+                                     selectedActivityDetail.type === 'assignment' ? '75' : '25'} pts
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                                <Target className="w-6 h-6 text-green-600" />
+                                <div>
+                                  <p className="text-sm text-gray-600">Difficulty</p>
+                                  <p className="font-semibold text-gray-900">
+                                    {selectedActivityDetail.type === 'quiz' ? 'Easy' :
+                                     selectedActivityDetail.type === 'assignment' ? 'Medium' : 'Easy'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Due Date (if applicable) */}
+                            {selectedActivityDetail.dueDate && (
+                              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <div className="flex items-center space-x-2">
+                                  <Calendar className="w-5 h-5 text-red-600" />
+                                  <span className="text-red-800 font-medium">
+                                    Due: {new Date(selectedActivityDetail.dueDate * 1000).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Progress Section (for in-progress activities) */}
+                            {selectedActivityDetail.status === 'in_progress' && (
+                              <div className="mb-6">
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-sm font-medium text-gray-700">Progress</span>
+                                  <span className="text-sm text-gray-500">60%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-3">
+                                  <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full" style={{ width: '60%' }}></div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Activity Content Section */}
+                            <div className="space-y-4">
+                              {/* Download Materials Button (if available) */}
+                              {selectedActivityDetail.details?.contents && selectedActivityDetail.details.contents.length > 0 && (
+                                <div className="flex space-x-4 mb-4">
+                                  <Button variant="outline" size="lg" onClick={() => handleDownloadMaterials(selectedActivityDetail)}>
+                                    <Download className="w-5 h-5 mr-2" />
+                                    Download Materials
+                                  </Button>
+                                </div>
+                              )}
+                              
+                              {/* Activity Iframe Container */}
+                              <div className="bg-gray-50 rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                  <h3 className="text-lg font-semibold text-gray-900">Activity Content</h3>
+                                  <div className="flex items-center space-x-2">
+                                    <div className={`w-3 h-3 rounded-full ${
+                                      selectedActivityDetail.status === 'completed' ? 'bg-green-500' : 
+                                      selectedActivityDetail.status === 'in_progress' ? 'bg-blue-500' : 
+                                      'bg-gray-400'
+                                    }`}></div>
+                                    <span className="text-sm text-gray-600">
+                                      {selectedActivityDetail.status === 'completed' ? 'Completed' : 
+                                       selectedActivityDetail.status === 'in_progress' ? 'In Progress' : 'Ready to Start'}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Iframe for SCORM/Activity Content */}
+                                <div className="relative bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                  {selectedActivityDetail.details?.url ? (
+                                    <div className="relative">
+                                      {iframeLoading && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                                          <div className="text-center">
+                                            <RefreshCw className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-2" />
+                                            <p className="text-gray-600">Loading activity...</p>
+                                          </div>
+                                        </div>
+                                      )}
+                                      <iframe
+                                        src={selectedActivityDetail.details.url}
+                                        className="w-full h-96 border-0"
+                                        title={selectedActivityDetail.name}
+                                        allowFullScreen
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        onLoad={() => setIframeLoading(false)}
+                                        onError={() => setIframeLoading(false)}
+                                      />
+                                    </div>
+                                  ) : selectedActivityDetail.details?.contents && selectedActivityDetail.details.contents.length > 0 ? (
+                                    <div className="relative">
+                                      {iframeLoading && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                                          <div className="text-center">
+                                            <RefreshCw className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-2" />
+                                            <p className="text-gray-600">Loading activity...</p>
+                                          </div>
+                                        </div>
+                                      )}
+                                      <iframe
+                                        src={selectedActivityDetail.details.contents[0].fileurl}
+                                        className="w-full h-96 border-0"
+                                        title={selectedActivityDetail.name}
+                                        allowFullScreen
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        onLoad={() => setIframeLoading(false)}
+                                        onError={() => setIframeLoading(false)}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center h-96 bg-gray-100">
+                                      <div className="text-center">
+                                        <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                                        <p className="text-gray-600 mb-4">No interactive content available for this activity.</p>
+                                        <Button 
+                                          variant="outline"
+                                          onClick={() => handleLaunchActivity(selectedActivityDetail)}
+                                        >
+                                          <Play className="w-4 h-4 mr-2" />
+                                          Launch Activity
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Activity Instructions */}
+                                {selectedActivityDetail.description && (
+                                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <h4 className="font-medium text-blue-900 mb-2">Instructions:</h4>
+                                    <p className="text-blue-800 text-sm">{selectedActivityDetail.description}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -952,71 +1272,7 @@ const CourseDetail: React.FC<CourseDetailProps> = ({ courseId, onBack }) => {
           </div>
         </div>
 
-        {/* Activity Detail Modal */}
-        {selectedActivity && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">{selectedActivity.name}</h2>
-                  <Button variant="outline" size="sm" onClick={() => setSelectedActivity(null)}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                {loadingActivity ? (
-                  <div className="flex items-center justify-center py-8">
-                    <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="secondary">{selectedActivity.type}</Badge>
-                      <Badge variant={selectedActivity.status === 'completed' ? 'default' : 'outline'}>
-                        {selectedActivity.status === 'completed' ? 'Completed' : 
-                         selectedActivity.status === 'in_progress' ? 'In Progress' : 'Not Started'}
-                      </Badge>
-                    </div>
-                    
-                    {selectedActivity.description && (
-                      <div className="prose prose-sm max-w-none">
-                        <div dangerouslySetInnerHTML={{ __html: selectedActivity.description }} />
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center space-x-4 text-sm text-gray-600">
-                      {selectedActivity.duration && (
-                        <div className="flex items-center space-x-1">
-                          <Clock className="w-4 h-4" />
-                          <span>{selectedActivity.duration}</span>
-                        </div>
-                      )}
-                      {selectedActivity.dueDate && (
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="w-4 h-4" />
-                          <span>Due: {new Date(selectedActivity.dueDate * 1000).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      {selectedActivity.details?.contents && selectedActivity.details.contents.length > 0 && (
-                        <Button variant="outline" size="sm" onClick={() => handleDownloadMaterials(selectedActivity)}>
-                          <Download className="w-4 h-4 mr-2" />
-                          Download Materials
-                        </Button>
-                      )}
-                      <Button size="sm" onClick={() => handleLaunchActivity(selectedActivity)}>
-                        <Play className="w-4 h-4 mr-2" />
-                        {getActivityButtonText(selectedActivity)}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-                 )}
+        
        </div>
      </DashboardLayout>
    );

@@ -475,9 +475,11 @@ const Courses: React.FC = () => {
   };
 
   const handleCourseClick = async (course: Course) => {
+    console.log('🎯 Course clicked:', course.fullname, 'ID:', course.id);
     // Open the new detailed course view
     setSelectedCourseForDetail(course);
     setShowCourseDetail(true);
+    console.log('✅ Course detail view should now be visible');
   };
 
   const handleCourseDetailsClick = async (course: Course) => {

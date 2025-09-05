@@ -207,6 +207,7 @@ const Compiler: React.FC = () => {
             <Badge variant="secondary" className="bg-green-100 text-green-800">
               Powered by Piston API
             </Badge>
+            
           </div>
         </div>
 

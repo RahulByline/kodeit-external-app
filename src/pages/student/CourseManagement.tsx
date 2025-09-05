@@ -41,7 +41,9 @@ import {
   Zap,
   Lightbulb,
   Brain,
-  Rocket
+  Rocket,
+  User,
+  Search
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { moodleService } from '../../services/moodleApi';
@@ -753,80 +755,207 @@ const CourseManagement: React.FC = () => {
 
                       {/* Course Activities */}
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Activities</h3>
-                        <div className="space-y-3">
-                          {courseActivities.map((activity) => (
-                            <div key={activity.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                  {getActivityIcon(activity.type)}
-                                  <h4 className="font-medium text-gray-900">{activity.name}</h4>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  {getStatusIcon(activity.status)}
-                                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(activity.status)}`}>
-                                    {activity.status.replace('_', ' ')}
-                                  </span>
-                                </div>
-                              </div>
-                              <p className="text-sm text-gray-600 mb-3">{activity.description}</p>
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500">Grade: {activity.grade || 0}/{activity.maxGrade || 100}</span>
-                                {activity.dueDate && (
-                                  <span className="text-gray-500">
-                                    Due: {new Date(activity.dueDate).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
+                        <div className="flex justify-between items-center mb-6">
+                          <h3 className="text-lg font-semibold text-gray-900">Course Activities</h3>
+                          <div className="flex items-center space-x-2">
+                            <div className="flex space-x-1">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                             </div>
-                          ))}
+                          </div>
+                        </div>
+                        
+                        {/* Timeline-style activities */}
+                        <div className="relative">
+                          {/* Vertical timeline line */}
+                          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-green-500"></div>
+                          
+                          <div className="space-y-6">
+                            {courseActivities.map((activity, index) => (
+                              <div key={activity.id} className="relative flex items-start">
+                                {/* Status indicator circle */}
+                                <div className={`absolute left-4 w-4 h-4 rounded-full border-2 border-white shadow-sm ${
+                                  activity.status === 'completed' ? 'bg-green-500' : 
+                                  activity.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-400'
+                                }`}>
+                                  {activity.status === 'completed' ? (
+                                    <CheckCircle className="w-4 h-4 text-white" />
+                                  ) : (
+                                    <span className="text-white text-xs font-bold flex items-center justify-center h-full">
+                                      {index + 1}
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* Activity card */}
+                                <div className="ml-12 flex-1 bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                  <div className="flex items-start space-x-4">
+                                    {/* Activity thumbnail */}
+                                    <div className="w-16 h-16 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      {getActivityIcon(activity.type)}
+                                    </div>
+                                    
+                                    {/* Activity content */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between mb-2">
+                                        <div className="flex-1">
+                                          <h4 className="font-semibold text-gray-900 mb-1">{activity.name}</h4>
+                                          <p className="text-sm text-gray-600 mb-3">{activity.description}</p>
+                                        </div>
+                                        <div className="flex items-center space-x-2 ml-4">
+                                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                                            activity.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                            activity.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                            'bg-gray-100 text-gray-800'
+                                          }`}>
+                                            {activity.status === 'completed' ? 'Easy' :
+                                             activity.status === 'in_progress' ? 'Medium' : 'Easy'}
+                                          </span>
+                                          <div className="flex items-center space-x-1 text-xs text-gray-500">
+                                            <User className="w-3 h-3" />
+                                            <span>{activity.maxGrade || 50}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Activity details */}
+                                      <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                                        <div className="flex items-center space-x-4">
+                                          <div className="flex items-center space-x-1">
+                                            <Clock className="w-4 h-4" />
+                                            <span>{activity.timeSpent || 15} min</span>
+                                          </div>
+                                          {activity.dueDate && (
+                                            <span className="text-red-600">
+                                              Due: {new Date(activity.dueDate).toLocaleDateString()}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                          <span className="text-gray-500">
+                                            Grade: {activity.grade || 0}/{activity.maxGrade || 100}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Action button */}
+                                      <div className="flex justify-end">
+                                        <button className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                          activity.status === 'completed' 
+                                            ? 'bg-green-600 text-white hover:bg-green-700' 
+                                            : activity.status === 'in_progress'
+                                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                            : 'bg-gray-600 text-white hover:bg-gray-700'
+                                        }`}>
+                                          {activity.status === 'completed' ? 'Review' :
+                                           activity.status === 'in_progress' ? 'Continue' : 'Start'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
 
                       {/* Student Activities */}
                       <div>
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex justify-between items-center mb-6">
                           <h3 className="text-lg font-semibold text-gray-900">My Study Activities</h3>
-                          <button 
-                            onClick={() => setShowActivityModal(true)}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            <Plus className="w-4 h-4 inline mr-2" />
-                            Add Activity
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            <button 
+                              onClick={() => setShowActivityModal(true)}
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                              <Plus className="w-4 h-4 inline mr-2" />
+                              Add Activity
+                            </button>
+                          </div>
                         </div>
-                        <div className="space-y-3">
-                          {studentActivities
-                            .filter(activity => activity.courseId === selectedCourse.id)
-                            .map((activity) => (
-                              <div key={activity.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center space-x-2">
-                                    <TargetIcon className="w-4 h-4 text-green-600" />
-                                    <h4 className="font-medium text-gray-900">{activity.title}</h4>
-                                  </div>
-                                  <div className="flex items-center space-x-2">
+                        
+                        {/* Timeline-style student activities */}
+                        <div className="relative">
+                          {/* Vertical timeline line */}
+                          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-green-500"></div>
+                          
+                          <div className="space-y-6">
+                            {studentActivities
+                              .filter(activity => activity.courseId === selectedCourse.id)
+                              .map((activity, index) => (
+                                <div key={activity.id} className="relative flex items-start">
+                                  {/* Status indicator circle */}
+                                  <div className={`absolute left-4 w-4 h-4 rounded-full border-2 border-white shadow-sm ${
+                                    activity.completed ? 'bg-green-500' : 'bg-gray-400'
+                                  }`}>
                                     {activity.completed ? (
-                                      <CheckCircle className="w-4 h-4 text-green-600" />
+                                      <CheckCircle className="w-4 h-4 text-white" />
                                     ) : (
-                                      <Circle className="w-4 h-4 text-gray-400" />
+                                      <span className="text-white text-xs font-bold flex items-center justify-center h-full">
+                                        {index + 1}
+                                      </span>
                                     )}
-                                    <span className={`px-2 py-1 text-xs rounded-full ${
-                                      activity.completed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                    }`}>
-                                      {activity.completed ? 'Completed' : 'In Progress'}
-                                    </span>
+                                  </div>
+                                  
+                                  {/* Activity card */}
+                                  <div className="ml-12 flex-1 bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                    <div className="flex items-start space-x-4">
+                                      {/* Activity thumbnail */}
+                                      <div className="w-16 h-16 bg-gradient-to-br from-green-50 to-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <TargetIcon className="w-8 h-8 text-green-600" />
+                                      </div>
+                                      
+                                      {/* Activity content */}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between mb-2">
+                                          <div className="flex-1">
+                                            <h4 className="font-semibold text-gray-900 mb-1">{activity.title}</h4>
+                                            <p className="text-sm text-gray-600 mb-3">{activity.description}</p>
+                                          </div>
+                                          <div className="flex items-center space-x-2 ml-4">
+                                            <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                                              activity.completed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                            }`}>
+                                              {activity.completed ? 'Completed' : 'In Progress'}
+                                            </span>
+                                            <div className="flex items-center space-x-1 text-xs text-gray-500">
+                                              <Clock className="w-3 h-3" />
+                                              <span>{activity.duration}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Activity details */}
+                                        <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                                          <div className="flex items-center space-x-4">
+                                            <div className="flex items-center space-x-1">
+                                              <Clock className="w-4 h-4" />
+                                              <span>{activity.duration} minutes</span>
+                                            </div>
+                                            <span className="text-gray-500">
+                                              {new Date(activity.timestamp).toLocaleDateString()}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Action button */}
+                                        <div className="flex justify-end">
+                                          <button className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                            activity.completed 
+                                              ? 'bg-green-600 text-white hover:bg-green-700' 
+                                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                                          }`}>
+                                            {activity.completed ? 'Review' : 'Continue'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                                <p className="text-sm text-gray-600 mb-3">{activity.description}</p>
-                                <div className="flex items-center justify-between text-sm">
-                                  <span className="text-gray-500">Duration: {activity.duration} minutes</span>
-                                  <span className="text-gray-500">
-                                    {new Date(activity.timestamp).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                              ))}
+                          </div>
                         </div>
                       </div>
                     </div>

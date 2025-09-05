@@ -7218,7 +7218,7 @@ export const moodleService = {
     }
   },
 
-  // Get real course content, modules, and activities
+  // Get real course content, modules, and activities (optimized)
   async getCourseContents(courseId: string) {
     try {
       console.log(`🔍 Fetching course contents for course ID: ${courseId}`);
@@ -7232,7 +7232,22 @@ export const moodleService = {
 
       if (response.data && Array.isArray(response.data)) {
         console.log(`✅ Found ${response.data.length} course sections`);
-        return response.data;
+        
+        // Process and enhance the data immediately for faster rendering
+        const enhancedContents = response.data.map((section: any) => ({
+          ...section,
+          modules: section.modules?.map((module: any) => ({
+            ...module,
+            // Add completion status if available
+            completion: module.completion || { state: 0 },
+            // Add default duration
+            duration: module.duration || '5-10 min',
+            // Add default description
+            description: module.description || module.intro || 'Course activity'
+          })) || []
+        }));
+        
+        return enhancedContents;
       } else {
         console.log('⚠️ No course contents found');
         return [];
@@ -7354,7 +7369,57 @@ export const moodleService = {
     }
   },
 
-  // Get detailed course information
+  // Get optimized course details (faster, essential data only)
+  async getCourseDetailsOptimized(courseId: string) {
+    try {
+      console.log(`🔍 Fetching optimized course information for course ID: ${courseId}`);
+      
+      // Get basic course info with image data only
+      const courseResponse = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_course_get_courses_by_field',
+          field: 'id',
+          value: courseId,
+        },
+      });
+
+      let courseInfo = null;
+      if (courseResponse.data && courseResponse.data.courses && courseResponse.data.courses.length > 0) {
+        courseInfo = courseResponse.data.courses[0];
+        
+        // Extract the best available image from the course data
+        let courseImage = courseInfo.courseimage;
+        
+        // If courseimage is not available, try to construct the image URL
+        if (!courseImage) {
+          // Try to get image from overviewfiles if available
+          if (courseInfo.overviewfiles && Array.isArray(courseInfo.overviewfiles) && courseInfo.overviewfiles.length > 0) {
+            courseImage = courseInfo.overviewfiles[0].fileurl;
+          }
+          // Try to get image from summaryfiles if available
+          else if (courseInfo.summaryfiles && Array.isArray(courseInfo.summaryfiles) && courseInfo.summaryfiles.length > 0) {
+            courseImage = courseInfo.summaryfiles[0].fileurl;
+          }
+          // If still no image, try to construct a default course image URL
+          else {
+            // Construct course image URL using Moodle's standard format
+            courseImage = `${API_BASE_URL.replace('/webservice/rest/server.php', '')}/pluginfile.php/${courseInfo.id}/course/overviewfiles/0/course_image.jpg`;
+          }
+        }
+        
+        // Add the processed image to courseInfo
+        courseInfo.courseimage = courseImage;
+        console.log(`✅ Course "${courseInfo.fullname}" - Image: ${courseImage || 'No image found'}`);
+      }
+
+      return courseInfo;
+    } catch (error: any) {
+      console.error('❌ Error fetching optimized course details:', error.response?.data || error.message);
+      return null;
+    }
+  },
+
+  // Get detailed course information (full version)
   async getCourseDetails(courseId: string) {
     try {
       console.log(`🔍 Fetching detailed course information for course ID: ${courseId}`);
