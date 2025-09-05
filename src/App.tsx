@@ -107,6 +107,12 @@ const StudentMessages = lazy(() => import("./pages/student/Messages"));
 const StudentProgress = lazy(() => import("./pages/student/Progress"));
 const StudentCommunity = lazy(() => import("./pages/student/Community"));
 const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
+
+// G4 specific student pages - lazy loaded
+const G4Courses = lazy(() => import("./pages/student/dashboards/G4TOG7/g4Courses"));
+const G4CurrentLessons = lazy(() => import("./pages/student/dashboards/G4TOG7/g4CurrentLessons"));
+const G4Activities = lazy(() => import("./pages/student/dashboards/G4TOG7/g4Activities"));
+const G4CourseLessons = lazy(() => import("./pages/student/dashboards/G4TOG7/g4CourseLessons"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
@@ -531,7 +537,7 @@ const App = () => {
                 <Route path="/dashboard/student/courses" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
-                      <StudentCourses />
+                      <G4Courses />
                     </Suspense>
                   </ProtectedRoute>
                 } />
@@ -616,6 +622,65 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentEnrollments />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+
+                {/* G4 Specific Routes */}
+                <Route path="/dashboard/student/g4courses" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4Courses />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/g4current-lessons" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4CurrentLessons />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/g4activities" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4Activities />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                {/* Redirect generic routes to G4-specific routes */}
+                <Route path="/dashboard/student/current-lessons" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4CurrentLessons />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/activities" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4Activities />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/course-lessons/:courseId" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4CourseLessons />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/lesson-activities/:courseId/:lessonId" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4CurrentLessons />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/lesson-activities-journey/:courseId/:lessonId" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4CourseLessons />
                     </Suspense>
                   </ProtectedRoute>
                 } />

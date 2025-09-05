@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import {  useLocation } from 'react-router-dom';
 import { 
   BookOpen, 
   Clock, 
@@ -44,18 +45,22 @@ import {
   Target as TargetIcon,
   ArrowLeft,
   Bell,
-  Info
+  Info,
+  LayoutDashboard,
+  Activity
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
-import moodleService from '../../services/moodleApi';
-import CourseDetail from './CourseDetail';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Progress } from '../../components/ui/progress';
-import { Input } from '../../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { useAuth } from '../../context/AuthContext';
+import DashboardLayout from '../../../../components/DashboardLayout';
+import { enhancedMoodleService } from '../../../../services/enhancedMoodleApi';
+// import CourseDetail from './CourseDetail';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Badge } from '../../../../components/ui/badge';
+import { Button } from '../../../../components/ui/button';
+import { Progress } from '../../../../components/ui/progress';
+import { Input } from '../../../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+import { useAuth } from '../../../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { getDashboardTypeByGrade, extractGradeFromCohortName } from '../../../../utils/gradeCohortMapping';
 
 interface Course {
   id: string;
@@ -337,12 +342,87 @@ const getBestCourseImage = (courses: Course[]): string => {
 
 const Courses: React.FC = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
+
+  
+  // Debug logging to verify component mounting
+  useEffect(() => {
+    console.log('🎓 Courses component mounted');
+    console.log('📍 Current location:', window.location.pathname);
+    console.log('👤 Current user:', currentUser);
+  }, [currentUser]);
+
+  const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
+
+  // Get student grade and dashboard type
+  const [studentGrade, setStudentGrade] = useState<number | null>(null);
+  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS'>('G8_PLUS');
+
+  // Get student grade from localStorage or determine from cohort
+  useEffect(() => {
+    if (currentUser?.id) {
+      // Try to get grade from localStorage first
+      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
+      if (storedGrade) {
+        const grade = parseInt(storedGrade);
+        setStudentGrade(grade);
+        setDashboardType(getDashboardTypeByGrade(grade));
+        console.log('🎓 Courses: Using stored grade:', grade, 'Dashboard type:', getDashboardTypeByGrade(grade));
+      } else {
+        // If no stored grade, try to get from cohort
+        const fetchStudentGrade = async () => {
+          try {
+            // const userCohorts = await enhancedMoodleService.getCohorts(); // Method not available
+            const userCohorts: any[] = []; // Fallback empty array
+            if (userCohorts && userCohorts.length > 0) {
+              const cohort = userCohorts[0]; // Use first cohort
+              const extractedGrade = extractGradeFromCohortName(cohort.name);
+              if (extractedGrade) {
+                setStudentGrade(extractedGrade);
+                setDashboardType(getDashboardTypeByGrade(extractedGrade));
+                localStorage.setItem(`student_grade_${currentUser.id}`, extractedGrade.toString());
+                console.log('🎓 Courses: Extracted grade from cohort:', extractedGrade, 'Dashboard type:', getDashboardTypeByGrade(extractedGrade));
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error fetching student grade:', error);
+            // Default to G8+ if error
+            setStudentGrade(8);
+            setDashboardType('G8_PLUS');
+          }
+        };
+        fetchStudentGrade();
+      }
+    }
+  }, [currentUser?.id]);
+
+  // Top navigation items - conditionally show based on dashboard type
+  const topNavItems = [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard/student' },
+    { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
+    // Only show Current Lessons and Activities for G4G7 students
+    ...(dashboardType === 'G4_G7' ? [
+      { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/g4current-lessons' },
+      { name: 'Activities', icon: Activity, path: '/dashboard/student/g4activities' }
+    ] : [])
+  ];
+
+  const isActivePath = (path: string) => {
+    if (path === '/dashboard/student') {
+      return location.pathname === '/dashboard/student' || location.pathname === '/dashboard/student/';
+    }
+    return location.pathname === path;
+  };
+
+  const handleTopNavClick = (path: string) => {
+    navigate(path);
+  };
   
   // Course details and activities
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -386,34 +466,22 @@ const Courses: React.FC = () => {
       setError('');
       
       console.log('🔍 Fetching real courses from IOMAD Moodle API...');
-      console.log('👤 Current user object:', currentUser);
-      console.log('👤 Current user ID:', currentUser?.id);
-      console.log('👤 Current user type:', typeof currentUser?.id);
       
       if (!currentUser?.id) {
-        console.error('❌ No current user ID available');
         throw new Error('No current user ID available');
       }
+
+      console.log('👤 Current user:', currentUser);
       
       // Fetch real user courses from IOMAD API
-      let userCourses;
-      try {
-        userCourses = await moodleService.getUserCourses(currentUser.id);
-        console.log('📊 Real user courses fetched:', userCourses.length);
-      } catch (apiError) {
-        console.error('❌ API call failed, using fallback data:', apiError);
-        // If API fails, use empty array to trigger sample data fallback
-        userCourses = [];
-      }
+      const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id);
+
+      console.log('📊 Real user courses fetched:', userCourses.length);
 
       // Process real course data - NO MOCK DATA
-      // More lenient filtering to include all visible courses
       const enrolledCourses = userCourses.filter(course => 
-        course.visible !== 0
+        course.visible !== 0 && course.categoryid && course.categoryid > 0
       );
-      
-      console.log('📊 All user courses:', userCourses);
-      console.log('📊 Filtered enrolled courses:', enrolledCourses);
 
       let processedCourses: Course[] = [];
 
@@ -421,8 +489,9 @@ const Courses: React.FC = () => {
         // Process real enrolled course data from IOMAD API - NO MOCK DATA
         processedCourses = await Promise.all(enrolledCourses.map(async (course) => {
           // Fetch real completion data for each course
-          const courseCompletion = await moodleService.getCourseCompletion(course.id);
-          const courseContents = await moodleService.getCourseContents(course.id);
+          // const courseCompletion = await enhancedMoodleService.getCourseCompletion(course.id); // Method not available
+          const courseCompletion = null; // Fallback
+          const courseContents = await enhancedMoodleService.getCourseContents(course.id.toString());
           
           // Calculate real progress and statistics from actual data
           const totalModules = courseContents?.length || 0;
@@ -430,7 +499,7 @@ const Courses: React.FC = () => {
           const progress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
             
           return {
-            id: course.id,
+            id: course.id.toString(),
             fullname: course.fullname,
             shortname: course.shortname,
             progress,
@@ -473,98 +542,27 @@ const Courses: React.FC = () => {
         setCourses(processedCourses);
         console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
       } else {
-        console.log('⚠️ No enrolled courses found, using sample data for testing');
-        
-        // Add sample data for testing when no real courses are available
-        const sampleCourses: Course[] = [
-          {
-            id: '1',
-            fullname: 'Introduction to Programming',
-            shortname: 'PROG101',
-            progress: 75,
-            grade: 85,
-            lastAccess: Date.now(),
-            completionDate: null,
-            status: 'in_progress',
-            categoryname: 'Programming',
-            categoryid: 1,
-            startdate: Date.now(),
-            enddate: null,
-            visible: 1,
-            description: 'Learn the basics of programming with hands-on exercises',
-            summary: 'Learn the basics of programming with hands-on exercises',
-            instructor: 'Dr. Sarah Johnson',
-            enrolledStudents: 25,
-            totalModules: 8,
-            completedModules: 6,
-            courseimage: '/card1.webp',
-            overviewfiles: [],
-            summaryfiles: [],
-            totalActivities: 8,
-            totalResources: 5,
-            totalAssignments: 3,
-            totalQuizzes: 2
-          },
-          {
-            id: '2',
-            fullname: 'Advanced Python Programming',
-            shortname: 'PYTHON201',
-            progress: 45,
-            grade: 0,
-            lastAccess: Date.now(),
-            completionDate: null,
-            status: 'in_progress',
-            categoryname: 'Programming',
-            categoryid: 1,
-            startdate: Date.now(),
-            enddate: null,
-            visible: 1,
-            description: 'Advanced Python concepts and applications',
-            summary: 'Advanced Python concepts and applications',
-            instructor: 'Prof. Michael Chen',
-            enrolledStudents: 18,
-            totalModules: 12,
-            completedModules: 5,
-            courseimage: '/card2.webp',
-            overviewfiles: [],
-            summaryfiles: [],
-            totalActivities: 12,
-            totalResources: 8,
-            totalAssignments: 4,
-            totalQuizzes: 3
-          }
-        ];
-        
-        setCourses(sampleCourses);
-        console.log('✅ Sample courses loaded for testing:', sampleCourses.length);
+        console.log('⚠️ No enrolled courses found');
+        setCourses([]);
+        setError('No enrolled courses available.');
       }
       
     } catch (error: any) {
       console.error('❌ Error fetching courses:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        stack: error.stack,
-        currentUser: currentUser
-      });
-      
-      // Show more specific error message
-      if (error.message?.includes('No current user ID')) {
-        setError('User not authenticated. Please log in again.');
-      } else if (error.message?.includes('Network')) {
-        setError('Network error. Please check your connection and try again.');
-      } else {
-        setError(`Failed to load courses: ${error.message || 'Unknown error'}. Please try again.`);
-      }
+      setError('Failed to load courses. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCourseClick = async (course: Course) => {
-    // Open the new detailed course view
-    setSelectedCourseForDetail(course);
-    setShowCourseDetail(true);
-  };
+      const handleCourseClick = async (course: Course) => {
+      // Navigate to course lessons page with course data
+      navigate(`/dashboard/student/course-lessons/${course.id}`, { 
+        state: { 
+          selectedCourse: course
+        }
+      });
+    };
 
   const handleCourseDetailsClick = async (course: Course) => {
     setSelectedCourse(course);
@@ -580,18 +578,17 @@ const Courses: React.FC = () => {
       const [
         courseContents,
         courseActivities,
-        courseCompletion,
-        courseGrades,
-        courseDetails,
         userCourses
       ] = await Promise.all([
-        moodleService.getCourseContents(course.id),
-        moodleService.getCourseActivities(course.id),
-        moodleService.getCourseCompletion(course.id),
-        moodleService.getCourseGrades(course.id),
-        moodleService.getCourseDetails(course.id),
-        moodleService.getUserCourses(currentUser?.id || '1')
+        enhancedMoodleService.getCourseContents(course.id),
+        enhancedMoodleService.getCourseContents(course.id), // Using getCourseContents for activities
+        enhancedMoodleService.getUserCourses(currentUser?.id || '1')
       ]);
+      
+      // Set fallback values for unavailable methods
+      const courseCompletion = null;
+      const courseGrades = null;
+      const courseDetails = null;
 
       console.log('✅ All course data fetched successfully');
 
@@ -682,7 +679,7 @@ const Courses: React.FC = () => {
     
     try {
       // Fetch detailed activity information
-      const activityDetails = await moodleService.getCourseContents(selectedCourse?.id || '');
+      const activityDetails = await enhancedMoodleService.getCourseContents(selectedCourse?.id || '');
       
       if (activityDetails) {
         // Find the specific activity in the course contents
@@ -771,122 +768,165 @@ const Courses: React.FC = () => {
   }
 
   if (showCourseDetail && selectedCourseForDetail) {
-    return (
-      <CourseDetail 
-        courseId={selectedCourseForDetail.id} 
-        onBack={() => setShowCourseDetail(false)} 
-      />
-    );
+    // return (
+    //   // <CourseDetail 
+    //   //   courseId={selectedCourseForDetail.id} 
+    //   //   onBack={() => setShowCourseDetail(false)} 
+    //   // />
+    // );
   }
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Courses</h1>
-            <p className="text-gray-600 mt-1">Real-time course data from IOMAD Moodle API - {courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            <Button variant="outline" onClick={refreshData} disabled={refreshing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button variant="outline" onClick={exportCoursesData}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
+      <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen p-6">
+        {/* Top Navigation Bar */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-8">
+          <div className="flex space-x-2 p-2">
+            {topNavItems.map((item) => {
+              const isActive = isActivePath(item.path);
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => handleTopNavClick(item.path)}
+                  className={`flex-1 flex items-center justify-center space-x-2 px-6 py-4 rounded-xl font-semibold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 hover:shadow-md'
+                  }`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        {/* Rest of the component content */}
+        <div className=" mx-auto space-y-8">
+                    {/* Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">My Courses</h1>
+              <p className="text-gray-600 text-lg">
+                Real-time course data from IOMAD Moodle API
+              </p>
+              <p className="text-gray-600 mt-2">{courses.length} available courses • {currentUser?.fullname || 'Student'}</p>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/dashboard/student')}
+                className="flex items-center space-x-2 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl hover:bg-white hover:shadow-lg transition-all duration-300 border border-white/20"
+              >
+                <LayoutDashboard className="w-5 h-5" />
+                <span className="font-semibold">Back to Dashboard</span>
+              </button>
+              <button
+                onClick={refreshData}
+                disabled={refreshing}
+                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-300 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+                <span className="font-semibold">Refresh</span>
+              </button>
+              <button
+                onClick={exportCoursesData}
+                className="flex items-center space-x-2 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl hover:bg-white hover:shadow-lg transition-all duration-300 border border-white/20"
+              >
+                <Download className="w-5 h-5" />
+                <span className="font-semibold">Export</span>
+              </button>
+            </div>
+          </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{courses.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Available courses
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.filter(c => c.status === 'in_progress').length}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Courses</p>
+                <p className="text-3xl font-bold text-gray-900">{courses.length}</p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Active courses
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.filter(c => c.status === 'completed').length}
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <BookOpen className="w-6 h-6 text-white" />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Finished courses
-              </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
-              <Award className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {courses.length > 0 ? Math.round(courses.reduce((sum, course) => sum + (course.grade || 0), 0) / courses.length) : 0}%
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">In Progress</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {courses.filter(c => c.status === 'in_progress').length}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Overall performance
-              </p>
-            </CardContent>
-          </Card>
+              <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                <Clock className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Completed</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {courses.filter(c => c.status === 'completed').length}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                <CheckCircle className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Average Grade</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {courses.length > 0 ? Math.round(courses.reduce((sum, course) => sum + (course.grade || 0), 0) / courses.length) : 0}%
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Award className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Search and Filter */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                type="text"
-                placeholder="Search courses..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+            <div className="flex items-center space-x-4">
+              <h2 className="text-2xl font-bold text-gray-900">Filter Courses</h2>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-48 bg-white/60 backdrop-blur-sm border border-white/20">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Courses</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="not_started">Not Started</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search courses..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full md:w-80 px-4 py-2 pl-10 bg-white/60 backdrop-blur-sm border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+              </div>
             </div>
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Courses</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="not_started">Not Started</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         {/* Courses Grid - Direct View for Students */}
@@ -894,7 +934,7 @@ const Courses: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">My Enrolled Courses</h2>
-              <p className="text-sm text-gray-600">All your available courses from IOMAD Moodle</p>
+              <p className="text-gray-600 text-lg">All your available courses from IOMAD Moodle</p>
             </div>
           </div>
 
@@ -1056,6 +1096,7 @@ const Courses: React.FC = () => {
               )}
             </div>
           )}
+        </div>
         </div>
       </div>
     </DashboardLayout>

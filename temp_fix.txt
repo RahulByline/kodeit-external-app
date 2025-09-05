@@ -1,0 +1,14 @@
+The issue is that the conditional rendering structure in G4G7Dashboard.tsx is incomplete. 
+
+The conditional rendering starts at line 1575:
+{currentPage === 'course-detail' ? (
+  // course detail content
+) : currentPage === 'section-view' ? (
+  // section view content  
+) : (
+  // dashboard content
+)}  // <-- This closing is missing
+
+The build error shows that the `)}` at line 1994 is not properly closing the conditional rendering because the entire conditional is missing its closing `)}`.
+
+To fix this, we need to add the missing closing `)}` for the entire conditional statement right after the dashboard content ends.

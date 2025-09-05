@@ -490,7 +490,7 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
                 <span className="text-xs text-gray-500">Loading activities...</span>
               </div>
             )}
-            <Link to="/dashboard/student/activities" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+            <Link to="/dashboard/student/assignments" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
               View All →
             </Link>
           </div>

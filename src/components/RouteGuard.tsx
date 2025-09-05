@@ -212,6 +212,13 @@ const getDashboardSubRoutes = (role: string | undefined | null) => {
         '/dashboard/student/enrollments',
         '/dashboard/student/current-lessons',
         '/dashboard/student/activities',
+        // G4 specific routes
+        '/dashboard/student/g4courses',
+        '/dashboard/student/g4current-lessons',
+        '/dashboard/student/g4activities',
+        '/dashboard/student/course-lessons',
+        '/dashboard/student/lesson-activities',
+        '/dashboard/student/lesson-activities-journey',
       ];
     default:
       return [];
