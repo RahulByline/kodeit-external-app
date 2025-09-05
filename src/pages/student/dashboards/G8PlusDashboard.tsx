@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   BookOpen, 
   FileText, 
@@ -20,11 +20,11 @@ import {
   Users,
   Activity,
   Circle,
-  Link,
   ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { Skeleton } from '../../../components/ui/skeleton';
+import DashboardLayout from '../../../components/DashboardLayout';
 
 interface Stats {
   enrolledCourses: number;
@@ -211,7 +211,8 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+      <div className="space-y-3">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -343,7 +344,7 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
               onClick={() => navigate('/dashboard/student/courses')}
               className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm font-medium"
             >
-              <span>View All</span>
+              <span>View All Courses</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -647,9 +648,9 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
           )}
         </div>
       </div>
-      
-           </div>
-   );
- };
+      </div>
+    </DashboardLayout>
+  );
+};
 
   export default G8PlusDashboard;
