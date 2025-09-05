@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -24,46 +24,13 @@ import {
   Settings as SettingsIcon,
   Play,
   Code,
-  Map,
-  Activity
+  Map
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import LogoutDialog from './ui/logout-dialog';
 import { authService } from '../services/authService';
 import { moodleService } from '../services/moodleApi';
 import { useAuth } from '../context/AuthContext';
-import { Skeleton } from './ui/skeleton';
-import { getDashboardTypeByGrade, extractGradeFromCohortName } from '../utils/gradeCohortMapping';
-
-// Cache utilities for sidebar
-const SIDEBAR_CACHE_PREFIX = 'sidebar_';
-const SIDEBAR_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-
-const getSidebarCachedData = (key: string) => {
-  try {
-    const cached = localStorage.getItem(`${SIDEBAR_CACHE_PREFIX}${key}`);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < SIDEBAR_CACHE_DURATION) {
-        return data;
-      }
-    }
-  } catch (error) {
-    console.warn('Sidebar cache read error:', error);
-  }
-  return null;
-};
-
-const setSidebarCachedData = (key: string, data: any) => {
-  try {
-    localStorage.setItem(`${SIDEBAR_CACHE_PREFIX}${key}`, JSON.stringify({
-      data,
-      timestamp: Date.now()
-    }));
-  } catch (error) {
-    console.warn('Sidebar cache write error:', error);
-  }
-};
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -77,52 +44,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const { currentUser } = useAuth();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const [cohortNavigationSettings, setCohortNavigationSettings] = useState<any>(() => {
-    // Initialize with cached data if available
-    if (userRole === 'student') {
-      return getSidebarCachedData('cohortNavigationSettings');
-    }
-    return null;
-  });
-  const [studentCohort, setStudentCohort] = useState<any>(() => {
-    // Initialize with cached data if available
-    if (userRole === 'student') {
-      return getSidebarCachedData('studentCohort');
-    }
-    return null;
-  });
+  const [cohortNavigationSettings, setCohortNavigationSettings] = useState<any>(null);
+  const [studentCohort, setStudentCohort] = useState<any>(null);
   const [isLoadingCohortSettings, setIsLoadingCohortSettings] = useState(false);
-  const [isLoadingSidebar, setIsLoadingSidebar] = useState(false);
-
-  const [isNavigating, setIsNavigating] = useState(false); // State for navigation loading
-
-  const [studentGrade, setStudentGrade] = useState<number | null>(() => {
-    // Try to get grade from localStorage first
-    if (currentUser?.id) {
-      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
-      if (storedGrade) {
-        const grade = parseInt(storedGrade);
-        console.log('🎓 DashboardLayout: Retrieved grade from localStorage:', grade);
-        return grade;
-      }
-    }
-    return null;
-  });
-  
-  const [dashboardType, setDashboardType] = useState<'G1_G3' | 'G4_G7' | 'G8_PLUS' | null>(() => {
-    // Try to get dashboard type from localStorage first
-    if (currentUser?.id) {
-      const storedGrade = localStorage.getItem(`student_grade_${currentUser.id}`);
-      if (storedGrade) {
-        const grade = parseInt(storedGrade);
-        const dashboardType = getDashboardTypeByGrade(grade);
-        console.log('🎓 DashboardLayout: Retrieved dashboard type from localStorage:', dashboardType);
-        return dashboardType;
-      }
-    }
-    return null;
-  });
-
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debug logging
@@ -130,162 +54,60 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   console.log('DashboardLayout - userName:', userName);
   console.log('DashboardLayout - current location:', location.pathname);
 
-  // Enhanced sidebar loading with caching and progressive loading
-  const fetchStudentCohortAndSettings = useCallback(async () => {
-    if (!currentUser?.id || userRole !== 'student') return;
-
-    try {
-      setIsLoadingSidebar(true);
-      console.log('🎓 Fetching student cohort and navigation settings...');
-      
-      // Check cache first for instant display
-      const cachedCohort = getSidebarCachedData('studentCohort');
-      const cachedSettings = getSidebarCachedData('cohortNavigationSettings');
-      
-      if (cachedCohort && cachedSettings) {
-        setStudentCohort(cachedCohort);
-        setCohortNavigationSettings(cachedSettings);
-        console.log('✅ Using cached sidebar data');
-      }
-      
-      // Fetch fresh data in background
-      const fetchFreshData = async () => {
-        try {
-          setIsLoadingCohortSettings(true);
-          
-          // Get student's cohort
-          const cohort = await moodleService.getStudentCohort(currentUser.id.toString());
-          console.log('🎓 Student cohort:', cohort);
-          setStudentCohort(cohort);
-          setSidebarCachedData('studentCohort', cohort);
-          
-          if (cohort) {
-            console.log('🎓 Cohort ID:', cohort.id);
-            console.log('🎓 Cohort name:', cohort.name);
-            
-            // Determine student's grade from cohort name
-            let grade ; // Default to grade 6 (G4-G7)
-            if (cohort.name) {
-              const extractedGrade = extractGradeFromCohortName(cohort.name);
-              if (extractedGrade) {
-                grade = extractedGrade;
-                console.log('🎓 Grade extracted from cohort name:', grade);
-              } else {
-                console.log('🎓 No grade found in cohort name, using default grade 6 (G4-G7)');
-              }
-            } else {
-              console.log('🎓 No cohort name, using default grade 6 (G4-G7)');
-            }
-            
-            // Store grade in localStorage for future use
-            localStorage.setItem(`student_grade_${currentUser.id}`, grade.toString());
-            console.log('🎓 DashboardLayout: Grade stored in localStorage:', grade);
-            
-            setStudentGrade(grade);
-            
-            // Determine dashboard type based on grade
-            const dashboardType = getDashboardTypeByGrade(grade);
-            setDashboardType(dashboardType);
-            
-            console.log('🎓 Dashboard type determined:', {
-              grade,
-              dashboardType
-            });
-            
-            // Get navigation settings for this cohort
-            const settings = await moodleService.getCohortNavigationSettingsFromStorage(cohort.id.toString());
-            console.log('⚙️ Cohort navigation settings loaded:', settings);
-            setCohortNavigationSettings(settings);
-            setSidebarCachedData('cohortNavigationSettings', settings);
-            
-            // Debug: Check backend API directly
-            try {
-              const apiResponse = await fetch(`http://localhost:5000/api/cohort-settings/${cohort.id}`);
-              const apiData = await apiResponse.json();
-              console.log('🔍 Backend API check for cohort:', cohort.id);
-              console.log('🔍 Backend API response:', apiData);
-            } catch (error) {
-              console.log('🔍 Backend API check failed:', error);
-            }
-                     } else {
-             console.warn('⚠️ No cohort found for student, using default settings');
-             // Use default settings if no cohort found
-             const defaultSettings = moodleService.getDefaultNavigationSettings();
-             console.log('⚙️ Using default navigation settings:', defaultSettings);
-             setCohortNavigationSettings(defaultSettings);
-             setSidebarCachedData('cohortNavigationSettings', defaultSettings);
-             
-             // Set default grade to G8+ when no cohort is found (most restrictive)
-             const defaultGrade = 8;
-             const defaultDashboardType = 'G8_PLUS';
-             
-             // Store default values in localStorage
-             localStorage.setItem(`student_grade_${currentUser.id}`, defaultGrade.toString());
-             console.log('🎓 DashboardLayout: Default grade stored in localStorage:', defaultGrade);
-             
-             setStudentGrade(defaultGrade);
-             setDashboardType(defaultDashboardType);
-             console.log('🎓 No cohort found, defaulting to G8+ (most restrictive)');
-           }
-                 } catch (error) {
-           console.error('❌ Error fetching cohort settings:', error);
-           // Fallback to default settings
-           const defaultSettings = moodleService.getDefaultNavigationSettings();
-           console.log('⚙️ Fallback to default settings:', defaultSettings);
-           setCohortNavigationSettings(defaultSettings);
-           setSidebarCachedData('cohortNavigationSettings', defaultSettings);
-           
-           // Set default grade to G8+ on error (most restrictive)
-           const defaultGrade = 8;
-           const defaultDashboardType = 'G8_PLUS';
-           
-           // Store default values in localStorage
-           localStorage.setItem(`student_grade_${currentUser.id}`, defaultGrade.toString());
-           console.log('🎓 DashboardLayout: Error fallback grade stored in localStorage:', defaultGrade);
-           
-           setStudentGrade(defaultGrade);
-           setDashboardType(defaultDashboardType);
-           console.log('🎓 Error occurred, defaulting to G8+ (most restrictive)');
-         } finally {
-          setIsLoadingCohortSettings(false);
-        }
-      };
-
-      // Start background fetch
-      fetchFreshData();
-
-    } catch (error) {
-      console.error('❌ Error in sidebar data fetch:', error);
-    } finally {
-      setIsLoadingSidebar(false);
-    }
-  }, [currentUser?.id, userRole]);
-
   // Fetch student cohort and navigation settings
   useEffect(() => {
     if (userRole === 'student' && currentUser?.id) {
       fetchStudentCohortAndSettings();
     }
-  }, [userRole, currentUser?.id, fetchStudentCohortAndSettings]);
+  }, [userRole, currentUser?.id]);
 
-  // Skeleton navigation components
-  const SkeletonNavigationItem = () => (
-    <div className="flex items-center space-x-3 px-3 py-2">
-      <Skeleton className="w-4 h-4 rounded" />
-      <Skeleton className="h-4 w-24 rounded" />
-    </div>
-  );
-
-  const SkeletonNavigationSection = () => (
-    <div className="space-y-3">
-      <Skeleton className="h-3 w-16 rounded" />
-      <div className="space-y-1">
-        <SkeletonNavigationItem />
-        <SkeletonNavigationItem />
-        <SkeletonNavigationItem />
-      </div>
-    </div>
-  );
+  const fetchStudentCohortAndSettings = async () => {
+    try {
+      setIsLoadingCohortSettings(true);
+      console.log('🎓 Fetching student cohort and navigation settings...');
+      console.log('👤 Current user ID:', currentUser.id);
+      console.log('👤 Current user object:', currentUser);
+      
+      // Get student's cohort
+      const cohort = await moodleService.getStudentCohort(currentUser.id.toString());
+      console.log('🎓 Student cohort:', cohort);
+      setStudentCohort(cohort);
+      
+      if (cohort) {
+        console.log('🎓 Cohort ID:', cohort.id);
+        console.log('🎓 Cohort name:', cohort.name);
+        
+        // Get navigation settings for this cohort
+        const settings = await moodleService.getCohortNavigationSettingsFromStorage(cohort.id.toString());
+        console.log('⚙️ Cohort navigation settings loaded:', settings);
+        setCohortNavigationSettings(settings);
+        
+        // Debug: Check backend API directly
+        try {
+          const apiResponse = await fetch(`http://localhost:5000/api/cohort-settings/${cohort.id}`);
+          const apiData = await apiResponse.json();
+          console.log('🔍 Backend API check for cohort:', cohort.id);
+          console.log('🔍 Backend API response:', apiData);
+        } catch (error) {
+          console.log('🔍 Backend API check failed:', error);
+        }
+      } else {
+        console.warn('⚠️ No cohort found for student, using default settings');
+        // Use default settings if no cohort found
+        const defaultSettings = moodleService.getDefaultNavigationSettings();
+        console.log('⚙️ Using default navigation settings:', defaultSettings);
+        setCohortNavigationSettings(defaultSettings);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching cohort settings:', error);
+      // Fallback to default settings
+      const defaultSettings = moodleService.getDefaultNavigationSettings();
+      console.log('⚙️ Fallback to default settings:', defaultSettings);
+      setCohortNavigationSettings(defaultSettings);
+    } finally {
+      setIsLoadingCohortSettings(false);
+    }
+  };
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -310,9 +132,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           ]
         },
         {
-          title: 'STUDENTS',
+          title: 'TEACHERS',
           items: [
-            { name: 'Students', icon: Users, path: '/dashboard/admin/students' },
+            { name: 'Teachers', icon: Users, path: '/dashboard/admin/teachers' },
             { name: 'Master Trainers', icon: Award, path: '/dashboard/admin/master-trainers' },
           ]
         },
@@ -425,56 +247,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
     }
 
     if (userRole === 'student') {
-             // Show skeleton navigation while loading cohort settings
-       if (isLoadingCohortSettings && !cohortNavigationSettings) {
-         const skeletonItems = [
-           {
-             title: 'DASHBOARD',
-             items: [
-               { name: 'Dashboard', icon: LayoutDashboard, path: `/dashboard/${userRole}` },
-               { name: 'Community', icon: Users, path: `/dashboard/${userRole}/community` },
-               { name: 'Enrollments', icon: GraduationCap, path: `/dashboard/${userRole}/enrollments` },
-             ]
-           },
-           {
-             title: 'COURSES',
-             items: [
-               { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
-               // Only show Current Lessons and Activities for G4G7 students when grade is determined
-               ...(dashboardType === 'G4_G7' ? [
-                 { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' },
-                 { name: 'Activities', icon: Activity, path: '/dashboard/student/activities' },
-               ] : []),
-               { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
-               { name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' },
-             ]
-           },
+      // Show loading state while fetching cohort settings
+      if (isLoadingCohortSettings) {
+        return [
           {
-            title: 'PROGRESS',
+            title: 'LOADING',
             items: [
-              { name: 'My Grades', icon: BarChart3, path: '/dashboard/student/grades' },
-              { name: 'Progress Tracking', icon: TrendingUp, path: '/dashboard/student/progress' },
-            ]
-          },
-          {
-            title: 'RESOURCES',
-            items: [
-              { name: 'Calendar', icon: Calendar, path: '/dashboard/student/calendar' },
-              { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
-            ]
-          },
-          // Only show EMULATORS section for G4G7 students when grade is determined
-          ...(dashboardType === 'G4_G7' ? [{
-            title: 'EMULATORS',
-            items: [
-              { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
-              { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
-            ]
-          }] : []),
-          {
-            title: 'SETTINGS',
-            items: [
-              { name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' },
+              { name: 'Loading navigation...', icon: LayoutDashboard, path: `/dashboard/${userRole}` }
             ]
           }
         ];
@@ -490,13 +269,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
         const courseItems = [];
         if (cohortNavigationSettings.courses['My Courses']) {
           courseItems.push({ name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' });
-        }
-        // Only show Current Lessons and Activities for G4G7 students when grade is determined
-        if (cohortNavigationSettings.courses['Current Lessons'] && dashboardType === 'G4_G7') {
-          courseItems.push({ name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' });
-        }
-        if (cohortNavigationSettings.courses['Activities'] && dashboardType === 'G4_G7') {
-          courseItems.push({ name: 'Activities', icon: Activity, path: '/dashboard/student/activities' });
         }
         if (cohortNavigationSettings.courses.Assignments) {
           courseItems.push({ name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' });
@@ -541,21 +313,19 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           });
         }
 
-        // Add EMULATORS section if any emulator items are enabled (only for G4G7 students when grade is determined)
-        if (dashboardType === 'G4_G7') {
-          const emulatorItems = [];
-          if (cohortNavigationSettings.emulators['Code Editor']) {
-            emulatorItems.push({ name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' });
-          }
-          if (cohortNavigationSettings.emulators['Scratch Editor']) {
-            emulatorItems.push({ name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' });
-          }
-          if (emulatorItems.length > 0) {
-            studentItems.push({
-              title: 'EMULATORS',
-              items: emulatorItems
-            });
-          }
+        // Add EMULATORS section if any emulator items are enabled
+        const emulatorItems = [];
+        if (cohortNavigationSettings.emulators['Code Editor']) {
+          emulatorItems.push({ name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' });
+        }
+        if (cohortNavigationSettings.emulators['Scratch Editor']) {
+          emulatorItems.push({ name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' });
+        }
+        if (emulatorItems.length > 0) {
+          studentItems.push({
+            title: 'EMULATORS',
+            items: emulatorItems
+          });
         }
 
         // Add SETTINGS section if settings are enabled
@@ -580,11 +350,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           title: 'COURSES',
           items: [
             { name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' },
-                         // Only show Current Lessons and Activities for G4G7 students when grade is determined
-             ...(dashboardType === 'G4_G7' ? [
-               { name: 'Current Lessons', icon: Clock, path: '/dashboard/student/current-lessons' },
-               { name: 'Activities', icon: Activity, path: '/dashboard/student/activities' },
-             ] : []),
             { name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' },
             { name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' },
           ]
@@ -603,14 +368,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
             { name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' },
           ]
         },
-                 // Only show EMULATORS section for G4G7 students when grade is determined
-         ...(dashboardType === 'G4_G7' ? [{
-           title: 'EMULATORS',
-           items: [
-             { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
-             { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
-           ]
-         }] : []),
+        {
+          title: 'EMULATORS',
+          items: [
+            { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
+            { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+          ]
+        },
         {
           title: 'SETTINGS',
           items: [
@@ -626,10 +390,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const navigationItems = getNavigationItems();
   console.log('🧭 Generated navigation items:', navigationItems);
   console.log('⚙️ Current cohort navigation settings:', cohortNavigationSettings);
-  console.log('🎓 Student grade:', studentGrade);
-  console.log('🎓 Dashboard type:', dashboardType);
-  console.log('🎓 Is G4G7 student:', dashboardType === 'G4_G7');
-  console.log('🎓 Grade detection status:', studentGrade ? 'Detected' : 'Not yet detected');
 
   const handleLogout = async () => {
     try {
@@ -669,141 +429,38 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-6 pb-20">
-          {isLoadingSidebar && userRole === 'student' ? (
-            // Show skeleton navigation while loading
-            <>
-              <SkeletonNavigationSection />
-              <SkeletonNavigationSection />
-              <SkeletonNavigationSection />
-              <SkeletonNavigationSection />
-              <SkeletonNavigationSection />
-            </>
-          ) : (
-            navigationItems.map((section, sectionIndex) => (
-              <div key={sectionIndex}>
-                                 <h3 className={`text-xs font-semibold uppercase tracking-wider mb-3 flex items-center space-x-2 ${
-                   section.title === 'EMULATORS' && dashboardType === 'G4_G7'
-                     ? 'text-purple-600' 
-                     : 'text-gray-500'
-                 }`}>
-                   {section.title === 'EMULATORS' && dashboardType === 'G4_G7' && (
-                     <div className="w-4 h-4 bg-purple-100 rounded flex items-center justify-center">
-                       <div className="w-2 h-2 bg-purple-600 rounded-sm"></div>
-                     </div>
-                   )}
-                   <span>{section.title}</span>
-                 </h3>
-                 {section.title === 'EMULATORS' && dashboardType === 'G4_G7' ? (
-                  // Special card-based layout for EMULATORS section
-                  <div className="space-y-2">
-                    {section.items.map((item, itemIndex) => {
-                      const Icon = item.icon;
-                      const isActive = location.pathname === item.path;
-                      const isCodeEditor = item.name === 'Code Editor';
-                      return (
-                        <button
-                          key={itemIndex}
-                          onClick={() => {
-                            console.log('🚀 DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
-                            console.log('📍 DashboardLayout - Current location:', location.pathname);
-                            console.log('🎯 DashboardLayout - Navigating to:', item.path);
-                            console.log('👤 DashboardLayout - User role:', userRole);
-                            console.log('🔧 DashboardLayout - isNavigating state:', isNavigating);
-                            
-                            // Prevent multiple clicks
-                            if (isNavigating) {
-                              console.log('⚠️ DashboardLayout - Navigation already in progress, ignoring click');
-                              return;
-                            }
-                            
-                            setIsNavigating(true);
-                            console.log('⏳ DashboardLayout - Set isNavigating to true');
-                            
-                            try {
-                              // Use replace: true to replace the current history entry
-                              // This prevents the course detail page from being in the back stack
-                              console.log('🔄 DashboardLayout - Calling navigate with replace: true');
-                              navigate(item.path, { replace: true });
-                              console.log('✅ DashboardLayout - Navigation call completed');
-                            } catch (error) {
-                              console.error('❌ DashboardLayout - Navigation error:', error);
-                            }
-                            
-                            // Reset navigation state after a short delay
-                            setTimeout(() => {
-                              console.log('🔄 DashboardLayout - Resetting isNavigating to false');
-                              setIsNavigating(false);
-                            }, 1000);
-                          }}
-
-                          disabled={isNavigating}
-                          className={`w-full p-3 rounded-lg transition-all duration-200 hover:shadow-md ${
-                            isActive
-                              ? 'bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 shadow-sm'
-                              : isCodeEditor
-                                ? 'bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200'
-                                : 'bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200'
-                          } ${isNavigating ? 'opacity-50 cursor-not-allowed' : ''}`}
-
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-lg ${
-                              isActive 
-                                ? 'bg-purple-100 text-purple-600' 
-                                : isCodeEditor
-                                  ? 'bg-purple-100 text-purple-600'
-                                  : 'bg-blue-100 text-blue-600'
-                            }`}>
-                              <Icon className="w-4 h-4" />
-                            </div>
-                            <div className="text-left">
-                              <div className={`text-sm font-semibold ${
-                                isActive ? 'text-gray-900' : 'text-gray-700'
-                              }`}>
-                                {item.name}
-                              </div>
-                              <div className={`text-xs ${
-                                isActive ? 'text-gray-600' : 'text-gray-500'
-                              }`}>
-                                {isCodeEditor ? 'Practice coding in virtual envir...' : 'Access digital learning materials'}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  // Default layout for other sections
-                  <ul className="space-y-1">
-                    {section.items.map((item, itemIndex) => {
-                      const Icon = item.icon;
-                      const isActive = location.pathname === item.path;
-                      return (
-                        <li key={itemIndex}>
-                          <button
-                            onClick={() => {
-                              console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
-                              navigate(item.path);
-                            }}
-                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            }`}
-                          >
-                            <Icon className="w-4 h-4" />
-                            <span>{item.name}</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ))
-          )}
+        <nav className="p-3 space-y-4 pb-16">
+          {navigationItems.map((section, sectionIndex) => (
+            <div key={sectionIndex}>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                {section.title}
+              </h3>
+              <ul className="space-y-0.5">
+                {section.items.map((item, itemIndex) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <li key={itemIndex}>
+                      <button
+                        onClick={() => {
+                          console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                          navigate(item.path);
+                        }}
+                        className={`w-full flex items-center space-x-2 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{item.name}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
       </div>
 
@@ -887,11 +544,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
         </header>
 
         {/* Main Content Area - with proper top padding */}
-        <main className="bg-gray-50 min-h-screen pt-32 my-10 p-4 lg:p-6">
-          <div className="max-w-full mx-auto">
-            <div className="mt-4">
-              {children}
-            </div>
+        <main className="bg-gray-50 min-h-screen pt-16 px-2 lg:px-4">
+          <div className="w-full">
+            {children}
           </div>
         </main>
       </div>
@@ -907,4 +562,4 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   );
 };
 
-export default DashboardLayout; 
+export default DashboardLayout;

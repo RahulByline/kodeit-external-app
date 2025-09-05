@@ -1356,48 +1356,6 @@ export const enhancedMoodleService = {
     }
   },
 
-  // Get user courses with real progress data
-  async getUserCourses(userId?: string) {
-    const userIdToUse = userId || '2';
-    const cacheKey = `user_courses_${userIdToUse}`;
-    
-    if (cache.has(cacheKey)) {
-      console.log('📱 Using cached user courses');
-      return cache.get(cacheKey);
-    }
-
-    try {
-      console.log(`🔍 Fetching user courses for user ${userIdToUse}...`);
-      
-      const response = await this.makeApiCall('', {
-        wsfunction: 'core_enrol_get_users_courses',
-        userid: userIdToUse
-      });
-
-      if (response && Array.isArray(response)) {
-        const courses = response.map(course => ({
-          id: course.id,
-          fullname: course.fullname,
-          shortname: course.shortname,
-          progress: course.progress || 0,
-          startdate: course.startdate,
-          enddate: course.enddate,
-          visible: course.visible,
-          summary: course.summary,
-          category: course.category || 'General'
-        }));
-
-        cache.set(cacheKey, courses);
-        console.log(`✅ Successfully fetched ${courses.length} user courses`);
-        return courses;
-      }
-
-      return [];
-    } catch (error) {
-      console.error('❌ Error fetching user courses:', error);
-      return [];
-    }
-  },
 
   // Get user activities and assignments with real completion data
   async getUserActivities(userId?: string) {
@@ -2141,79 +2099,6 @@ export const enhancedMoodleService = {
     }
   },
 
-  // Get all assignments for a user from course contents
-  async getUserAssignments(userId?: string) {
-    const userIdToUse = userId || '2';
-    const cacheKey = `user_assignments_${userIdToUse}`;
-    if (cache.has(cacheKey)) {
-      console.log('📱 Using cached user assignments');
-      return cache.get(cacheKey);
-    }
-
-    try {
-      console.log(`🔍 Fetching all assignments for user: ${userIdToUse}...`);
-      
-      // Get user courses first
-      const userCourses = await this.getUserCourses(userIdToUse);
-      if (!userCourses || userCourses.length === 0) {
-        console.log('⚠️ No user courses found');
-        return [];
-      }
-
-      const allAssignments = [];
-      
-      // Get assignments from course contents for each course
-      for (const course of userCourses) {
-        try {
-          const response = await this.makeApiCall('', {
-            wsfunction: 'core_course_get_contents',
-            courseid: course.id
-          });
-
-          if (response && Array.isArray(response)) {
-            response.forEach(section => {
-              if (section.modules && Array.isArray(section.modules)) {
-                section.modules.forEach(module => {
-                  if (module.modname === 'assign') {
-                    allAssignments.push({
-                      id: module.id,
-                      name: module.name,
-                      description: module.description,
-                      intro: module.description,
-                      url: module.url,
-                      visible: module.visible !== 0,
-                      completion: module.completion,
-                      completiondata: module.completiondata,
-                      coursemodule: module.id,
-                      course: course.id,
-                      coursename: course.fullname,
-                      section: section.name,
-                      sectionid: section.id,
-                      duedate: null, // Will be fetched separately if needed
-                      grade: null, // Will be fetched separately if needed
-                      maxattempts: null, // Will be fetched separately if needed
-                      submissions: [], // Will be fetched separately if needed
-                      status: module.completiondata?.state === 2 ? 'completed' : 
-                              module.completiondata?.state === 1 ? 'in_progress' : 'pending'
-                    });
-                  }
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.log(`⚠️ Could not fetch course contents for course ${course.id}:`, error.message);
-        }
-      }
-
-      cache.set(cacheKey, allAssignments);
-      console.log(`✅ Successfully fetched ${allAssignments.length} assignments for user`);
-      return allAssignments;
-    } catch (error) {
-      console.error('❌ Error fetching user assignments:', error);
-      return [];
-    }
-  },
 
   // Launch SCORM content using Moodle API
   async launchScormContent(scormId: string, userId?: string) {

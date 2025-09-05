@@ -113,6 +113,9 @@ const G4Courses = lazy(() => import("./pages/student/dashboards/G4TOG7/g4Courses
 const G4CurrentLessons = lazy(() => import("./pages/student/dashboards/G4TOG7/g4CurrentLessons"));
 const G4Activities = lazy(() => import("./pages/student/dashboards/G4TOG7/g4Activities"));
 const G4CourseLessons = lazy(() => import("./pages/student/dashboards/G4TOG7/g4CourseLessons"));
+
+// G8+ Dashboard - lazy loaded
+const G8PlusDashboard = lazy(() => import("./pages/student/dashboards/G8PlusDashboard"));
 const Emulators = lazy(() => import("./pages/student/Emulators"));
 const CodeEditor = lazy(() => import("./features/codeEditor/CodeEditorPage"));
 const Compiler = lazy(() => import("./pages/student/Compiler"));
@@ -235,6 +238,36 @@ const App = () => {
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
                       <StudentDashboard />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/g8plus" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G8PlusDashboard 
+                        stats={{
+                          enrolledCourses: 0,
+                          completedAssignments: 0,
+                          pendingAssignments: 0,
+                          averageGrade: 0,
+                          totalActivities: 0,
+                          activeStudents: 0
+                        }}
+                        userCourses={[]}
+                        courseProgress={[]}
+                        studentActivities={[]}
+                        recentActivities={[]}
+                        userAssignments={[]}
+                        loadingStates={{
+                          stats: false,
+                          courseProgress: false,
+                          studentActivities: false,
+                          recentActivities: false,
+                          userCourses: false,
+                          userAssignments: false,
+                          profile: false
+                        }}
+                      />
                     </Suspense>
                   </ProtectedRoute>
                 } />
@@ -537,7 +570,7 @@ const App = () => {
                 <Route path="/dashboard/student/courses" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
-                      <G4Courses />
+                      <StudentCourses />
                     </Suspense>
                   </ProtectedRoute>
                 } />
