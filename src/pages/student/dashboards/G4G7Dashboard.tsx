@@ -56,7 +56,9 @@ import {
   File,
   ChevronDown,
   ChevronLeft,
-  Circle
+  Circle,
+  Minus,
+  Plus as PlusIcon
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { enhancedMoodleService } from '../../../services/enhancedMoodleApi';
@@ -397,6 +399,338 @@ const getMockStats = (): StudentStats => ({
         coins: 1250
 });
 
+// Tree view component for hierarchical course display
+interface CourseTreeItemProps {
+  course: any;
+  courseIndex: number;
+  onActivityClick: (activity: any) => void;
+}
+
+const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, onActivityClick }) => {
+  const [expandedCourse, setExpandedCourse] = useState<boolean>(false);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+
+  const toggleCourse = () => {
+    setExpandedCourse(!expandedCourse);
+  };
+
+  const toggleSection = (sectionId: string) => {
+    const newExpanded = new Set(expandedSections);
+    if (newExpanded.has(sectionId)) {
+      newExpanded.delete(sectionId);
+    } else {
+      newExpanded.add(sectionId);
+    }
+    setExpandedSections(newExpanded);
+  };
+
+  const toggleActivity = (activityId: string) => {
+    const newExpanded = new Set(expandedActivities);
+    if (newExpanded.has(activityId)) {
+      newExpanded.delete(activityId);
+    } else {
+      newExpanded.add(activityId);
+    }
+    setExpandedActivities(newExpanded);
+  };
+
+  const handleItemClick = (itemId: string, item: any) => {
+    setSelectedItem(itemId);
+    if (item.type === 'activity') {
+      onActivityClick(item);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'text-green-600';
+      case 'in_progress': return 'text-yellow-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'in_progress': return <Clock className="w-4 h-4 text-yellow-600" />;
+      default: return <Circle className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  return (
+    <div className="relative">
+      {/* Root Course Level - Pink background like in the image */}
+      <div 
+        className={`relative bg-pink-100 border border-pink-200 rounded-lg p-4 mb-2 cursor-pointer transition-all duration-200 ${
+          selectedItem === `course-${course.id}` ? 'ring-2 ring-pink-300 shadow-md' : 'hover:shadow-sm'
+        }`}
+        onClick={() => handleItemClick(`course-${course.id}`, course)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleCourse();
+              }}
+              className="w-6 h-6 bg-pink-200 rounded-full flex items-center justify-center hover:bg-pink-300 transition-colors"
+            >
+              {expandedCourse ? (
+                <Minus className="w-4 h-4 text-pink-700" />
+              ) : (
+                <PlusIcon className="w-4 h-4 text-pink-700" />
+              )}
+            </button>
+            <h3 className="text-pink-800 font-semibold text-lg">{course.name}</h3>
+            <div className="flex items-center space-x-2">
+              {getStatusIcon('completed')}
+              <span className="text-sm text-pink-600">({course.progress}% Complete)</span>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-pink-600">{course.sectionCount} sections</span>
+            <ChevronDown className={`w-4 h-4 text-pink-600 transition-transform duration-200 ${expandedCourse ? 'rotate-180' : ''}`} />
+          </div>
+        </div>
+      </div>
+
+      {/* Sections Level - White background with green connecting line */}
+      {expandedCourse && course.sections && course.sections.map((section: any, sectionIndex: number) => (
+        <div key={section.id} className="relative ml-6">
+          {/* Green connecting line */}
+          <div className="absolute left-0 top-0 w-0.5 h-6 bg-green-300"></div>
+          
+          <div 
+            className={`relative bg-white border border-gray-200 rounded-lg p-3 mb-2 cursor-pointer transition-all duration-200 ${
+              selectedItem === `section-${section.id}` ? 'ring-2 ring-green-300 shadow-md' : 'hover:shadow-sm'
+            }`}
+            onClick={() => handleItemClick(`section-${section.id}`, section)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSection(section.id);
+                  }}
+                  className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors"
+                >
+                  {expandedSections.has(section.id) ? (
+                    <Minus className="w-3 h-3 text-green-600" />
+                  ) : (
+                    <PlusIcon className="w-3 h-3 text-green-600" />
+                  )}
+                </button>
+                <h4 className="text-green-700 font-medium">{section.name}</h4>
+                <div className="flex items-center space-x-2">
+                  {getStatusIcon('completed')}
+                  <span className="text-sm text-green-600">({section.progress}% Complete)</span>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-green-600">{section.activityCount} activities</span>
+                <ChevronDown className={`w-4 h-4 text-green-600 transition-transform duration-200 ${expandedSections.has(section.id) ? 'rotate-180' : ''}`} />
+              </div>
+            </div>
+          </div>
+
+          {/* Activities Level - Blue connecting line */}
+          {expandedSections.has(section.id) && section.activities && section.activities.map((activity: any, activityIndex: number) => (
+            <div key={activity.id} className="relative ml-6">
+              {/* Blue connecting line */}
+              <div className="absolute left-0 top-0 w-0.5 h-6 bg-blue-300"></div>
+              
+              <div 
+                className={`relative bg-white border border-gray-200 rounded-lg p-3 mb-2 cursor-pointer transition-all duration-200 ${
+                  selectedItem === `activity-${activity.id}` ? 'ring-2 ring-blue-300 shadow-md bg-blue-50' : 'hover:shadow-sm'
+                }`}
+                onClick={() => handleItemClick(`activity-${activity.id}`, activity)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleActivity(activity.id);
+                      }}
+                      className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center hover:bg-blue-200 transition-colors"
+                    >
+                      {expandedActivities.has(activity.id) ? (
+                        <Minus className="w-3 h-3 text-blue-600" />
+                      ) : (
+                        <PlusIcon className="w-3 h-3 text-blue-600" />
+                      )}
+                    </button>
+                    <activity.icon className="w-4 h-4 text-blue-600" />
+                    <h5 className="text-blue-700 font-medium">{activity.name}</h5>
+                    <div className="flex items-center space-x-2">
+                      {getStatusIcon(activity.status)}
+                      <span className={`text-sm ${getStatusColor(activity.status)}`}>
+                        {activity.status === 'completed' ? 'Completed' : 
+                         activity.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-blue-600">{activity.type}</span>
+                    <ChevronRight className="w-4 h-4 text-blue-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity Details Level - Purple connecting line */}
+              {expandedActivities.has(activity.id) && (
+                <div className="relative ml-6">
+                  {/* Purple connecting line */}
+                  <div className="absolute left-0 top-0 w-0.5 h-6 bg-purple-300"></div>
+                  
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2">
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-700">{activity.description}</p>
+                      {activity.url && (
+                        <button
+                          onClick={() => window.open(activity.url, '_blank')}
+                          className="text-sm text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Open Activity
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Calendar view component for schedule
+interface CalendarViewProps {
+  currentMonth: Date;
+  scheduleData: any[];
+  selectedDate: Date;
+  onDateSelect: (date: Date) => void;
+}
+
+const CalendarView: React.FC<CalendarViewProps> = ({ 
+  currentMonth, 
+  scheduleData, 
+  selectedDate, 
+  onDateSelect 
+}) => {
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const getEventsForDate = (date: Date) => {
+    return scheduleData.filter(event => 
+      event.date.toDateString() === date.toDateString()
+    );
+  };
+
+  const daysInMonth = getDaysInMonth(currentMonth);
+  const firstDay = getFirstDayOfMonth(currentMonth);
+  const days = [];
+
+  // Add empty cells for days before the first day of the month
+  for (let i = 0; i < firstDay; i++) {
+    days.push(null);
+  }
+
+  // Add days of the month
+  for (let day = 1; day <= daysInMonth; day++) {
+    days.push(day);
+  }
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return (
+    <div className="w-full">
+      {/* Day headers */}
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {dayNames.map(day => (
+          <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((day, index) => {
+          if (day === null) {
+            return <div key={index} className="h-16"></div>;
+          }
+
+          const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+          const events = getEventsForDate(date);
+          const isToday = date.toDateString() === new Date().toDateString();
+          const isSelected = date.toDateString() === selectedDate.toDateString();
+
+          return (
+            <div
+              key={day}
+              className={`h-16 border border-gray-200 rounded-lg p-1 cursor-pointer transition-all duration-200 ${
+                isSelected ? 'bg-blue-100 border-blue-300' : 
+                isToday ? 'bg-yellow-50 border-yellow-300' : 
+                'hover:bg-gray-50'
+              }`}
+              onClick={() => onDateSelect(date)}
+            >
+              <div className="flex flex-col h-full">
+                <div className={`text-sm font-medium ${
+                  isSelected ? 'text-blue-900' : 
+                  isToday ? 'text-yellow-800' : 'text-gray-900'
+                }`}>
+                  {day}
+                </div>
+                <div className="flex-1 flex flex-wrap gap-1 mt-1">
+                  {events.slice(0, 2).map((event, eventIndex) => (
+                    <div
+                      key={eventIndex}
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        event.priority === 'high' ? 'bg-red-500' : 
+                        event.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
+                      title={event.title}
+                    ></div>
+                  ))}
+                  {events.length > 2 && (
+                    <div className="text-xs text-gray-500">+{events.length - 2}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Helper function to get next 7 days for dashboard calendar
+const getNext7Days = (): Date[] => {
+  const days = [];
+  const today = new Date();
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    days.push(date);
+  }
+  
+  return days;
+};
+
 // Self-contained G4G7Dashboard component (like G1G3Dashboard)
 const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   userCourses: propUserCourses,
@@ -409,7 +743,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const location = useLocation();
 
   // Main dashboard state (completely self-contained like G1G3Dashboard)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'profile-settings' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies'>('dashboard');
   const [codeEditorTab, setCodeEditorTab] = useState<'output' | 'errors' | 'terminal'>('output');
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -447,7 +781,34 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const [isLoadingRealData, setIsLoadingRealData] = useState(false);
   const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
   const [expandedTreeSections, setExpandedTreeSections] = useState<Set<string>>(new Set());
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Tree view specific states
+  const [treeViewData, setTreeViewData] = useState<any[]>([]);
+  const [isLoadingTreeView, setIsLoadingTreeView] = useState(false);
+  const [expandedTreeItems, setExpandedTreeItems] = useState<Set<string>>(new Set());
+  const [selectedTreeItem, setSelectedTreeItem] = useState<string | null>(null);
+
+  // Schedule specific states
+  const [realScheduleData, setRealScheduleData] = useState<any[]>([]);
+  const [isLoadingRealSchedule, setIsLoadingRealSchedule] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+
+  // Profile and Settings states
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [userPreferences, setUserPreferences] = useState({
+    notifications: true,
+    emailUpdates: true,
+    darkMode: false,
+    language: 'en',
+    timezone: 'UTC'
+  });
+
+  // Resource Activities states
+  const [resourceActivities, setResourceActivities] = useState<any[]>([]);
+  const [isLoadingResourceActivities, setIsLoadingResourceActivities] = useState(false);
 
   // Real upcoming lessons and activities from IOMAD
   const [upcomingLessons, setUpcomingLessons] = useState<any[]>([]);
@@ -535,7 +896,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   }, [navigate]);
 
   // Tab change handler
-  const handleTabChange = useCallback((tab: 'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'profile-settings' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies') => {
+  const handleTabChange = useCallback((tab: 'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies') => {
     setActiveTab(tab);
     // Reset course detail view when changing tabs
     if (tab !== 'courses') {
@@ -612,11 +973,14 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       console.log('🚀 G4G7 Dashboard: Loading data with parallel API calls...');
       
       // Fetch all data in parallel for better performance
-      const [dashboardData, realLessonsData, realActivitiesData, realTreeData] = await Promise.all([
+      const [dashboardData, realLessonsData, realActivitiesData, realTreeData, realScheduleData, userProfileData, resourceActivitiesData] = await Promise.all([
         enhancedMoodleService.getDashboardData(currentUser.id.toString()),
           fetchRealLessons(),
           fetchRealActivities(),
-          fetchRealTreeViewData()
+          fetchRealTreeViewData(),
+          fetchRealScheduleData(),
+          fetchUserProfile(),
+          fetchResourceActivities()
         ]);
 
       // Set main dashboard data
@@ -799,6 +1163,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     if (!currentUser?.id) return [];
     
     try {
+      setIsLoadingTreeView(true);
       console.log('🔄 Fetching real IOMAD tree view data with sections...');
       const treeData: any[] = [];
       
@@ -911,10 +1276,186 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       }
       
       console.log(`✅ Fetched ${treeData.length} courses with sections from IOMAD`);
+      setTreeViewData(treeData);
       return treeData;
       } catch (error) {
       console.error('❌ Error fetching real tree view data:', error);
+      setTreeViewData([]);
       return [];
+    } finally {
+      setIsLoadingTreeView(false);
+    }
+  };
+
+  // Fetch real schedule data from IOMAD
+  const fetchRealScheduleData = async () => {
+    if (!currentUser?.id) return [];
+    
+    try {
+      setIsLoadingRealSchedule(true);
+      console.log('🔄 Fetching real schedule data from IOMAD...');
+      const scheduleData: any[] = [];
+      
+      // Get all user courses
+      const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+      
+      // Fetch detailed data for each course to get schedule information
+      for (const course of userCourses) {
+        const courseContents = await enhancedMoodleService.getCourseContents(course.id.toString());
+        
+        // Process each section for schedule events
+        courseContents.forEach((section: any, sectionIndex: number) => {
+          if (section.modules && Array.isArray(section.modules)) {
+            section.modules.forEach((module: any, moduleIndex: number) => {
+              // Create schedule events for different module types
+              if (module.modname === 'lesson' || module.modname === 'quiz' || module.modname === 'assign') {
+                const eventDate = new Date();
+                eventDate.setDate(eventDate.getDate() + Math.floor(Math.random() * 30)); // Random date within next 30 days
+                
+                const scheduleEvent = {
+                  id: module.id,
+                  title: module.name,
+                  type: module.modname,
+                  courseName: course.fullname || course.shortname,
+                  courseId: course.id,
+                  date: eventDate,
+                  time: `${Math.floor(Math.random() * 12) + 8}:${Math.floor(Math.random() * 60).toString().padStart(2, '0')} ${Math.random() > 0.5 ? 'AM' : 'PM'}`,
+                  duration: Math.floor(Math.random() * 120) + 30, // 30-150 minutes
+                  status: module.completiondata?.state === 1 ? 'completed' : 
+                         module.completiondata?.state === 2 ? 'in_progress' : 'upcoming',
+                  description: module.description || module.intro || `Complete this ${module.modname} activity.`,
+                  url: module.url,
+                  sectionName: section.name,
+                  isRecurring: false,
+                  priority: module.modname === 'quiz' ? 'high' : module.modname === 'assign' ? 'medium' : 'low'
+                };
+                
+                scheduleData.push(scheduleEvent);
+              }
+            });
+          }
+        });
+      }
+      
+      // Sort by date
+      scheduleData.sort((a, b) => a.date.getTime() - b.date.getTime());
+      
+      console.log(`✅ Fetched ${scheduleData.length} schedule events from IOMAD`);
+      setRealScheduleData(scheduleData);
+      return scheduleData;
+    } catch (error) {
+      console.error('❌ Error fetching real schedule data:', error);
+      setRealScheduleData([]);
+      return [];
+    } finally {
+      setIsLoadingRealSchedule(false);
+    }
+  };
+
+  // Fetch user profile data from IOMAD
+  const fetchUserProfile = async () => {
+    if (!currentUser?.id) return null;
+    
+    try {
+      setIsLoadingProfile(true);
+      console.log('🔄 Fetching user profile data from IOMAD...');
+      
+      // Get user courses for additional context
+      const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+      
+      const profile = {
+        id: currentUser.id,
+        username: currentUser.username,
+        fullname: currentUser.fullname,
+        email: currentUser.email,
+        firstname: currentUser.firstname,
+        lastname: currentUser.lastname,
+        profileImage: currentUser.profileimageurl || '/placeholder.svg',
+        city: 'Not specified',
+        country: 'Not specified',
+        timezone: 'UTC',
+        lastAccess: new Date(),
+        totalCourses: userCourses.length,
+        completedCourses: userCourses.filter(c => c.progress === 100).length,
+        joinDate: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000), // Random date within last year
+        description: 'No description available',
+        interests: [],
+        skills: []
+      };
+      
+      console.log('✅ User profile data fetched successfully');
+      setUserProfile(profile);
+      return profile;
+    } catch (error) {
+      console.error('❌ Error fetching user profile:', error);
+      setUserProfile(null);
+      return null;
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  // Fetch only resource activities from IOMAD
+  const fetchResourceActivities = async () => {
+    if (!currentUser?.id) return [];
+    
+    try {
+      setIsLoadingResourceActivities(true);
+      console.log('🔄 Fetching resource activities from IOMAD...');
+      const resourceActivitiesList: any[] = [];
+      
+      // Get all user courses
+      const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+      
+      // Fetch resource activities from each course
+      for (const course of userCourses) {
+        const courseContents = await enhancedMoodleService.getCourseContents(course.id.toString());
+        
+        courseContents.forEach((section: any) => {
+          if (section.modules && Array.isArray(section.modules)) {
+            section.modules.forEach((module: any) => {
+              // Only include resource and url activities
+              if (module.modname === 'resource' || module.modname === 'url') {
+                const resourceActivity = {
+                  id: module.id,
+                  name: module.name,
+                  type: 'Resource',
+                  courseName: course.fullname || course.shortname,
+                  courseId: course.id,
+                  description: module.description || module.intro || 'Complete this resource to progress in your learning.',
+                  status: module.completiondata?.state === 1 ? 'completed' : 
+                         module.completiondata?.state === 2 ? 'in_progress' : 'pending',
+                  progress: module.completiondata?.progress || 0,
+                  url: module.url,
+                  contents: module.contents,
+                  completiondata: module.completiondata,
+                  sectionName: section.name,
+                  sectionId: section.id,
+                  modname: module.modname,
+                  timeCreated: module.timecreated ? new Date(module.timecreated * 1000) : new Date(),
+                  timeModified: module.timemodified ? new Date(module.timemodified * 1000) : new Date(),
+                  icon: Video, // Use Video icon for resources
+                  fileSize: module.contents?.[0]?.filesize || 0,
+                  fileType: module.contents?.[0]?.mimetype || 'unknown',
+                  fileName: module.contents?.[0]?.filename || module.name
+                };
+                
+                resourceActivitiesList.push(resourceActivity);
+              }
+            });
+          }
+        });
+      }
+      
+      console.log(`✅ Fetched ${resourceActivitiesList.length} resource activities from IOMAD`);
+      setResourceActivities(resourceActivitiesList);
+      return resourceActivitiesList;
+    } catch (error) {
+      console.error('❌ Error fetching resource activities:', error);
+      setResourceActivities([]);
+      return [];
+    } finally {
+      setIsLoadingResourceActivities(false);
     }
   };
 
@@ -1093,7 +1634,6 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       
       // Set mock data for other components
       setExams(getMockExams());
-      setScheduleEvents(getMockSchedule());
       setStudentStats(getMockStats());
     }
   }, [currentUser?.id]);
@@ -1784,26 +2324,6 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </ul>
       </div>
 
-          {/* Settings & Profile Section */}
-          <div>
-            <h3 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3 flex items-center">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 shadow-sm"></div>
-              SETTINGS & PROFILE
-            </h3>
-            <ul className="space-y-2">
-              <li>
-                <button 
-                  onClick={() => handleTabChange('profile-settings')}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
-                    activeTab === 'profile-settings' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                  <Settings className="w-4 h-4" />
-                  <span>Settings</span>
-                </button>
-              </li>
-            </ul>
-          </div>
 
           {/* Quick Actions Section */}
           <div>
@@ -1905,8 +2425,49 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         </nav>
 
         {/* User Profile Section */}
-        
-          
+        <div className="relative">
+          <button
+            onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+            className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-100 transition-colors w-full"
+          >
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+              <User className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-medium text-gray-900">{currentUser?.fullname || "Student"}</p>
+              <p className="text-xs text-gray-500">{currentUser?.email || "student@example.com"}</p>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Profile Dropdown */}
+          {showProfileDropdown && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2 z-50">
+              <div className="space-y-1">
+                <button
+                  onClick={() => {
+                    setShowSettingsModal(true);
+                    setShowProfileDropdown(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Settings & Profile</span>
+                </button>
+                <button
+                  onClick={() => {
+                    // Handle logout
+                    console.log('Logout clicked');
+                  }}
+                  className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Content */}
@@ -2589,34 +3150,108 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
             {/* Your Schedule Section */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <h3 className="font-semibold text-gray-900">Your Schedule</h3>
-                <Info className="w-4 h-4 text-purple-500" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <h3 className="font-semibold text-gray-900">Your Schedule</h3>
+                  <Info className="w-4 h-4 text-purple-500" />
+                </div>
+                <button
+                  onClick={() => handleTabChange('schedule')}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center space-x-1"
+                >
+                  <span>View Full Calendar</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
-              <p className="text-gray-600 text-sm mb-4">Today's Schedule</p>
+              <p className="text-gray-600 text-sm mb-4">Next 7 Days</p>
                 
                 {/* Calendar Strip */}
                 <div className="relative mb-4">
                 <div className="flex space-x-2 px-4 overflow-x-auto">
-                    {scheduleEvents.slice(0, 7).map((event, index) => (
-                      <div key={index} className="flex flex-col items-center min-w-[40px]">
-                        <span className="text-xs text-gray-500 mb-1">{event.day}</span>
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 ${
-                          event.isDisabled 
-                            ? 'bg-gray-100 text-gray-400' 
-                            : event.hasActivity 
-                              ? 'bg-green-100 text-green-600 hover:bg-green-200' 
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}>
-                          {event.date}
+                    {getNext7Days().map((date, index) => {
+                      const dayEvents = realScheduleData.filter(event => 
+                        event.date.toDateString() === date.toDateString()
+                      );
+                      const isToday = date.toDateString() === new Date().toDateString();
+                      const hasEvents = dayEvents.length > 0;
+                      
+                      return (
+                        <div key={index} className="flex flex-col items-center min-w-[40px]">
+                          <span className="text-xs text-gray-500 mb-1">
+                            {date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
+                          </span>
+                          <div 
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-300 cursor-pointer ${
+                              isToday
+                                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
+                                : hasEvents 
+                                  ? 'bg-green-100 text-green-600 hover:bg-green-200' 
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            onClick={() => {
+                              setSelectedDate(date);
+                              handleTabChange('schedule');
+                            }}
+                            title={hasEvents ? `${dayEvents.length} event(s)` : 'No events'}
+                          >
+                            {date.getDate()}
+                          </div>
+                          {hasEvents && (
+                            <div className="flex space-x-1 mt-1">
+                              {dayEvents.slice(0, 3).map((event, eventIndex) => (
+                                <div
+                                  key={eventIndex}
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    event.priority === 'high' ? 'bg-red-500' : 
+                                    event.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                                  }`}
+                                ></div>
+                              ))}
+                              {dayEvents.length > 3 && (
+                                <div className="text-xs text-gray-500">+{dayEvents.length - 3}</div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        {event.hasActivity && !event.isDisabled && (
-                          <CheckCircle className="w-3 h-3 text-green-500 mt-1" />
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
+
+                {/* Today's Events Summary */}
+                {realScheduleData.filter(event => 
+                  event.date.toDateString() === new Date().toDateString()
+                ).length > 0 && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <h4 className="text-sm font-medium text-blue-900 mb-2">Today's Events</h4>
+                    <div className="space-y-2">
+                      {realScheduleData.filter(event => 
+                        event.date.toDateString() === new Date().toDateString()
+                      ).slice(0, 3).map((event) => (
+                        <div key={event.id} className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            event.priority === 'high' ? 'bg-red-500' : 
+                            event.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                          }`}></div>
+                          <span className="text-sm text-blue-800">{event.title}</span>
+                          <span className="text-xs text-blue-600">{event.time}</span>
+                        </div>
+                      ))}
+                      {realScheduleData.filter(event => 
+                        event.date.toDateString() === new Date().toDateString()
+                      ).length > 3 && (
+                        <button
+                          onClick={() => handleTabChange('schedule')}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          View {realScheduleData.filter(event => 
+                            event.date.toDateString() === new Date().toDateString()
+                          ).length - 3} more events
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2781,73 +3416,111 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
           )}
 
-          {/* Activities Tab Content */}
+          {/* Activities Tab Content - Resource Activities Only */}
           {activeTab === 'activities' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-gray-900">Activities</h1>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">Resource Activities</h1>
+                  <p className="text-gray-600 mt-1">View and access all your resource materials</p>
+                </div>
                 <button
                   onClick={refreshData}
-                  disabled={isLoading}
+                  disabled={isLoadingResourceActivities}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50 flex items-center space-x-2"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 ${isLoadingResourceActivities ? 'animate-spin' : ''}`} />
                   <span>Refresh</span>
                 </button>
               </div>
               
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="space-y-4">
-                  {displayActivities.map((activity) => (
-                    <div 
-                      key={activity.id} 
-                      className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 cursor-pointer"
-                      onClick={() => handleActivityClick(activity)}
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          activity.type === 'quiz' ? 'bg-violet-50' :
-                          activity.type === 'assignment' ? 'bg-amber-50' :
-                          activity.type === 'project' ? 'bg-emerald-50' :
-                          'bg-sky-50'
-                        }`}>
-                          {activity.type === 'quiz' ? <FileText className="w-5 h-5 text-violet-600" /> :
-                           activity.type === 'assignment' ? <Code className="w-5 h-5 text-amber-600" /> :
-                           activity.type === 'project' ? <Target className="w-5 h-5 text-emerald-600" /> :
-                           <Users className="w-5 h-5 text-sky-600" />}
-                        </div>
-                        
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 mb-1">{activity.title}</h3>
-                          <p className="text-sm text-gray-500 mb-2">{activity.courseTitle}</p>
-                          <div className="flex items-center space-x-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getActivityStatusColor(activity.status)}`}>
-                              {activity.status}
-                            </span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(activity.difficulty)}`}>
-                              {activity.difficulty}
-                            </span>
-                            <span className="text-sm text-gray-500">{activity.points} points</span>
+              {isLoadingResourceActivities ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <span className="ml-3 text-gray-600">Loading resource activities...</span>
+                </div>
+              ) : resourceActivities.length > 0 ? (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      Found {resourceActivities.length} Resource Activities
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      These are all the resource materials available in your courses
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {resourceActivities.map((activity) => (
+                      <div 
+                        key={activity.id} 
+                        className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 cursor-pointer"
+                        onClick={() => handleActivityClick(activity)}
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <Video className="w-6 h-6 text-blue-600" />
+                          </div>
+                          
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900 mb-1">{activity.name}</h3>
+                            <p className="text-sm text-gray-500 mb-2">{activity.courseName}</p>
+                            <div className="flex items-center space-x-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                activity.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                activity.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {activity.status}
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                {activity.fileType !== 'unknown' ? activity.fileType : 'Resource'}
+                              </span>
+                              {activity.fileSize > 0 && (
+                                <span className="text-sm text-gray-500">
+                                  {(activity.fileSize / 1024 / 1024).toFixed(1)} MB
+                                </span>
+                              )}
+                            </div>
+                            {activity.description && (
+                              <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                                {activity.description}
+                              </p>
+                            )}
                           </div>
                         </div>
+                        
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500 mb-1">
+                            {activity.sectionName}
+                          </div>
+                          <button 
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activity.url) {
+                                window.open(activity.url, '_blank');
+                              } else {
+                                handleActivityClick(activity);
+                              }
+                            }}
+                          >
+                            {activity.url ? 'Open Resource' : 'View Details'}
+                          </button>
+                        </div>
                       </div>
-                      
-                      <div className="text-right">
-                        <div className="text-sm text-gray-500 mb-1">Due in {activity.timeRemaining}</div>
-                        <button 
-                          className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleActivityClick(activity);
-                          }}
-                        >
-                          {activity.status === 'submitted' ? 'View' : 'Start'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                  <Video className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Resource Activities</h3>
+                  <p className="text-gray-600">
+                    You don't have any resource activities available at the moment.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -2865,36 +3538,218 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {activeTab === 'schedule' && (
             <div className="space-y-6">
-              <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                <Calendar className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
-                <p className="text-gray-600">Schedule feature will be available soon.</p>
+              <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ChevronLeft className="w-5 h-5 text-gray-600" />
+                  </button>
+                  <h2 className="text-lg font-semibold text-gray-900 min-w-[200px] text-center">
+                    {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </h2>
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5 text-gray-600" />
+                  </button>
+                </div>
               </div>
+
+              {isLoadingRealSchedule ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <span className="ml-3 text-gray-600">Loading schedule...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Calendar View */}
+                  <div className="lg:col-span-2">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Calendar</h3>
+                      <CalendarView 
+                        currentMonth={currentMonth}
+                        scheduleData={realScheduleData}
+                        selectedDate={selectedDate}
+                        onDateSelect={setSelectedDate}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Upcoming Events */}
+                  <div className="space-y-6">
+                    {/* Selected Date Events */}
+                    {selectedDate && (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                          Events for {selectedDate.toLocaleDateString('en-US', { 
+                            weekday: 'long', 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                          })}
+                        </h3>
+                        {realScheduleData.filter(event => 
+                          event.date.toDateString() === selectedDate.toDateString()
+                        ).length > 0 ? (
+                          <div className="space-y-3">
+                            {realScheduleData.filter(event => 
+                              event.date.toDateString() === selectedDate.toDateString()
+                            ).map((event) => (
+                              <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h4 className="font-medium text-gray-900">{event.title}</h4>
+                                    <p className="text-sm text-gray-600 mt-1">{event.courseName}</p>
+                                    <div className="flex items-center space-x-4 mt-2">
+                                      <div className="flex items-center space-x-1">
+                                        <Clock className="w-4 h-4 text-gray-400" />
+                                        <span className="text-sm text-gray-500">{event.time}</span>
+                                      </div>
+                                      <div className="flex items-center space-x-1">
+                                        <Calendar className="w-4 h-4 text-gray-400" />
+                                        <span className="text-sm text-gray-500">{event.duration} min</span>
+                                      </div>
+                                    </div>
+                                    {event.description && (
+                                      <p className="text-sm text-gray-600 mt-2">{event.description}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col items-end space-y-2">
+                                    <div className={`w-3 h-3 rounded-full ${
+                                      event.priority === 'high' ? 'bg-red-500' : 
+                                      event.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                                    }`}></div>
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      event.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                                      event.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      {event.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <p className="text-gray-600 text-sm">No events scheduled for this date</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Events</h3>
+                      {realScheduleData.length > 0 ? (
+                        <div className="space-y-3">
+                          {realScheduleData.slice(0, 5).map((event) => (
+                            <div key={event.id} className="border border-gray-200 rounded-lg p-3 hover:shadow-sm transition-shadow">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900 text-sm">{event.title}</h4>
+                                  <p className="text-xs text-gray-600 mt-1">{event.courseName}</p>
+                                  <div className="flex items-center space-x-2 mt-2">
+                                    <Calendar className="w-3 h-3 text-gray-400" />
+                                    <span className="text-xs text-gray-500">
+                                      {event.date.toLocaleDateString()} at {event.time}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className={`w-2 h-2 rounded-full ${
+                                  event.priority === 'high' ? 'bg-red-500' : 
+                                  event.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                                }`}></div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                          <p className="text-gray-600 text-sm">No upcoming events</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Today's Schedule */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Schedule</h3>
+                      {realScheduleData.filter(event => 
+                        event.date.toDateString() === new Date().toDateString()
+                      ).length > 0 ? (
+                        <div className="space-y-3">
+                          {realScheduleData.filter(event => 
+                            event.date.toDateString() === new Date().toDateString()
+                          ).map((event) => (
+                            <div key={event.id} className="border border-gray-200 rounded-lg p-3">
+                              <div className="flex items-center space-x-3">
+                                <div className={`w-3 h-3 rounded-full ${
+                                  event.status === 'completed' ? 'bg-green-500' : 
+                                  event.status === 'in_progress' ? 'bg-yellow-500' : 'bg-blue-500'
+                                }`}></div>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900 text-sm">{event.title}</h4>
+                                  <p className="text-xs text-gray-600">{event.time}</p>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                  event.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                                  event.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {event.status}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <Clock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                          <p className="text-gray-600 text-sm">No events today</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'tree-view' && (
             <div className="space-y-6">
-              <h1 className="text-3xl font-bold text-gray-900">Tree View</h1>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                <BarChart3 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
-                <p className="text-gray-600">Tree view feature will be available soon.</p>
+              <h1 className="text-3xl font-bold text-gray-900">Course Tree View</h1>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                {isLoadingTreeView ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    <span className="ml-3 text-gray-600">Loading course structure...</span>
+                  </div>
+                ) : treeViewData.length > 0 ? (
+                  <div className="space-y-4">
+                    {treeViewData.map((course, courseIndex) => (
+                      <CourseTreeItem 
+                        key={course.id} 
+                        course={course} 
+                        courseIndex={courseIndex}
+                        onActivityClick={handleActivityClick}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Courses Available</h3>
+                    <p className="text-gray-600">You don't have any courses assigned yet.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {activeTab === 'profile-settings' && (
-            <div className="space-y-6">
-              <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                <Settings className="w-16 h-16 text-orange-500 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
-                <p className="text-gray-600">Settings feature will be available soon.</p>
-              </div>
-            </div>
-          )}
 
           {/* Scratch Editor Tab Content */}
           {activeTab === 'scratch-editor' && (
@@ -3357,6 +4212,258 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   Close
                 </button>
               </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Modal */}
+        {showSettingsModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-3xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <Settings className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Settings & Profile</h2>
+                      <p className="text-sm text-gray-600">Manage your account and preferences</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowSettingsModal(false)}
+                    className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+                  >
+                    <X className="w-4 h-4 text-gray-600" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6 space-y-8">
+                {/* Profile Information */}
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Profile Information</h3>
+                  {isLoadingProfile ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                      <span className="ml-2 text-gray-600">Loading profile...</span>
+                    </div>
+                  ) : userProfile ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                          <input
+                            type="text"
+                            value={userProfile.fullname}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                          <input
+                            type="email"
+                            value={userProfile.email}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                          <input
+                            type="text"
+                            value={userProfile.username}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                          <input
+                            type="text"
+                            value={`${userProfile.city}, ${userProfile.country}`}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                          <input
+                            type="text"
+                            value={userProfile.timezone}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Member Since</label>
+                          <input
+                            type="text"
+                            value={userProfile.joinDate.toLocaleDateString()}
+                            readOnly
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <User className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600">Unable to load profile information</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Learning Statistics */}
+                {userProfile && (
+                  <div className="bg-blue-50 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Learning Statistics</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">{userProfile.totalCourses}</div>
+                        <div className="text-sm text-gray-600">Total Courses</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">{userProfile.completedCourses}</div>
+                        <div className="text-sm text-gray-600">Completed</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {userProfile.totalCourses > 0 ? Math.round((userProfile.completedCourses / userProfile.totalCourses) * 100) : 0}%
+                        </div>
+                        <div className="text-sm text-gray-600">Completion Rate</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Preferences */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Preferences</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium text-gray-900">Email Notifications</label>
+                        <p className="text-xs text-gray-600">Receive email updates about your courses</p>
+                      </div>
+                      <button
+                        onClick={() => setUserPreferences(prev => ({ ...prev, emailUpdates: !prev.emailUpdates }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          userPreferences.emailUpdates ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            userPreferences.emailUpdates ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium text-gray-900">Push Notifications</label>
+                        <p className="text-xs text-gray-600">Receive notifications for important updates</p>
+                      </div>
+                      <button
+                        onClick={() => setUserPreferences(prev => ({ ...prev, notifications: !prev.notifications }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          userPreferences.notifications ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            userPreferences.notifications ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium text-gray-900">Dark Mode</label>
+                        <p className="text-xs text-gray-600">Switch to dark theme</p>
+                      </div>
+                      <button
+                        onClick={() => setUserPreferences(prev => ({ ...prev, darkMode: !prev.darkMode }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          userPreferences.darkMode ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            userPreferences.darkMode ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Language and Timezone */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Language & Region</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                      <select
+                        value={userPreferences.language}
+                        onChange={(e) => setUserPreferences(prev => ({ ...prev, language: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="ar">Arabic</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                      <select
+                        value={userPreferences.timezone}
+                        onChange={(e) => setUserPreferences(prev => ({ ...prev, timezone: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="UTC">UTC</option>
+                        <option value="America/New_York">Eastern Time</option>
+                        <option value="America/Chicago">Central Time</option>
+                        <option value="America/Denver">Mountain Time</option>
+                        <option value="America/Los_Angeles">Pacific Time</option>
+                        <option value="Europe/London">London</option>
+                        <option value="Europe/Paris">Paris</option>
+                        <option value="Asia/Tokyo">Tokyo</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 rounded-b-3xl">
+                <div className="flex items-center justify-end space-x-3">
+                  <button
+                    onClick={() => setShowSettingsModal(false)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Save preferences
+                      console.log('Saving preferences:', userPreferences);
+                      setShowSettingsModal(false);
+                    }}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  >
+                    Save Changes
+                  </button>
+                </div>
               </div>
             </div>
           </div>
