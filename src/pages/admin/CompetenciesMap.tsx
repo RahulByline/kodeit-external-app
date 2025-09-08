@@ -52,11 +52,11 @@ const CompetenciesMap: React.FC = () => {
   const [selectedFramework, setSelectedFramework] = useState<CompetencyFramework | null>(null);
   const [selectedCompetency, setSelectedCompetency] = useState<Competency | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCompetency, setEditingCompetency] = useState<Competency | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [frameworkCompetencies, setFrameworkCompetencies] = useState<Competency[]>([]);
 
   // Form states for creating/editing competencies
   const [formData, setFormData] = useState({
@@ -90,14 +90,14 @@ const CompetenciesMap: React.FC = () => {
     fetchCompetenciesData();
   }, []);
 
-  // Rebuild tree structure whenever competencies change
+  // Rebuild tree structure whenever framework competencies change
   useEffect(() => {
-    if (competencies.length > 0) {
-      buildTreeStructure(competencies);
+    if (frameworkCompetencies.length > 0) {
+      buildTreeStructure(frameworkCompetencies);
     } else {
       setTreeData([]);
     }
-  }, [competencies]);
+  }, [frameworkCompetencies]);
 
   const fetchCompetenciesData = async () => {
     try {
@@ -197,7 +197,7 @@ const CompetenciesMap: React.FC = () => {
     const newExpandedNodes = new Set(expandedNodes);
     if (newExpandedNodes.has(nodeId)) {
       newExpandedNodes.delete(nodeId);
-    } else {
+      } else {
       newExpandedNodes.add(nodeId);
     }
     setExpandedNodes(newExpandedNodes);
@@ -243,10 +243,11 @@ const CompetenciesMap: React.FC = () => {
   const handleFrameworkSelect = async (framework: CompetencyFramework) => {
     setSelectedFramework(framework);
     setExpandedNodes(new Set()); // Clear expanded nodes when switching frameworks
+    setSelectedCompetency(null); // Clear selected competency
     try {
-      const frameworkCompetencies = await competencyService.getCompetenciesByFramework(framework.id);
-      setCompetencies(frameworkCompetencies);
-      console.log(`✅ Loaded ${frameworkCompetencies.length} competencies for framework: ${framework.shortname}`);
+      const competencies = await competencyService.getCompetenciesByFramework(framework.id);
+      setFrameworkCompetencies(competencies);
+      console.log(`✅ Loaded ${competencies.length} competencies for framework: ${framework.shortname}`);
     } catch (error) {
       console.error('❌ Error fetching framework competencies:', error);
       setError('Failed to fetch competencies for selected framework.');
@@ -256,10 +257,11 @@ const CompetenciesMap: React.FC = () => {
   const handleShowAllCompetencies = async () => {
     setSelectedFramework(null);
     setExpandedNodes(new Set()); // Clear expanded nodes
+    setSelectedCompetency(null); // Clear selected competency
     try {
       // Get all competencies from all frameworks
       const { competencies: allCompetencies } = await competencyService.getAllFrameworksWithCompetencies();
-      setCompetencies(allCompetencies);
+      setFrameworkCompetencies(allCompetencies);
       console.log(`✅ Loaded ${allCompetencies.length} competencies from all frameworks`);
     } catch (error) {
       console.error('❌ Error fetching all competencies:', error);
@@ -275,9 +277,9 @@ const CompetenciesMap: React.FC = () => {
     if (!searchTerm.trim()) {
       // If no search term, show all competencies
       await fetchCompetenciesData();
-      return;
+        return;
       }
-
+      
       try {
       setLoading(true);
       const searchResults = await competencyService.searchCompetencies(
@@ -286,11 +288,11 @@ const CompetenciesMap: React.FC = () => {
       );
       setCompetencies(searchResults);
       console.log(`✅ Found ${searchResults.length} competencies matching "${searchTerm}"`);
-      } catch (error) {
+    } catch (error) {
       console.error('❌ Error searching competencies:', error);
       setError('Failed to search competencies.');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -333,7 +335,7 @@ const CompetenciesMap: React.FC = () => {
     }
   };
 
-  const filteredCompetencies = competencies.filter(competency => {
+  const filteredCompetencies = frameworkCompetencies.filter(competency => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -492,223 +494,273 @@ const CompetenciesMap: React.FC = () => {
 
   return (
     <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Competencies Map</h1>
-            <p className="text-gray-600">Manage competency frameworks and competencies</p>
-          </div>
-                     <div className="flex items-center space-x-3">
-             <button 
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-             >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-             </button>
-            <button 
-              onClick={handleCreateCompetency}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Competency</span>
-            </button>
-            <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-               <Download className="w-4 h-4" />
-               <span>Export</span>
-             </button>
-           </div>
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-              <span className="text-red-800">{error}</span>
-              </div>
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Competencies Map</h1>
+              <p className="text-gray-600">Manage competency frameworks and competencies</p>
             </div>
-        )}
-
-        {/* Statistics Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Total Frameworks</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{frameworks.length}</h3>
-              </div>
-              <Target className="w-8 h-8 text-blue-600" />
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Total Competencies</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{competencies.length}</h3>
-              </div>
-              <BookOpen className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Selected Framework</p>
-                <h3 className="text-lg font-bold text-gray-900 mt-1">
-                  {selectedFramework ? selectedFramework.shortname : 'None'}
-                </h3>
-              </div>
-              <Map className="w-8 h-8 text-purple-600" />
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Filtered Results</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{filteredCompetencies.length}</h3>
-              </div>
-              <Filter className="w-8 h-8 text-orange-600" />
-            </div>
-          </div>
-                 </div>
-
-        {/* Frameworks Selection */}
-           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Competency Frameworks</h2>
-            <button
-              onClick={handleShowAllCompetencies}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedFramework === null
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Show All Competencies
-            </button>
-          </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {frameworks.map((framework) => (
-              <div 
-                key={framework.id} 
-                className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                  selectedFramework?.id === framework.id 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-                onClick={() => handleFrameworkSelect(framework)}
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900">{framework.shortname}</h3>
-                       <span className={`px-2 py-1 text-xs rounded-full ${
-                    framework.visible ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                       }`}>
-                    {framework.visible ? 'Visible' : 'Hidden'}
-                       </span>
-                     </div>
-                <p className="text-sm text-gray-600 mb-2">{truncateText(framework.description)}</p>
-                     <div className="flex justify-between text-xs text-gray-500">
-                  <span>{framework.competenciescount} competencies</span>
-                  <span>Created: {formatDate(framework.timecreated)}</span>
-                     </div>
-                   </div>
-                 ))}
-               </div>
-         </div>
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+              <button 
+                onClick={handleCreateCompetency}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Competency</span>
+              </button>
+              <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                <Download className="w-4 h-4" />
+                <span>Export</span>
+              </button>
+            </div>
+          </div>
 
-        {/* Search and Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search competencies..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+                <span className="text-red-800">{error}</span>
               </div>
             </div>
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Search
-            </button>
-          </div>
-        </div>
+          )}
 
-        {/* Competencies Tree View */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
+          {/* Framework Selection */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Competencies Hierarchy</h2>
-                {selectedFramework ? (
-                  <p className="text-sm text-blue-600 mt-1">
-                    Showing competencies from: <span className="font-medium">{selectedFramework.shortname}</span>
-                  </p>
+                <h2 className="text-xl font-bold text-gray-900">Select Competency Framework</h2>
+                <p className="text-gray-600 mt-1">Choose a framework to view its competencies and statistics</p>
+              </div>
+              <div className="text-sm text-gray-500">
+                {frameworks.length} frameworks available
+              </div>
+            </div>
+
+            {/* Framework Dropdown */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {frameworks.map((framework) => (
+                <div 
+                  key={framework.id} 
+                  className={`border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                    selectedFramework?.id === framework.id 
+                      ? 'border-blue-500 bg-blue-50 shadow-md' 
+                      : 'border-gray-200 hover:border-blue-300 bg-white'
+                  }`}
+                  onClick={() => handleFrameworkSelect(framework)}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 text-sm leading-tight">{framework.shortname}</h3>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      framework.visible ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {framework.visible ? 'Visible' : 'Hidden'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mb-3 line-clamp-2">{truncateText(framework.description, 80)}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-500">
+                    <span className="font-medium">{framework.competenciescount} competencies</span>
+                    <span>{formatDate(framework.timecreated)}</span>
+                  </div>
+                  {selectedFramework?.id === framework.id && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <div className="flex items-center text-blue-600 text-xs font-medium">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Selected
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Show All Option */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <button
+                onClick={handleShowAllCompetencies}
+                className={`w-full py-3 px-4 rounded-lg text-sm font-medium transition-colors ${
+                  selectedFramework === null
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Globe className="w-4 h-4 inline mr-2" />
+                Show All Competencies from All Frameworks
+              </button>
+            </div>
+          </div>
+
+          {/* Statistics and Content - Only show after framework selection */}
+          {selectedFramework && (
+            <>
+              {/* Statistics Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Selected Framework</p>
+                      <h3 className="text-lg font-bold text-gray-900 mt-1 truncate">
+                        {selectedFramework.shortname}
+                      </h3>
+                    </div>
+                    <Map className="w-8 h-8 text-purple-600" />
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Total Competencies</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mt-1">{frameworkCompetencies.length}</h3>
+                    </div>
+                    <BookOpen className="w-8 h-8 text-green-600" />
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Root Competencies</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mt-1">{treeData.length}</h3>
+                    </div>
+                    <Target className="w-8 h-8 text-blue-600" />
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Filtered Results</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mt-1">{filteredCompetencies.length}</h3>
+                    </div>
+                    <Filter className="w-8 h-8 text-orange-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Search and Filters - Only show after framework selection */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        type="text"
+                        placeholder={`Search competencies in ${selectedFramework.shortname}...`}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSearch}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Search
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Competencies Tree View - Only show after framework selection */}
+          {selectedFramework && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Competencies Hierarchy</h2>
+                    <p className="text-sm text-blue-600 mt-1">
+                      Showing competencies from: <span className="font-medium">{selectedFramework.shortname}</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-500">
+                      {treeData.length} root competencies
+                    </span>
+                    <button 
+                      onClick={() => {
+                        // Expand all nodes
+                        const allNodeIds = new Set<number>();
+                        const collectNodeIds = (nodes: TreeNode[]) => {
+                          nodes.forEach(node => {
+                            allNodeIds.add(node.id);
+                            collectNodeIds(node.children);
+                          });
+                        };
+                        collectNodeIds(treeData);
+                        setExpandedNodes(allNodeIds);
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Expand All
+                    </button>
+                    <button 
+                      onClick={() => setExpandedNodes(new Set())}
+                      className="text-sm text-gray-600 hover:text-gray-800"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
+              </div>
+          
+              <div className="p-4">
+                {treeData.length > 0 ? (
+                  <div className="space-y-1">
+                    {treeData.map((node) => (
+                      <TreeNodeComponent key={node.id} node={node} />
+                    ))}
+                  </div>
                 ) : (
-                  <p className="text-sm text-gray-600 mt-1">
-                    Showing all competencies from all frameworks
-                  </p>
+                  <div className="text-center py-8">
+                    <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No competencies found</h3>
+                    <p className="text-gray-600">
+                      {searchTerm ? 'Try adjusting your search criteria.' : 'Create a new competency to get started.'}
+                    </p>
+                  </div>
                 )}
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-500">
-                  {treeData.length} root competencies
-                </span>
-                <button
-                  onClick={() => {
-                    // Expand all nodes
-                    const allNodeIds = new Set<number>();
-                    const collectNodeIds = (nodes: TreeNode[]) => {
-                      nodes.forEach(node => {
-                        allNodeIds.add(node.id);
-                        collectNodeIds(node.children);
-                      });
-                    };
-                    collectNodeIds(treeData);
-                    setExpandedNodes(allNodeIds);
-                  }}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  Expand All
-                </button>
-                <button
-                  onClick={() => setExpandedNodes(new Set())}
-                  className="text-sm text-gray-600 hover:text-gray-800"
-                >
-                  Collapse All
-                </button>
+            </div>
+          )}
+
+          {/* Welcome Message - Show when no framework is selected */}
+          {!selectedFramework && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-8 border border-blue-100">
+              <div className="text-center">
+                <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <Target className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Competencies Map</h3>
+                <p className="text-gray-600 mb-4">
+                  Select a competency framework above to view its competencies, statistics, and hierarchical structure.
+                </p>
+                <div className="flex justify-center space-x-4 text-sm text-gray-500">
+                  <div className="flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
+                    View competency hierarchies
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
+                    Analyze framework statistics
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
+                    Search and filter competencies
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          
-          <div className="p-4">
-            {treeData.length > 0 ? (
-              <div className="space-y-1">
-                {treeData.map((node) => (
-                  <TreeNodeComponent key={node.id} node={node} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No competencies found</h3>
-                <p className="text-gray-600">
-                  {searchTerm ? 'Try adjusting your search criteria.' : 'Create a new competency to get started.'}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
+          )}
 
         {/* Competency Detail Modal */}
         {selectedCompetency && (
