@@ -542,7 +542,14 @@ export const competencyService = {
       // Get system context
       const contextId = await this.getSystemContext();
       
-      const apiParams = {
+      // Fetch the parent framework to get its scale configuration
+      const parentFramework = await this.readFramework(competencyData.competencyframeworkid);
+      console.log('📊 Parent framework scale config:', {
+        scaleid: parentFramework.scaleid,
+        scaleconfiguration: parentFramework.scaleconfiguration
+      });
+      
+      const apiParams: any = {
         wsfunction: 'core_competency_create_competency',
         'competency[shortname]': competencyData.shortname,
         'competency[idnumber]': competencyData.idnumber,
@@ -552,15 +559,20 @@ export const competencyService = {
         'competency[parentid]': competencyData.parentid || 0,
         'competency[sortorder]': competencyData.sortorder || 0,
         'competency[ruleoutcome]': competencyData.ruleoutcome || 0,
-        'competency[ruletype]': competencyData.ruletype || '',
-        'competency[ruleconfig]': competencyData.ruleconfig || '',
-        'competency[scaleid]': competencyData.scaleid || 0,
-        'competency[scaleconfiguration]': competencyData.scaleconfiguration || '',
-        'competency[contextid]': contextId,
+        'competency[scaleid]': competencyData.scaleid || parentFramework.scaleid,
+        'competency[scaleconfiguration]': competencyData.scaleconfiguration || parentFramework.scaleconfiguration,
         'competency[timecreated]': 0,
         'competency[timemodified]': 0,
         'competency[usermodified]': 0
       };
+
+      // Only add ruletype and ruleconfig if they have valid values
+      if (competencyData.ruletype && competencyData.ruletype.trim() !== '') {
+        apiParams['competency[ruletype]'] = competencyData.ruletype;
+      }
+      if (competencyData.ruleconfig && competencyData.ruleconfig.trim() !== '') {
+        apiParams['competency[ruleconfig]'] = competencyData.ruleconfig;
+      }
 
       const response = await makeApiCall(apiParams);
       
@@ -603,7 +615,7 @@ export const competencyService = {
       
       const apiParams: any = {
         wsfunction: 'core_competency_update_competency',
-        id: id
+        'competency[id]': id // Only include id within the competency structure
       };
 
       // Add competency data with proper parameter structure
@@ -641,8 +653,7 @@ export const competencyService = {
         apiParams['competency[scaleconfiguration]'] = competencyData.scaleconfiguration;
       }
       
-      // Add context
-      apiParams['competency[contextid]'] = contextId;
+      // Note: contextid is not a valid parameter for competency update API
 
       const response = await makeApiCall(apiParams);
       
@@ -669,8 +680,7 @@ export const competencyService = {
       
       const apiParams = {
         wsfunction: 'core_competency_delete_competency',
-        id: id,
-        ...buildContextParams({ contextid: await this.getSystemContext() })
+        id: id
       };
 
       const response = await makeApiCall(apiParams);

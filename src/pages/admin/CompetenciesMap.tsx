@@ -313,12 +313,36 @@ const CompetenciesMap: React.FC = () => {
   };
 
   const handleCreateCompetency = () => {
+    // Check if a framework is selected
+    if (!selectedFramework) {
+      setError('Please select a competency framework first before creating a competency.');
+      return;
+    }
+    
     setFormData({
       shortname: '',
       idnumber: '',
       description: '',
-      competencyframeworkid: selectedFramework?.id || 0,
+      competencyframeworkid: selectedFramework.id,
       parentid: 0,
+      sortorder: 0
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleCreateChildCompetency = (parentCompetency: Competency) => {
+    // Check if a framework is selected
+    if (!selectedFramework) {
+      setError('Please select a competency framework first before creating a competency.');
+      return;
+    }
+    
+    setFormData({
+      shortname: '',
+      idnumber: '',
+      description: '',
+      competencyframeworkid: selectedFramework.id,
+      parentid: parentCompetency.id, // Set parent ID to the clicked competency's ID
       sortorder: 0
     });
     setShowCreateModal(true);
@@ -395,13 +419,17 @@ const CompetenciesMap: React.FC = () => {
   const handleDeleteCompetency = async (competency: Competency) => {
     if (window.confirm(`Are you sure you want to delete the competency "${competency.shortname}"?`)) {
       try {
-        // Note: Delete functionality would need to be implemented in the service
+        setError(''); // Clear any previous errors
+        setSuccessMessage(''); // Clear any previous success messages
+        
         console.log('🗑️ Delete competency:', competency.shortname);
-        // await competencyService.deleteCompetency(competency.id);
+        await competencyService.deleteCompetency(competency.id);
+        
+        setSuccessMessage(`Successfully deleted competency "${competency.shortname}"`);
         await handleRefresh();
       } catch (error) {
         console.error('❌ Error deleting competency:', error);
-        setError('Failed to delete competency.');
+        setError('Failed to delete competency. Please try again.');
       }
     }
   };
@@ -627,10 +655,21 @@ const CompetenciesMap: React.FC = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    handleCreateChildCompetency(node as any);
+                  }}
+                  className="p-1 hover:bg-green-100 rounded text-gray-600 hover:text-green-600"
+                  title="Add Child Competency"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setEditingCompetency(node as any);
                     setShowEditModal(true);
                   }}
                   className="p-1 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-800"
+                  title="Edit Competency"
                 >
                   <Edit className="w-3 h-3" />
                 </button>
@@ -640,6 +679,7 @@ const CompetenciesMap: React.FC = () => {
                     handleDeleteCompetency(node as any);
                   }}
                   className="p-1 hover:bg-red-100 rounded text-gray-600 hover:text-red-600"
+                  title="Delete Competency"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -700,14 +740,14 @@ const CompetenciesMap: React.FC = () => {
         </div>
 
           {/* Error Display */}
-          {error && (
+          {/* {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-center">
                 <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
                 <span className="text-red-800">{error}</span>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Success Display */}
           {successMessage && (
@@ -789,26 +829,13 @@ const CompetenciesMap: React.FC = () => {
              </div>
            </div>
          )}
-                 </div>
+             </div>
                ))}
-             </div>
-
-            {/* Show All Option */}
-            <div className="mt-4 pt-4 border-t border-gray-200">
-               <button 
-                onClick={handleShowAllCompetencies}
-                className={`w-full py-3 px-4 rounded-lg text-sm font-medium transition-colors ${
-                  selectedFramework === null
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Globe className="w-4 h-4 inline mr-2" />
-                Show All Competencies from All Frameworks
-               </button>
-             </div>
            </div>
            
+
+             </div>
+             
           {/* Statistics and Content - Only show after framework selection */}
           {selectedFramework && (
             <>
@@ -821,37 +848,37 @@ const CompetenciesMap: React.FC = () => {
                       <h3 className="text-lg font-bold text-gray-900 mt-1 truncate">
                         {selectedFramework.shortname}
                       </h3>
-             </div>
-                    <Map className="w-8 h-8 text-purple-600" />
                    </div>
+                    <Map className="w-8 h-8 text-purple-600" />
                </div>
+             </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-500 text-sm font-medium">Total Competencies</p>
                       <h3 className="text-2xl font-bold text-gray-900 mt-1">{frameworkCompetencies.length}</h3>
-             </div>
-                    <BookOpen className="w-8 h-8 text-green-600" />
            </div>
+                    <BookOpen className="w-8 h-8 text-green-600" />
+                     </div>
                      </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-500 text-sm font-medium">Root Competencies</p>
                       <h3 className="text-2xl font-bold text-gray-900 mt-1">{treeData.length}</h3>
-                     </div>
-                    <Target className="w-8 h-8 text-blue-600" />
                        </div>
+                    <Target className="w-8 h-8 text-blue-600" />
                      </div>
+                   </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-500 text-sm font-medium">Filtered Results</p>
                       <h3 className="text-2xl font-bold text-gray-900 mt-1">{filteredCompetencies.length}</h3>
-                   </div>
-                    <Filter className="w-8 h-8 text-orange-600" />
                </div>
+                    <Filter className="w-8 h-8 text-orange-600" />
                  </div>
+             </div>
          </div>
 
               {/* Search and Filters - Only show after framework selection */}
@@ -939,9 +966,26 @@ const CompetenciesMap: React.FC = () => {
                     </p>
           </div>
         )}
-                    </div>
-                    </div>
-          )}
+                        </div>
+                    
+                    {/* Add Competency Button - Always show when framework is selected */}
+                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                          <button 
+                        onClick={handleCreateCompetency}
+                        disabled={!selectedFramework}
+                        className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span>Add Competency</span>
+                          </button>
+                      {!selectedFramework && (
+                        <p className="text-xs text-gray-500 mt-2 text-center">
+                          Select a framework above to add competencies
+                        </p>
+                      )}
+            </div>
+          </div>
+        )}
 
           {/* Welcome Message - Show when no framework is selected */}
           {!selectedFramework && (
@@ -949,7 +993,7 @@ const CompetenciesMap: React.FC = () => {
               <div className="text-center">
                 <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                   <Target className="w-8 h-8 text-blue-600" />
-                      </div>
+                    </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Competencies Map</h3>
                 <p className="text-gray-600 mb-4">
                   Select a competency framework above to view its competencies, statistics, and hierarchical structure.
@@ -966,9 +1010,9 @@ const CompetenciesMap: React.FC = () => {
                   <div className="flex items-center">
                     <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
                     Search and filter competencies
-                    </div>
                   </div>
-                  </div>
+                </div>
+                      </div>
           </div>
         )}
 
@@ -1085,9 +1129,41 @@ const CompetenciesMap: React.FC = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {showCreateModal ? 'Create New Competency' : 'Edit Competency'}
+                {showCreateModal ? (formData.parentid === 0 ? 'Create New Root Competency' : 'Create New Child Competency') : 'Edit Competency'}
               </h3>
               
+              {/* Framework Selection Display */}
+              {showCreateModal && selectedFramework && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <Map className="w-4 h-4 text-blue-600" />
+                      </div>
+                    <div className="ml-2">
+                      <p className="text-sm font-medium text-blue-800">Adding to Framework:</p>
+                      <p className="text-sm text-blue-700">{selectedFramework.shortname}</p>
+                      </div>
+                      </div>
+                      </div>
+              )}
+
+              {/* Parent Competency Display */}
+              {showCreateModal && formData.parentid !== 0 && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <Target className="w-4 h-4 text-green-600" />
+                      </div>
+                    <div className="ml-2">
+                      <p className="text-sm font-medium text-green-800">Adding as child of:</p>
+                      <p className="text-sm text-green-700">
+                        {frameworkCompetencies.find(c => c.id === formData.parentid)?.shortname || 'Parent Competency'}
+                      </p>
+                    </div>
+                  </div>
+                  </div>
+              )}
+                
                 <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1099,7 +1175,7 @@ const CompetenciesMap: React.FC = () => {
                     onChange={(e) => setFormData({...formData, shortname: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                      </div>
+                            </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1111,7 +1187,7 @@ const CompetenciesMap: React.FC = () => {
                     onChange={(e) => setFormData({...formData, idnumber: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  </div>
+                            </div>
                   
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1123,35 +1199,121 @@ const CompetenciesMap: React.FC = () => {
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  </div>
-                </div>
+                          </div>
+                      </div>
                 
               <div className="flex justify-end space-x-3 mt-6">
-                              <button
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setShowEditModal(false);
-                    setEditingCompetency(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                              </button>
                         <button
                           onClick={() => {
-                    // TODO: Implement create/update functionality
-                    console.log('Save competency:', formData);
                     setShowCreateModal(false);
                     setShowEditModal(false);
                     setEditingCompetency(null);
+                          }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                  Cancel
+                        </button>
+                          <button
+                          onClick={async () => {
+                    try {
+                      setError(''); // Clear any previous errors
+                      setSuccessMessage(''); // Clear any previous success messages
+                      
+                      if (showCreateModal) {
+                        // Create new competency
+                        if (!selectedFramework) {
+                          setError('No framework selected. Please select a framework first.');
+                          return;
+                        }
+                        
+                        const competencyData = {
+                          shortname: formData.shortname,
+                          idnumber: formData.idnumber,
+                          description: formData.description,
+                          descriptionformat: 1,
+                          competencyframeworkid: selectedFramework.id, // Use the selected framework
+                          parentid: formData.parentid, // Use the parent ID from form (0 for root, or parent competency ID)
+                          sortorder: formData.sortorder,
+                          ruleoutcome: 0
+                          // Note: visible is not a valid parameter for competencies
+                        };
+                        
+                        console.log('Creating competency:', competencyData);
+                        const newCompetency = await competencyService.createCompetency(competencyData);
+                        console.log('✅ Created competency:', newCompetency);
+                        
+                        // Refresh the competencies list
+                        if (selectedFramework) {
+                          const competencies = await competencyService.getCompetenciesByFramework(selectedFramework.id);
+                          setFrameworkCompetencies(competencies);
+                        }
+                        
+                        // Show success message
+                        setSuccessMessage(`🎉 Successfully created competency: "${newCompetency.shortname}"`);
+                        
+                        // Clear success message after 5 seconds
+                        setTimeout(() => {
+                          setSuccessMessage('');
+                        }, 5000);
+                        
+                      } else if (showEditModal && editingCompetency) {
+                        // Update existing competency
+                        const competencyData = {
+                          shortname: formData.shortname,
+                          idnumber: formData.idnumber,
+                          description: formData.description,
+                          descriptionformat: 1,
+                          competencyframeworkid: formData.competencyframeworkid,
+                          parentid: formData.parentid,
+                          sortorder: formData.sortorder,
+                          ruleoutcome: 0
+                          // Note: visible is not a valid parameter for competencies
+                        };
+                        
+                        console.log('Updating competency:', competencyData);
+                        const updatedCompetency = await competencyService.updateCompetency(editingCompetency.id, competencyData);
+                        console.log('✅ Updated competency:', updatedCompetency);
+                        
+                        // Refresh the competencies list
+                        if (selectedFramework) {
+                          const competencies = await competencyService.getCompetenciesByFramework(selectedFramework.id);
+                          setFrameworkCompetencies(competencies);
+                        }
+                        
+                        // Show success message
+                        setSuccessMessage(`✅ Successfully updated competency: "${updatedCompetency.shortname}"`);
+                        
+                        // Clear success message after 5 seconds
+                        setTimeout(() => {
+                          setSuccessMessage('');
+                        }, 5000);
+                      }
+                      
+                      // Close modal and reset form
+                      setShowCreateModal(false);
+                      setShowEditModal(false);
+                      setEditingCompetency(null);
+                      setFormData({
+                        shortname: '',
+                        idnumber: '',
+                        description: '',
+                        competencyframeworkid: 0,
+                        parentid: 0,
+                        sortorder: 0
+                      });
+                      
+                    } catch (error) {
+                      console.error('❌ Error saving competency:', error);
+                      setError('Failed to save competency. Please try again.');
+                    }
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   {showCreateModal ? 'Create' : 'Update'}
-                        </button>
-                      </div>
+                          </button>
+                        </div>
+                    </div>
                   </div>
-                          </div>
         )}
 
         {/* Create Framework Modal */}
