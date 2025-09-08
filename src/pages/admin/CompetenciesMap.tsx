@@ -47,6 +47,7 @@ const CompetenciesMap: React.FC = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [frameworks, setFrameworks] = useState<CompetencyFramework[]>([]);
   const [competencies, setCompetencies] = useState<Competency[]>([]);
   const [selectedFramework, setSelectedFramework] = useState<CompetencyFramework | null>(null);
@@ -54,6 +55,9 @@ const CompetenciesMap: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateFrameworkModal, setShowCreateFrameworkModal] = useState(false);
+  const [showEditFrameworkModal, setShowEditFrameworkModal] = useState(false);
+  const [editingFramework, setEditingFramework] = useState<CompetencyFramework | null>(null);
   const [editingCompetency, setEditingCompetency] = useState<Competency | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [frameworkCompetencies, setFrameworkCompetencies] = useState<Competency[]>([]);
@@ -66,6 +70,18 @@ const CompetenciesMap: React.FC = () => {
     competencyframeworkid: 0,
     parentid: 0,
     sortorder: 0
+  });
+
+  // Form states for creating frameworks
+  const [frameworkFormData, setFrameworkFormData] = useState({
+    shortname: '',
+    idnumber: '',
+    description: '',
+    descriptionformat: 1,
+    visible: 1,
+    scaleid: 0,
+    scaleconfiguration: '',
+    taxonomies: ''
   });
 
   // Tree view states
@@ -248,7 +264,7 @@ const CompetenciesMap: React.FC = () => {
       const competencies = await competencyService.getCompetenciesByFramework(framework.id);
       setFrameworkCompetencies(competencies);
       console.log(`✅ Loaded ${competencies.length} competencies for framework: ${framework.shortname}`);
-    } catch (error) {
+      } catch (error) {
       console.error('❌ Error fetching framework competencies:', error);
       setError('Failed to fetch competencies for selected framework.');
     }
@@ -263,7 +279,7 @@ const CompetenciesMap: React.FC = () => {
       const { competencies: allCompetencies } = await competencyService.getAllFrameworksWithCompetencies();
       setFrameworkCompetencies(allCompetencies);
       console.log(`✅ Loaded ${allCompetencies.length} competencies from all frameworks`);
-    } catch (error) {
+      } catch (error) {
       console.error('❌ Error fetching all competencies:', error);
       setError('Failed to fetch all competencies.');
     }
@@ -308,6 +324,61 @@ const CompetenciesMap: React.FC = () => {
     setShowCreateModal(true);
   };
 
+  const handleCreateFramework = () => {
+    setFrameworkFormData({
+      shortname: '',
+      idnumber: '',
+      description: '',
+      descriptionformat: 1,
+      visible: 1,
+      scaleid: 2, // Use the working scale ID
+      scaleconfiguration: '[{"scaleid":"2"},{"id":1,"scaledefault":1,"proficient":0},{"id":2,"scaledefault":0,"proficient":1}]',
+      taxonomies: ''
+    });
+    setShowCreateFrameworkModal(true);
+  };
+
+  const handleCreateFrameworkSubmit = async () => {
+    try {
+      setError(''); // Clear any previous errors
+      setSuccessMessage(''); // Clear any previous success messages
+      
+      const newFramework = await competencyService.createFramework(frameworkFormData);
+      console.log('✅ Created framework:', newFramework);
+      
+      // Refresh the frameworks list
+      await fetchCompetenciesData();
+      
+      // Close modal and reset form
+      setShowCreateFrameworkModal(false);
+      setFrameworkFormData({
+        shortname: '',
+        idnumber: '',
+        description: '',
+        descriptionformat: 1,
+        visible: 1,
+        scaleid: 2, // Use the working scale ID
+        scaleconfiguration: '[{"scaleid":"2"},{"id":1,"scaledefault":1,"proficient":0},{"id":2,"scaledefault":0,"proficient":1}]',
+        taxonomies: ''
+      });
+      
+      // Optionally select the newly created framework
+      setSelectedFramework(newFramework);
+        
+        // Show success message
+      setSuccessMessage(`🎉 Successfully created framework: "${newFramework.shortname}"`);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 5000);
+      
+    } catch (error) {
+      console.error('❌ Error creating framework:', error);
+      setError('Failed to create competency framework. Please try again.');
+    }
+  };
+
   const handleEditCompetency = (competency: Competency) => {
     setEditingCompetency(competency);
     setFormData({
@@ -328,10 +399,107 @@ const CompetenciesMap: React.FC = () => {
         console.log('🗑️ Delete competency:', competency.shortname);
         // await competencyService.deleteCompetency(competency.id);
         await handleRefresh();
-    } catch (error) {
+      } catch (error) {
         console.error('❌ Error deleting competency:', error);
         setError('Failed to delete competency.');
       }
+    }
+  };
+
+  const handleDeleteFramework = async (framework: CompetencyFramework) => {
+    const confirmMessage = `Are you sure you want to delete the framework "${framework.shortname}"?\n\nThis will also delete all competencies within this framework. This action cannot be undone.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        setError(''); // Clear any previous errors
+        setSuccessMessage(''); // Clear any previous success messages
+        
+        console.log('🗑️ Deleting framework:', framework.shortname);
+        await competencyService.deleteFramework(framework.id);
+        
+        // If the deleted framework was selected, clear the selection
+        if (selectedFramework?.id === framework.id) {
+          setSelectedFramework(null);
+          setFrameworkCompetencies([]);
+          setTreeData([]);
+        }
+        
+        // Refresh the frameworks list
+        await fetchCompetenciesData();
+        
+        // Show success message
+        setSuccessMessage(`🗑️ Successfully deleted framework: "${framework.shortname}"`);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 5000);
+        
+      } catch (error) {
+        console.error('❌ Error deleting framework:', error);
+        setError(`Failed to delete framework "${framework.shortname}". Please try again.`);
+      }
+    }
+  };
+
+  const handleEditFramework = (framework: CompetencyFramework) => {
+    setEditingFramework(framework);
+    setFrameworkFormData({
+      shortname: framework.shortname,
+      idnumber: framework.idnumber,
+      description: framework.description,
+      descriptionformat: framework.descriptionformat,
+      visible: framework.visible ? 1 : 0, // Ensure boolean is converted to integer
+      scaleid: framework.scaleid,
+      scaleconfiguration: framework.scaleconfiguration,
+      taxonomies: framework.taxonomies
+    });
+    setShowEditFrameworkModal(true);
+  };
+
+  const handleEditFrameworkSubmit = async () => {
+    if (!editingFramework) return;
+    
+    try {
+      setError(''); // Clear any previous errors
+      setSuccessMessage(''); // Clear any previous success messages
+      
+      const updatedFramework = await competencyService.updateFramework(editingFramework.id, frameworkFormData);
+      console.log('✅ Updated framework:', updatedFramework);
+      
+      // Refresh the frameworks list
+      await fetchCompetenciesData();
+      
+      // Close modal and reset form
+      setShowEditFrameworkModal(false);
+      setEditingFramework(null);
+      setFrameworkFormData({
+        shortname: '',
+        idnumber: '',
+        description: '',
+        descriptionformat: 1,
+        visible: 1,
+        scaleid: 2,
+        scaleconfiguration: '[{"scaleid":"2"},{"id":1,"scaledefault":1,"proficient":0},{"id":2,"scaledefault":0,"proficient":1}]',
+        taxonomies: ''
+      });
+      
+      // Update selected framework if it was the one being edited
+      if (selectedFramework?.id === editingFramework.id) {
+        setSelectedFramework(updatedFramework);
+      }
+      
+      // Show success message
+      setSuccessMessage(`✅ Successfully updated framework: "${updatedFramework.shortname}"`);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 5000);
+      
+    } catch (error) {
+      console.error('❌ Error updating framework:', error);
+      setError('Failed to update competency framework. Please try again.');
     }
   };
 
@@ -494,21 +662,28 @@ const CompetenciesMap: React.FC = () => {
 
   return (
     <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Competencies Map</h1>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Competencies Map</h1>
               <p className="text-gray-600">Manage competency frameworks and competencies</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button 
+          </div>
+                     <div className="flex items-center space-x-3">
+             <button 
                 onClick={handleRefresh}
                 disabled={refreshing}
                 className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
+             >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
+             </button>
+              <button 
+                onClick={handleCreateFramework}
+                className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Framework</span>
               </button>
               <button 
                 onClick={handleCreateCompetency}
@@ -518,11 +693,11 @@ const CompetenciesMap: React.FC = () => {
                 <span>Create Competency</span>
               </button>
               <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                <Download className="w-4 h-4" />
-                <span>Export</span>
-              </button>
-            </div>
-          </div>
+               <Download className="w-4 h-4" />
+               <span>Export</span>
+             </button>
+           </div>
+        </div>
 
           {/* Error Display */}
           {error && (
@@ -534,6 +709,16 @@ const CompetenciesMap: React.FC = () => {
             </div>
           )}
 
+          {/* Success Display */}
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                <span className="text-green-800">{successMessage}</span>
+          </div>
+              </div>
+          )}
+
           {/* Framework Selection */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -543,15 +728,15 @@ const CompetenciesMap: React.FC = () => {
               </div>
               <div className="text-sm text-gray-500">
                 {frameworks.length} frameworks available
-              </div>
-            </div>
+          </div>
+                 </div>
 
             {/* Framework Dropdown */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {frameworks.map((framework) => (
                 <div 
                   key={framework.id} 
-                  className={`border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                  className={`group border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
                     selectedFramework?.id === framework.id 
                       ? 'border-blue-500 bg-blue-50 shadow-md' 
                       : 'border-gray-200 hover:border-blue-300 bg-white'
@@ -560,32 +745,57 @@ const CompetenciesMap: React.FC = () => {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="font-semibold text-gray-900 text-sm leading-tight">{framework.shortname}</h3>
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      framework.visible ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {framework.visible ? 'Visible' : 'Hidden'}
-                    </span>
-                  </div>
+                    <div className="flex items-center space-x-2">
+                     <span className={`px-2 py-1 text-xs rounded-full ${
+                        framework.visible ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                     }`}>
+                        {framework.visible ? 'Visible' : 'Hidden'}
+                     </span>
+                      {/* Action Buttons */}
+                      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                               <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditFramework(framework);
+                          }}
+                          className="p-1 hover:bg-blue-100 rounded text-gray-600 hover:text-blue-600"
+                          title="Edit Framework"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFramework(framework);
+                          }}
+                          className="p-1 hover:bg-red-100 rounded text-gray-600 hover:text-red-600"
+                          title="Delete Framework"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                               </button>
+                             </div>
+                           </div>
+                     </div>
                   <p className="text-xs text-gray-600 mb-3 line-clamp-2">{truncateText(framework.description, 80)}</p>
                   <div className="flex justify-between items-center text-xs text-gray-500">
                     <span className="font-medium">{framework.competenciescount} competencies</span>
                     <span>{formatDate(framework.timecreated)}</span>
-                  </div>
+                   </div>
                   {selectedFramework?.id === framework.id && (
                     <div className="mt-3 pt-3 border-t border-blue-200">
                       <div className="flex items-center text-blue-600 text-xs font-medium">
                         <CheckCircle className="w-3 h-3 mr-1" />
                         Selected
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+             </div>
+           </div>
+         )}
+                 </div>
+               ))}
+             </div>
 
             {/* Show All Option */}
             <div className="mt-4 pt-4 border-t border-gray-200">
-              <button
+               <button 
                 onClick={handleShowAllCompetencies}
                 className={`w-full py-3 px-4 rounded-lg text-sm font-medium transition-colors ${
                   selectedFramework === null
@@ -595,10 +805,10 @@ const CompetenciesMap: React.FC = () => {
               >
                 <Globe className="w-4 h-4 inline mr-2" />
                 Show All Competencies from All Frameworks
-              </button>
-            </div>
-          </div>
-
+               </button>
+             </div>
+           </div>
+           
           {/* Statistics and Content - Only show after framework selection */}
           {selectedFramework && (
             <>
@@ -611,63 +821,63 @@ const CompetenciesMap: React.FC = () => {
                       <h3 className="text-lg font-bold text-gray-900 mt-1 truncate">
                         {selectedFramework.shortname}
                       </h3>
-                    </div>
+             </div>
                     <Map className="w-8 h-8 text-purple-600" />
-                  </div>
-                </div>
+                   </div>
+               </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-500 text-sm font-medium">Total Competencies</p>
                       <h3 className="text-2xl font-bold text-gray-900 mt-1">{frameworkCompetencies.length}</h3>
-                    </div>
+             </div>
                     <BookOpen className="w-8 h-8 text-green-600" />
-                  </div>
-                </div>
+           </div>
+                     </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-500 text-sm font-medium">Root Competencies</p>
                       <h3 className="text-2xl font-bold text-gray-900 mt-1">{treeData.length}</h3>
-                    </div>
+                     </div>
                     <Target className="w-8 h-8 text-blue-600" />
-                  </div>
-                </div>
+                       </div>
+                     </div>
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-500 text-sm font-medium">Filtered Results</p>
                       <h3 className="text-2xl font-bold text-gray-900 mt-1">{filteredCompetencies.length}</h3>
-                    </div>
+                   </div>
                     <Filter className="w-8 h-8 text-orange-600" />
-                  </div>
-                </div>
-              </div>
+               </div>
+                 </div>
+         </div>
 
               {/* Search and Filters - Only show after framework selection */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex flex-col lg:flex-row gap-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <input
-                        type="text"
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
                         placeholder={`Search competencies in ${selectedFramework.shortname}...`}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  <button
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+              <button
                     onClick={handleSearch}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     Search
-                  </button>
-                </div>
-              </div>
+              </button>
+            </div>
+          </div>
             </>
           )}
 
@@ -675,17 +885,17 @@ const CompetenciesMap: React.FC = () => {
           {selectedFramework && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
               <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex items-center justify-between">
+                    <div>
                     <h2 className="text-xl font-bold text-gray-900">Competencies Hierarchy</h2>
                     <p className="text-sm text-blue-600 mt-1">
                       Showing competencies from: <span className="font-medium">{selectedFramework.shortname}</span>
                     </p>
-                  </div>
+                      </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-500">
                       {treeData.length} root competencies
-                    </span>
+                          </span>
                     <button 
                       onClick={() => {
                         // Expand all nodes
@@ -719,7 +929,7 @@ const CompetenciesMap: React.FC = () => {
                     {treeData.map((node) => (
                       <TreeNodeComponent key={node.id} node={node} />
                     ))}
-                  </div>
+            </div>
                 ) : (
                   <div className="text-center py-8">
                     <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -727,10 +937,10 @@ const CompetenciesMap: React.FC = () => {
                     <p className="text-gray-600">
                       {searchTerm ? 'Try adjusting your search criteria.' : 'Create a new competency to get started.'}
                     </p>
-                  </div>
-                )}
-              </div>
-            </div>
+          </div>
+        )}
+                    </div>
+                    </div>
           )}
 
           {/* Welcome Message - Show when no framework is selected */}
@@ -739,7 +949,7 @@ const CompetenciesMap: React.FC = () => {
               <div className="text-center">
                 <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                   <Target className="w-8 h-8 text-blue-600" />
-                </div>
+                      </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Competencies Map</h3>
                 <p className="text-gray-600 mb-4">
                   Select a competency framework above to view its competencies, statistics, and hierarchical structure.
@@ -748,7 +958,7 @@ const CompetenciesMap: React.FC = () => {
                   <div className="flex items-center">
                     <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
                     View competency hierarchies
-                  </div>
+                    </div>
                   <div className="flex items-center">
                     <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
                     Analyze framework statistics
@@ -756,11 +966,11 @@ const CompetenciesMap: React.FC = () => {
                   <div className="flex items-center">
                     <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
                     Search and filter competencies
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
+                  </div>
+          </div>
+        )}
 
         {/* Competency Detail Modal */}
         {selectedCompetency && (
@@ -863,12 +1073,12 @@ const CompetenciesMap: React.FC = () => {
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                     Edit Competency
-                </button>
+                  </button>
+                </div>
               </div>
-                      </div>
-                      </div>
-                      </div>
-                    )}
+            </div>
+          </div>
+        )}
 
         {/* Create/Edit Modal Placeholder */}
         {(showCreateModal || showEditModal) && (
@@ -878,7 +1088,7 @@ const CompetenciesMap: React.FC = () => {
                 {showCreateModal ? 'Create New Competency' : 'Edit Competency'}
               </h3>
               
-              <div className="space-y-4">
+                <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Short Name
@@ -889,7 +1099,7 @@ const CompetenciesMap: React.FC = () => {
                     onChange={(e) => setFormData({...formData, shortname: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
+                      </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -901,8 +1111,8 @@ const CompetenciesMap: React.FC = () => {
                     onChange={(e) => setFormData({...formData, idnumber: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                </div>
-                
+                  </div>
+                  
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Description
@@ -913,11 +1123,11 @@ const CompetenciesMap: React.FC = () => {
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  </div>
                 </div>
-              </div>
-              
+                
               <div className="flex justify-end space-x-3 mt-6">
-                <button
+                              <button
                   onClick={() => {
                     setShowCreateModal(false);
                     setShowEditModal(false);
@@ -926,9 +1136,9 @@ const CompetenciesMap: React.FC = () => {
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
-                </button>
-                <button
-                  onClick={() => {
+                              </button>
+                        <button
+                          onClick={() => {
                     // TODO: Implement create/update functionality
                     console.log('Save competency:', formData);
                     setShowCreateModal(false);
@@ -938,6 +1148,285 @@ const CompetenciesMap: React.FC = () => {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   {showCreateModal ? 'Create' : 'Update'}
+                        </button>
+                      </div>
+                  </div>
+                          </div>
+        )}
+
+        {/* Create Framework Modal */}
+        {showCreateFrameworkModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900">Create Competency Framework</h2>
+                <button
+                    onClick={() => setShowCreateFrameworkModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+              
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Framework Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.shortname}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, shortname: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework name"
+                  />
+          </div>
+              
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.idnumber}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, idnumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter unique ID number"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description *
+                  </label>
+                  <textarea
+                    value={frameworkFormData.description}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, description: e.target.value})}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework description"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Visibility
+                    </label>
+                    <select
+                      value={frameworkFormData.visible}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, visible: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>Visible</option>
+                      <option value={0}>Hidden</option>
+                    </select>
+              </div>
+              
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description Format
+                    </label>
+                    <select
+                      value={frameworkFormData.descriptionformat}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, descriptionformat: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>HTML</option>
+                      <option value={0}>Moodle</option>
+                      <option value={2}>Plain Text</option>
+                      <option value={4}>Markdown</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Taxonomies
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.taxonomies}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, taxonomies: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter taxonomies (comma-separated)"
+                  />
+                </div>
+
+                {/* Scale Configuration Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-blue-800">Scale Configuration</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Using default competency scale (ID: 2) with "Not yet competent" and "Competent" levels.
+                        This configuration has been tested and works correctly.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowCreateFrameworkModal(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateFrameworkSubmit}
+                  disabled={!frameworkFormData.shortname || !frameworkFormData.idnumber || !frameworkFormData.description}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Framework
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Framework Modal */}
+        {showEditFrameworkModal && editingFramework && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900">Edit Competency Framework</h2>
+                  <button
+                    onClick={() => {
+                      setShowEditFrameworkModal(false);
+                      setEditingFramework(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Framework Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.shortname}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, shortname: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework name"
+                  />
+              </div>
+              
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.idnumber}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, idnumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter unique ID number"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description *
+                  </label>
+                  <textarea
+                    value={frameworkFormData.description}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, description: e.target.value})}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework description"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Visibility
+                    </label>
+                    <select
+                      value={frameworkFormData.visible}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, visible: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>Visible</option>
+                      <option value={0}>Hidden</option>
+                    </select>
+              </div>
+              
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description Format
+                    </label>
+                    <select
+                      value={frameworkFormData.descriptionformat}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, descriptionformat: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>HTML</option>
+                      <option value={0}>Moodle</option>
+                      <option value={2}>Plain Text</option>
+                      <option value={4}>Markdown</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Taxonomies
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.taxonomies}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, taxonomies: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter taxonomies (comma-separated)"
+                  />
+                </div>
+
+                {/* Scale Configuration Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-blue-800">Scale Configuration</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Using existing scale configuration. Scale ID: {editingFramework.scaleid}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowEditFrameworkModal(false);
+                    setEditingFramework(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditFrameworkSubmit}
+                  disabled={!frameworkFormData.shortname || !frameworkFormData.idnumber || !frameworkFormData.description}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Update Framework
                 </button>
               </div>
             </div>
