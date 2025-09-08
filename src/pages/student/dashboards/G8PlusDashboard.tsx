@@ -331,7 +331,6 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">My Enrolled Courses</h2>
-            <p className="text-gray-600 mt-1">All your available courses from IOMAD Moodle</p>
           </div>
           <div className="flex items-center space-x-3">
             {loadingStates.userCourses && (
