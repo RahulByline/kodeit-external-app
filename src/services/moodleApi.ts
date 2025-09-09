@@ -15675,7 +15675,7 @@ export const moodleService = {
 
   async getCompetencyDetails(competencyId: string, includeMappings: boolean = true) {
     try {
-      console.log(`🔍 Fetching details for competency ${competencyId}...`);
+     
       
       const response = await axios.get(`${API_BASE_URL}`, {
         params: {
@@ -15694,7 +15694,6 @@ export const moodleService = {
           mappings = await this.listCoursesUsingCompetency(competencyId);
         }
 
-        console.log('✅ Competency details fetched successfully');
         return {
           id: competency.id,
           shortname: competency.shortname,
@@ -15723,6 +15722,532 @@ export const moodleService = {
     }
   },
 
+  // ==================== DETAILED COURSE CONTENTS ====================
+
+  /**
+   * Get detailed course contents with all activities and modules
+   * @param courseId - Course ID
+   * @param options - Optional parameters for filtering content
+   * @returns Promise<CourseSection[]>
+   */
+  async getDetailedCourseContents(courseId: string, options: any = {}) {
+    try {
+      console.log(`🔍 Fetching detailed course contents for course ${courseId}...`);
+      
+      const params: any = {
+        wstoken: API_TOKEN,
+        wsfunction: 'core_course_get_contents',
+        moodlewsrestformat: 'json',
+        courseid: courseId
+      };
+
+      // Add options if provided
+      if (options && Object.keys(options).length > 0) {
+        Object.keys(options).forEach((key, index) => {
+          params[`options[${index}][name]`] = key;
+          params[`options[${index}][value]`] = options[key];
+        });
+      }
+
+      const response = await axios.get(`${API_BASE_URL}`, { params });
+
+      if (response.data && !response.data.exception) {
+        console.log(`✅ Found ${response.data.length} course sections with detailed contents`);
+        return response.data;
+      } else {
+        console.log('⚠️ Failed to fetch detailed course contents:', response.data);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching detailed course contents:', error.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get available content items for the activity picker
+   * @param courseId - Course ID
+   * @param sectionNum - Optional section number
+   * @returns Promise<ContentItem[]>
+   */
+  async getCourseContentItems(courseId: string, sectionNum?: number) {
+    try {
+      console.log(`🔍 Fetching course content items for course ${courseId}...`);
+      
+      const params: any = {
+        wstoken: API_TOKEN,
+        wsfunction: 'core_course_get_course_content_items',
+        moodlewsrestformat: 'json',
+        courseid: courseId
+      };
+
+      if (sectionNum !== undefined) {
+        params.sectionnum = sectionNum;
+      }
+
+      const response = await axios.get(`${API_BASE_URL}`, { params });
+
+      if (response.data && !response.data.exception && response.data.content_items) {
+        console.log(`✅ Found ${response.data.content_items.length} available content items`);
+        return response.data.content_items;
+      } else {
+        console.log('⚠️ Failed to fetch course content items:', response.data);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching course content items:', error.response?.data || error.message);
+      return [];
+    }
+  },
+
+  // ==================== SCORM VIEWER ====================
+
+  /**
+   * Get SCORM activity details and launch URL
+   * @param courseId - Course ID
+   * @param moduleId - Module ID (SCORM activity ID)
+   * @returns Promise<any> - SCORM activity details with launch URL
+   */
+  async getScormActivityDetails(courseId: string, moduleId: string) {
+    try {
+      console.log(`🔍 Getting SCORM activity details for module ${moduleId}...`);
+      
+      const params = {
+        wstoken: API_TOKEN,
+        wsfunction: 'mod_scorm_get_scorms_by_courses',
+        moodlewsrestformat: 'json',
+        courseids: [parseInt(courseId)]
+      };
+
+      const response = await axios.get(`${API_BASE_URL}`, { params });
+
+      if (response.data && !response.data.exception && response.data.scorms) {
+        // Find the specific SCORM activity
+        const scormActivity = response.data.scorms.find((scorm: any) => scorm.coursemodule === parseInt(moduleId));
+        
+        if (scormActivity) {
+          console.log(`✅ Found SCORM activity: ${scormActivity.name}`);
+          
+          // Try to get the actual SCORM player URL using mod_scorm_launch_sco
+          try {
+            const launchParams = {
+              wstoken: API_TOKEN,
+              wsfunction: 'mod_scorm_launch_sco',
+              moodlewsrestformat: 'json',
+              scormid: scormActivity.id,
+              scoid: scormActivity.launch || 0
+            };
+
+            const launchResponse = await axios.get(`${API_BASE_URL}`, { params: launchParams });
+            
+            if (launchResponse.data && !launchResponse.data.exception) {
+              console.log(`✅ SCORM launch URL obtained:`, launchResponse.data);
+              return {
+                ...scormActivity,
+                launchUrl: launchResponse.data.launchurl || launchResponse.data.url
+              };
+            }
+          } catch (launchError) {
+            console.log('⚠️ Could not get launch URL via API, trying alternative method');
+          }
+
+          // Alternative: Try to get SCORM structure and find the main SCO
+          try {
+            const structureParams = {
+              wstoken: API_TOKEN,
+              wsfunction: 'mod_scorm_get_scorm_scoes',
+              moodlewsrestformat: 'json',
+              scormid: scormActivity.id
+            };
+
+            const structureResponse = await axios.get(`${API_BASE_URL}`, { params: structureParams });
+            
+            if (structureResponse.data && !structureResponse.data.exception && structureResponse.data.scoes) {
+              console.log(`✅ Found ${structureResponse.data.scoes.length} SCOs in SCORM package`);
+              
+              // Find the main SCO (usually the one with launch = 1 or the first one)
+              let mainSco = structureResponse.data.scoes.find((sco: any) => sco.launch === 1);
+              
+              // If no SCO has launch = 1, try to find the root SCO (parentid = 0)
+              if (!mainSco) {
+                mainSco = structureResponse.data.scoes.find((sco: any) => sco.parentid === 0);
+              }
+              
+              // If still no main SCO, use the first one
+              if (!mainSco) {
+                mainSco = structureResponse.data.scoes[0];
+              }
+              
+              if (mainSco) {
+                console.log(`✅ Found main SCO: ${mainSco.title} (ID: ${mainSco.id}, Launch: ${mainSco.launch})`);
+                
+                // Construct the direct SCORM player URL with proper parameters
+                const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+                const playerUrl = `${baseUrl}/mod/scorm/player.php?a=${scormActivity.id}&currentorg=${mainSco.organization || 'default'}&scoid=${mainSco.id}&sesskey=${API_TOKEN}`;
+                
+                console.log(`✅ Constructed SCORM player URL: ${playerUrl}`);
+                
+                return {
+                  ...scormActivity,
+                  launchUrl: playerUrl,
+                  mainSco: mainSco
+                };
+              }
+            }
+          } catch (structureError) {
+            console.log('⚠️ Could not get SCORM structure:', structureError.response?.data || structureError.message);
+          }
+
+          // Final fallback: Use the basic player URL
+          const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+          const fallbackUrl = `${baseUrl}/mod/scorm/player.php?a=${scormActivity.id}&sesskey=${API_TOKEN}`;
+          
+          return {
+            ...scormActivity,
+            launchUrl: fallbackUrl
+          };
+        }
+      }
+      
+      console.log('⚠️ SCORM activity not found');
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting SCORM activity details:', error.response?.data || error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Get SCORM package launch URL (alternative method)
+   * @param courseId - Course ID
+   * @param moduleId - Module ID (SCORM activity ID)
+   * @returns Promise<string> - SCORM launch URL
+   */
+  async getScormLaunchUrl(courseId: string, moduleId: string): Promise<string> {
+    try {
+      console.log(`🔍 Getting SCORM launch URL for module ${moduleId}...`);
+      
+      // First, try to get SCORM activity details
+      const scormDetails = await this.getScormActivityDetails(courseId, moduleId);
+      
+      if (scormDetails && scormDetails.launchUrl) {
+        console.log(`✅ Using API-obtained SCORM URL: ${scormDetails.launchUrl}`);
+        return scormDetails.launchUrl;
+      }
+      
+      // Alternative: Try to get SCORM ID from course contents
+      try {
+        const contentsParams = {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_course_get_contents',
+          moodlewsrestformat: 'json',
+          courseid: parseInt(courseId)
+        };
+
+        const contentsResponse = await axios.get(`${API_BASE_URL}`, { params: contentsParams });
+        
+        if (contentsResponse.data && !contentsResponse.data.exception) {
+          // Find the SCORM module in course contents
+          for (const section of contentsResponse.data) {
+            if (section.modules) {
+              for (const module of section.modules) {
+                if (module.id === parseInt(moduleId) && module.modname === 'scorm') {
+                  console.log(`✅ Found SCORM module in contents: ${module.name}`);
+                  
+                  // Try to get the SCORM instance ID from the URL or other data
+                  const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+                  
+                  // Method 1: Try to extract instance ID from module URL
+                  if (module.url) {
+                    const urlMatch = module.url.match(/id=(\d+)/);
+                    if (urlMatch) {
+                      const scormId = urlMatch[1];
+                      const playerUrl = `${baseUrl}/mod/scorm/player.php?a=${scormId}&sesskey=${API_TOKEN}`;
+                      console.log(`✅ Constructed SCORM player URL: ${playerUrl}`);
+                      return playerUrl;
+                    }
+                  }
+                  
+                  // Method 2: Use module instance if available
+                  if (module.instance) {
+                    const playerUrl = `${baseUrl}/mod/scorm/player.php?a=${module.instance}&sesskey=${API_TOKEN}`;
+                    console.log(`✅ Constructed SCORM player URL with instance: ${playerUrl}`);
+                    return playerUrl;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (contentsError) {
+        console.log('⚠️ Could not get course contents, using basic fallback');
+      }
+      
+      // Final fallback: Use the basic player URL with module ID
+      const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+      const fallbackUrl = `${baseUrl}/mod/scorm/player.php?cmid=${moduleId}&sesskey=${API_TOKEN}`;
+      
+      console.log(`✅ SCORM fallback URL: ${fallbackUrl}`);
+      return fallbackUrl;
+    } catch (error) {
+      console.error('❌ Error getting SCORM launch URL:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get SCO ID for a specific SCORM activity
+   * @param scormId - SCORM activity ID
+   * @returns Promise<number|null> - SCO ID or null if not found
+   */
+  async getScormScoId(scormId: string): Promise<number|null> {
+    try {
+      console.log(`🔍 Getting SCO ID for SCORM activity ${scormId}...`);
+      
+      const params = {
+        wstoken: API_TOKEN,
+        wsfunction: 'mod_scorm_get_scorm_scoes',
+        moodlewsrestformat: 'json',
+        scormid: parseInt(scormId)
+      };
+
+      const response = await axios.get(`${API_BASE_URL}`, { params });
+
+      if (response.data && !response.data.exception && response.data.scoes) {
+        console.log(`✅ Found ${response.data.scoes.length} SCOs in SCORM package`);
+        
+        // Find the main SCO using multiple strategies
+        let mainSco = null;
+        
+        // Strategy 1: Find SCO with launch = 1
+        mainSco = response.data.scoes.find((sco: any) => sco.launch === 1);
+        
+        // Strategy 2: Find root SCO (parentid = 0)
+        if (!mainSco) {
+          mainSco = response.data.scoes.find((sco: any) => sco.parentid === 0);
+        }
+        
+        // Strategy 3: Find SCO with title containing "main" or "index"
+        if (!mainSco) {
+          mainSco = response.data.scoes.find((sco: any) => 
+            sco.title && (sco.title.toLowerCase().includes('main') || sco.title.toLowerCase().includes('index'))
+          );
+        }
+        
+        // Strategy 4: Use the first SCO
+        if (!mainSco) {
+          mainSco = response.data.scoes[0];
+        }
+        
+        if (mainSco) {
+          console.log(`✅ Found main SCO: ${mainSco.title} (ID: ${mainSco.id})`);
+          return mainSco.id;
+        }
+      }
+      
+      console.log('⚠️ No SCO found for SCORM activity');
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting SCO ID:', error.response?.data || error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Get SCORM package URL with proper token authentication
+   * @param courseId - Course ID
+   * @param moduleId - Module ID (SCORM activity ID)
+   * @returns Promise<string> - SCORM package URL with token
+   */
+  async getScormPackageUrl(courseId: string, moduleId: string): Promise<string> {
+    try {
+      console.log(`🔍 Getting SCORM package URL for module ${moduleId}...`);
+      
+      // Get SCORM activity details to access package URL
+      const scormDetails = await this.getScormActivityDetails(courseId, moduleId);
+      
+      if (scormDetails && scormDetails.packageurl) {
+        console.log(`✅ Found SCORM package URL: ${scormDetails.packageurl}`);
+        
+        // Add token parameter to the package URL
+        const packageUrl = scormDetails.packageurl;
+        const separator = packageUrl.includes('?') ? '&' : '?';
+        const authenticatedUrl = `${packageUrl}${separator}token=${API_TOKEN}`;
+        
+        console.log(`✅ Authenticated SCORM package URL: ${authenticatedUrl}`);
+        return authenticatedUrl;
+      }
+      
+      // Fallback: Try to get SCORM details from course contents
+      try {
+        const contentsParams = {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_course_get_contents',
+          moodlewsrestformat: 'json',
+          courseid: parseInt(courseId)
+        };
+
+        const contentsResponse = await axios.get(`${API_BASE_URL}`, { params: contentsParams });
+        
+        if (contentsResponse.data && !contentsResponse.data.exception) {
+          // Find the SCORM module in course contents
+          for (const section of contentsResponse.data) {
+            if (section.modules) {
+              for (const module of section.modules) {
+                if (module.id === parseInt(moduleId) && module.modname === 'scorm') {
+                  console.log(`✅ Found SCORM module in contents: ${module.name}`);
+                  
+                  // Try to get SCORM details using the instance ID
+                  if (module.instance) {
+                    const scormParams = {
+                      wstoken: API_TOKEN,
+                      wsfunction: 'mod_scorm_get_scorms_by_courses',
+                      moodlewsrestformat: 'json',
+                      courseids: [parseInt(courseId)]
+                    };
+
+                    const scormResponse = await axios.get(`${API_BASE_URL}`, { params: scormParams });
+                    
+                    if (scormResponse.data && !scormResponse.data.exception && scormResponse.data.scorms) {
+                      const scormActivity = scormResponse.data.scorms.find((scorm: any) => scorm.coursemodule === parseInt(moduleId));
+                      
+                      if (scormActivity && scormActivity.packageurl) {
+                        console.log(`✅ Found SCORM package URL from contents: ${scormActivity.packageurl}`);
+                        
+                        // Add token parameter to the package URL
+                        const packageUrl = scormActivity.packageurl;
+                        const separator = packageUrl.includes('?') ? '&' : '?';
+                        const authenticatedUrl = `${packageUrl}${separator}token=${API_TOKEN}`;
+                        
+                        console.log(`✅ Authenticated SCORM package URL from contents: ${authenticatedUrl}`);
+                        return authenticatedUrl;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (contentsError) {
+        console.log('⚠️ Could not get course contents for package URL');
+      }
+      
+      throw new Error('Could not find SCORM package URL');
+    } catch (error) {
+      console.error('❌ Error getting SCORM package URL:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get SCORM content URL that can be embedded in iframe
+   * @param courseId - Course ID
+   * @param moduleId - Module ID (SCORM activity ID)
+   * @returns Promise<string> - SCORM content URL for iframe
+   */
+  async getScormContentUrl(courseId: string, moduleId: string): Promise<string> {
+    try {
+      console.log(`🔍 Getting SCORM content URL for iframe embedding...`);
+      
+      // Try to get the SCORM package URL first
+      try {
+        const packageUrl = await this.getScormPackageUrl(courseId, moduleId);
+        
+        // For iframe embedding, we need to create a custom viewer
+        // Since the ZIP file can't be directly embedded, we'll use a different approach
+        console.log(`📦 SCORM package URL found: ${packageUrl}`);
+        
+        // Return a custom SCORM viewer URL that can handle the package
+        const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+        const viewerUrl = `${baseUrl}/mod/scorm/view.php?id=${moduleId}&wstoken=${API_TOKEN}&embed=1`;
+        
+        console.log(`✅ SCORM content URL for iframe: ${viewerUrl}`);
+        return viewerUrl;
+      } catch (packageError) {
+        console.log('⚠️ Could not get package URL, using alternative method');
+      }
+      
+      // Alternative: Try to get a direct content URL
+      const scormDetails = await this.getScormActivityDetails(courseId, moduleId);
+      
+      if (scormDetails && scormDetails.id) {
+        // Try to get the main SCO and construct a content URL
+        const scoid = await this.getScormScoId(scormDetails.id.toString());
+        
+        if (scoid) {
+          const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+          // Use a different approach - try to get the content directly
+          const contentUrl = `${baseUrl}/mod/scorm/player.php?a=${scormDetails.id}&scoid=${scoid}&sesskey=${API_TOKEN}&embed=1`;
+          console.log(`✅ SCORM content URL with SCO ID: ${contentUrl}`);
+          return contentUrl;
+        }
+      }
+      
+      // Final fallback: Use the view URL with embed parameter
+      const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+      const fallbackUrl = `${baseUrl}/mod/scorm/view.php?id=${moduleId}&wstoken=${API_TOKEN}&embed=1`;
+      
+      console.log(`⚠️ Using fallback SCORM content URL: ${fallbackUrl}`);
+      return fallbackUrl;
+    } catch (error) {
+      console.error('❌ Error getting SCORM content URL:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get complete SCORM player URL with all required parameters
+   * @param courseId - Course ID
+   * @param moduleId - Module ID (SCORM activity ID)
+   * @returns Promise<string> - Complete SCORM player URL
+   */
+  async getCompleteScormPlayerUrl(courseId: string, moduleId: string): Promise<string> {
+    try {
+      console.log(`🔍 Getting complete SCORM player URL for module ${moduleId}...`);
+      
+      // First, try to get the SCORM package URL (this avoids iframe blocking)
+      try {
+        const packageUrl = await this.getScormPackageUrl(courseId, moduleId);
+        console.log(`✅ Using SCORM package URL: ${packageUrl}`);
+        return packageUrl;
+      } catch (packageError) {
+        console.log('⚠️ Could not get package URL, trying player URL method');
+      }
+      
+      // Fallback: Try the traditional player URL method
+      const scormDetails = await this.getScormActivityDetails(courseId, moduleId);
+      
+      if (scormDetails && scormDetails.launchUrl) {
+        console.log(`✅ Using API-obtained SCORM URL: ${scormDetails.launchUrl}`);
+        return scormDetails.launchUrl;
+      }
+      
+      // If we have SCORM details but no launch URL, try to get SCO ID
+      if (scormDetails && scormDetails.id) {
+        const scoid = await this.getScormScoId(scormDetails.id.toString());
+        
+        if (scoid) {
+          const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+          const playerUrl = `${baseUrl}/mod/scorm/player.php?a=${scormDetails.id}&scoid=${scoid}&sesskey=${API_TOKEN}`;
+          console.log(`✅ Constructed SCORM player URL with SCO ID: ${playerUrl}`);
+          return playerUrl;
+        }
+      }
+      
+      // Final fallback: Use the basic player URL (this will show the error you saw)
+      const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
+      const fallbackUrl = `${baseUrl}/mod/scorm/player.php?cmid=${moduleId}&sesskey=${API_TOKEN}`;
+      
+      console.log(`⚠️ Using fallback SCORM URL (may show error): ${fallbackUrl}`);
+      return fallbackUrl;
+    } catch (error) {
+      console.error('❌ Error getting complete SCORM player URL:', error);
+      throw error;
+    }
+  },
+
+
 };
 
 
@@ -15750,7 +16275,5 @@ if (typeof window !== 'undefined') {
   };
 
 }
-
-
 
 export default moodleService;
