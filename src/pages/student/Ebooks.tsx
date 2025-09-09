@@ -24,7 +24,7 @@ import {
   Calendar,
   Zap
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import G8PlusLayout from '../../components/G8PlusLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -51,7 +51,7 @@ const mockEbooks: Ebook[] = [
     id: '1',
     title: 'Introduction to Python Programming',
     author: 'Dr. Sarah Johnson',
-    description: 'A comprehensive guide to Python programming fundamentals with practical examples and exercises.',
+    description: 'A comprehensive guide to Python programming fundamentals with practical examples and exercises. Perfect for beginners who want to learn programming from scratch.',
     category: 'Programming',
     format: 'pdf',
     rating: 4.8,
@@ -65,7 +65,7 @@ const mockEbooks: Ebook[] = [
     id: '2',
     title: 'Web Development with React',
     author: 'Mike Chen',
-    description: 'Learn modern web development using React.js with hands-on projects and real-world applications.',
+    description: 'Learn modern web development using React.js with hands-on projects and real-world applications. Build responsive and interactive web applications.',
     category: 'Web Development',
     format: 'interactive',
     rating: 4.9,
@@ -79,7 +79,7 @@ const mockEbooks: Ebook[] = [
     id: '3',
     title: 'Data Science Fundamentals',
     author: 'Dr. Emily Rodriguez',
-    description: 'Master the basics of data science including statistics, machine learning, and data visualization.',
+    description: 'Master the basics of data science including statistics, machine learning, and data visualization. Learn to extract insights from data.',
     category: 'Data Science',
     format: 'video',
     rating: 4.7,
@@ -94,7 +94,7 @@ const mockEbooks: Ebook[] = [
     id: '4',
     title: 'Mobile App Development',
     author: 'Alex Thompson',
-    description: 'Build mobile applications for iOS and Android using modern development frameworks.',
+    description: 'Build mobile applications for iOS and Android using modern development frameworks. Create cross-platform apps with Flutter and React Native.',
     category: 'Mobile Development',
     format: 'epub',
     rating: 4.6,
@@ -108,7 +108,7 @@ const mockEbooks: Ebook[] = [
     id: '5',
     title: 'Cybersecurity Essentials',
     author: 'Prof. David Kim',
-    description: 'Learn about cybersecurity principles, threats, and protection strategies for digital systems.',
+    description: 'Learn about cybersecurity principles, threats, and protection strategies for digital systems. Protect yourself and your organization from cyber attacks.',
     category: 'Cybersecurity',
     format: 'pdf',
     rating: 4.8,
@@ -122,7 +122,7 @@ const mockEbooks: Ebook[] = [
     id: '6',
     title: 'Artificial Intelligence Basics',
     author: 'Dr. Lisa Wang',
-    description: 'Explore the fundamentals of AI, machine learning algorithms, and their real-world applications.',
+    description: 'Explore the fundamentals of AI, machine learning algorithms, and their real-world applications. Understand how AI is transforming industries.',
     category: 'Artificial Intelligence',
     format: 'interactive',
     rating: 4.9,
@@ -131,6 +131,92 @@ const mockEbooks: Ebook[] = [
     thumbnail: '/api/placeholder/300/200',
     isBookmarked: false,
     tags: ['AI', 'Machine Learning', 'Neural Networks']
+  },
+  {
+    id: '7',
+    title: 'JavaScript Mastery Guide',
+    author: 'John Smith',
+    description: 'Master JavaScript from basics to advanced concepts. Learn ES6+, async programming, and modern JavaScript frameworks.',
+    category: 'Programming',
+    format: 'pdf',
+    rating: 4.7,
+    downloads: 980,
+    pages: 350,
+    thumbnail: '/api/placeholder/300/200',
+    isBookmarked: true,
+    tags: ['JavaScript', 'ES6', 'Async Programming']
+  },
+  {
+    id: '8',
+    title: 'UI/UX Design Principles',
+    author: 'Sarah Wilson',
+    description: 'Learn the fundamentals of user interface and user experience design. Create beautiful and functional digital products.',
+    category: 'Design',
+    format: 'video',
+    rating: 4.6,
+    downloads: 720,
+    pages: 240,
+    duration: '6h 15m',
+    thumbnail: '/api/placeholder/300/200',
+    isBookmarked: false,
+    tags: ['UI Design', 'UX Design', 'Figma']
+  },
+  {
+    id: '9',
+    title: 'Database Management Systems',
+    author: 'Dr. Robert Brown',
+    description: 'Comprehensive guide to database design, SQL, and database management. Learn MySQL, PostgreSQL, and NoSQL databases.',
+    category: 'Programming',
+    format: 'interactive',
+    rating: 4.5,
+    downloads: 650,
+    pages: 400,
+    thumbnail: '/api/placeholder/300/200',
+    isBookmarked: false,
+    tags: ['Database', 'SQL', 'MySQL']
+  },
+  {
+    id: '10',
+    title: 'Digital Marketing Strategies',
+    author: 'Emma Davis',
+    description: 'Learn modern digital marketing techniques including SEO, social media marketing, and content marketing strategies.',
+    category: 'Business',
+    format: 'epub',
+    rating: 4.4,
+    downloads: 580,
+    pages: 280,
+    thumbnail: '/api/placeholder/300/200',
+    isBookmarked: true,
+    tags: ['Marketing', 'SEO', 'Social Media']
+  },
+  {
+    id: '11',
+    title: 'Cloud Computing with AWS',
+    author: 'Michael Johnson',
+    description: 'Master Amazon Web Services and cloud computing concepts. Learn to deploy and manage applications in the cloud.',
+    category: 'Programming',
+    format: 'video',
+    rating: 4.8,
+    downloads: 1200,
+    pages: 320,
+    duration: '10h 45m',
+    thumbnail: '/api/placeholder/300/200',
+    isBookmarked: false,
+    tags: ['AWS', 'Cloud Computing', 'DevOps']
+  },
+  {
+    id: '12',
+    title: 'Game Development with Unity',
+    author: 'Alex Garcia',
+    description: 'Create amazing games using Unity game engine. Learn C# scripting, 3D modeling, and game design principles.',
+    category: 'Programming',
+    format: 'interactive',
+    rating: 4.7,
+    downloads: 890,
+    pages: 380,
+    thumbnail: '/api/placeholder/300/200',
+    isBookmarked: true,
+    tags: ['Unity', 'Game Development', 'C#']
   }
 ];
 
@@ -231,7 +317,7 @@ const Ebooks: React.FC = () => {
   };
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+    <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -247,6 +333,43 @@ const Ebooks: React.FC = () => {
           </div>
         </div>
 
+        {/* Featured E-books Section */}
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Zap className="w-5 h-5 text-blue-600" />
+              <span>Featured E-books</span>
+            </CardTitle>
+            <CardDescription>Handpicked recommendations for you</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {mockEbooks.slice(0, 3).map(ebook => (
+                <div key={ebook.id} className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center">
+                      <BookOpen className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-900 text-sm line-clamp-2">{ebook.title}</h4>
+                      <p className="text-xs text-gray-600 mt-1">{ebook.author}</p>
+                      <div className="flex items-center mt-2 space-x-2">
+                        <div className="flex items-center">
+                          <Star className="w-3 h-3 text-yellow-400 mr-1" />
+                          <span className="text-xs text-gray-600">{ebook.rating}</span>
+                        </div>
+                        <Badge className={`text-xs ${getFormatColor(ebook.format)}`}>
+                          {ebook.format.toUpperCase()}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Quick Actions Section */}
         <Card>
           <CardHeader>
@@ -257,34 +380,34 @@ const Ebooks: React.FC = () => {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Button 
                 variant="outline" 
-                className="h-20 flex-col"
+                className="h-20 flex-col hover:bg-blue-50 hover:border-blue-200 transition-colors"
                 onClick={() => handleQuickAction('recent')}
               >
-                <Clock className="w-6 h-6 mb-2" />
+                <Clock className="w-6 h-6 mb-2 text-blue-600" />
                 <span className="text-sm">Recently Viewed</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex-col"
+                className="h-20 flex-col hover:bg-green-50 hover:border-green-200 transition-colors"
                 onClick={() => handleQuickAction('bookmarked')}
               >
-                <BookmarkPlus className="w-6 h-6 mb-2" />
+                <BookmarkPlus className="w-6 h-6 mb-2 text-green-600" />
                 <span className="text-sm">My Bookmarks</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex-col"
+                className="h-20 flex-col hover:bg-orange-50 hover:border-orange-200 transition-colors"
                 onClick={() => handleQuickAction('trending')}
               >
-                <TrendingUp className="w-6 h-6 mb-2" />
+                <TrendingUp className="w-6 h-6 mb-2 text-orange-600" />
                 <span className="text-sm">Trending Books</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex-col"
+                className="h-20 flex-col hover:bg-purple-50 hover:border-purple-200 transition-colors"
                 onClick={() => handleQuickAction('new')}
               >
-                <Plus className="w-6 h-6 mb-2" />
+                <Plus className="w-6 h-6 mb-2 text-purple-600" />
                 <span className="text-sm">New Releases</span>
               </Button>
             </div>
@@ -370,8 +493,22 @@ const Ebooks: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Results Count */}
-        <div className="flex items-center justify-between">
+        {/* Statistics and Results Count */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+          <div className="flex items-center space-x-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{mockEbooks.length}</div>
+              <div className="text-sm text-gray-600">Total E-books</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{mockEbooks.filter(book => book.isBookmarked).length}</div>
+              <div className="text-sm text-gray-600">Bookmarked</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{mockEbooks.reduce((sum, book) => sum + book.downloads, 0).toLocaleString()}</div>
+              <div className="text-sm text-gray-600">Total Downloads</div>
+            </div>
+          </div>
           <p className="text-gray-600">
             Showing {sortedEbooks.length} of {mockEbooks.length} e-books
           </p>
@@ -471,7 +608,7 @@ const Ebooks: React.FC = () => {
           </Card>
         )}
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 

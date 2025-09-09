@@ -41,6 +41,20 @@ const extractGradeFromProfile = (user: any): 'g1-g3' | 'g4-g7' | 'g8-plus' | nul
   return null;
 };
 
+// Cache dashboard type to prevent re-evaluation
+const dashboardTypeCache = new Map<string, 'g1-g3' | 'g4-g7' | 'g8-plus'>();
+
+// Function to clear cache (useful for logout or user changes)
+export const clearDashboardCache = (userId?: string) => {
+  if (userId) {
+    dashboardTypeCache.delete(userId);
+    console.log('🗑️ Cleared dashboard cache for user:', userId);
+  } else {
+    dashboardTypeCache.clear();
+    console.log('🗑️ Cleared all dashboard cache');
+  }
+};
+
 const StudentDashboardRouter: React.FC<StudentDashboardRouterProps> = () => {
   const { currentUser } = useAuth();
   const [dashboardType, setDashboardType] = useState<'loading' | 'g1-g3' | 'g4-g7' | 'g8-plus'>('loading');
@@ -50,6 +64,14 @@ const StudentDashboardRouter: React.FC<StudentDashboardRouterProps> = () => {
     const determineDashboard = async () => {
       if (!currentUser?.id) {
         setError('User not found');
+        return;
+      }
+
+      // Check cache first
+      const cachedType = dashboardTypeCache.get(currentUser.id.toString());
+      if (cachedType) {
+        console.log('🚀 Using cached dashboard type:', cachedType);
+        setDashboardType(cachedType);
         return;
       }
 
@@ -80,25 +102,34 @@ const StudentDashboardRouter: React.FC<StudentDashboardRouterProps> = () => {
           console.log('🎓 Pattern matching results:', { isG1G3, isG4G7, isG8Plus });
 
           if (isG1G3) {
-            setDashboardType('g1-g3');
-            console.log('✅ Routing to G1-G3 Dashboard');
+            const type = 'g1-g3';
+            dashboardTypeCache.set(currentUser.id.toString(), type);
+            setDashboardType(type);
+            console.log('✅ Routing to G1-G3 Dashboard (cached)');
           } else if (isG4G7) {
-            setDashboardType('g4-g7');
-            console.log('✅ Routing to G4-G7 Dashboard');
+            const type = 'g4-g7';
+            dashboardTypeCache.set(currentUser.id.toString(), type);
+            setDashboardType(type);
+            console.log('✅ Routing to G4-G7 Dashboard (cached)');
           } else if (isG8Plus) {
-            setDashboardType('g8-plus');
-            console.log('✅ Routing to G8+ Dashboard');
+            const type = 'g8-plus';
+            dashboardTypeCache.set(currentUser.id.toString(), type);
+            setDashboardType(type);
+            console.log('✅ Routing to G8+ Dashboard (cached)');
           } else {
             // Try to extract grade from user profile as fallback
             console.log('⚠️ Cohort pattern didn\'t match, trying profile fallback...');
             const profileGrade = extractGradeFromProfile(currentUser);
             if (profileGrade) {
+              dashboardTypeCache.set(currentUser.id.toString(), profileGrade);
               setDashboardType(profileGrade);
-              console.log(`✅ Fallback: Routing to ${profileGrade} Dashboard based on profile`);
+              console.log(`✅ Fallback: Routing to ${profileGrade} Dashboard based on profile (cached)`);
             } else {
               // Default to G8+ dashboard if no grade can be determined
-              setDashboardType('g8-plus');
-              console.log('⚠️ No grade found in profile, defaulting to G8+ Dashboard');
+              const defaultType = 'g8-plus';
+              dashboardTypeCache.set(currentUser.id.toString(), defaultType);
+              setDashboardType(defaultType);
+              console.log('⚠️ No grade found in profile, defaulting to G8+ Dashboard (cached)');
               console.log('⚠️ Cohort name that didn\'t match:', cohortName);
             }
           }
@@ -107,12 +138,15 @@ const StudentDashboardRouter: React.FC<StudentDashboardRouterProps> = () => {
           console.log('⚠️ No cohort found, trying profile fallback...');
           const profileGrade = extractGradeFromProfile(currentUser);
           if (profileGrade) {
+            dashboardTypeCache.set(currentUser.id.toString(), profileGrade);
             setDashboardType(profileGrade);
-            console.log(`✅ Fallback: Routing to ${profileGrade} Dashboard based on profile`);
+            console.log(`✅ Fallback: Routing to ${profileGrade} Dashboard based on profile (cached)`);
           } else {
             // Default to G8+ dashboard
-            setDashboardType('g8-plus');
-            console.log('⚠️ No grade found in profile, defaulting to G8+ Dashboard');
+            const defaultType = 'g8-plus';
+            dashboardTypeCache.set(currentUser.id.toString(), defaultType);
+            setDashboardType(defaultType);
+            console.log('⚠️ No grade found in profile, defaulting to G8+ Dashboard (cached)');
           }
         }
       } catch (error) {

@@ -24,8 +24,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import DashboardLayout from '@/components/DashboardLayout';
+import G8PlusLayout from '@/components/G8PlusLayout';
 import { moodleService } from '@/services/moodleApi';
+import { useAuth } from '@/context/AuthContext';
 
 interface Course {
   id: number;
@@ -50,6 +51,11 @@ interface Course {
   courseimage?: string;
   overviewfiles?: Array<{ fileurl: string; filename?: string }>;
   summaryfiles?: Array<{ fileurl: string; filename?: string }>;
+  // Additional fields that might be present in the API response
+  progress?: any;
+  completedLessons?: any;
+  totalLessons?: any;
+  activitiesData?: any;
 }
 
 // Course image fallbacks based on category and course name
@@ -203,6 +209,7 @@ const getCourseStatusInfo = (course: Course) => {
 // const getCertificationProvider = (course: Course): string => { ... }
 
 const Courses: React.FC = () => {
+  const { currentUser } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -213,18 +220,27 @@ const Courses: React.FC = () => {
   const [isUsingFallbackData, setIsUsingFallbackData] = useState(false);
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    if (currentUser?.id) {
+      fetchCourses();
+    }
+  }, [currentUser?.id]);
 
   const fetchCourses = async () => {
     try {
       setLoading(true);
       setError('');
       
-      console.log('🔄 Starting to fetch real course data from Moodle API...');
+      if (!currentUser?.id) {
+        setError('User not found. Please log in again.');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('🔄 Starting to fetch student-specific course data from Moodle API...');
+      console.log('👤 Fetching courses for user:', currentUser.id, currentUser.fullname);
       
       const [coursesData, categoriesData, usersData] = await Promise.all([
-        moodleService.getAllCourses(),
+        moodleService.getUserCourses(currentUser.id.toString()),
         moodleService.getCourseCategories(),
         moodleService.getAllUsers()
       ]);
@@ -272,8 +288,8 @@ const Courses: React.FC = () => {
         console.log(`🔍 Processing course "${course.fullname}":`, {
           id: course.id,
           courseimage: course.courseimage,
-          overviewfiles: course.overviewfiles,
-          summaryfiles: course.summaryfiles
+          overviewfiles: (course as any).overviewfiles,
+          summaryfiles: (course as any).summaryfiles
         });
         
         // Check if courseimage is a default Moodle image (course.svg)
@@ -285,11 +301,11 @@ const Courses: React.FC = () => {
         
         if (courseImage && !isDefaultMoodleImage) {
           console.log(`✅ Using courseimage for "${course.fullname}": ${courseImage}`);
-        } else if (course.overviewfiles && Array.isArray(course.overviewfiles) && course.overviewfiles.length > 0) {
-          courseImage = course.overviewfiles[0].fileurl;
+        } else if ((course as any).overviewfiles && Array.isArray((course as any).overviewfiles) && (course as any).overviewfiles.length > 0) {
+          courseImage = (course as any).overviewfiles[0].fileurl;
           console.log(`⚠️ Using overviewfiles for "${course.fullname}": ${courseImage}`);
-        } else if (course.summaryfiles && Array.isArray(course.summaryfiles) && course.summaryfiles.length > 0) {
-          courseImage = course.summaryfiles[0].fileurl;
+        } else if ((course as any).summaryfiles && Array.isArray((course as any).summaryfiles) && (course as any).summaryfiles.length > 0) {
+          courseImage = (course as any).summaryfiles[0].fileurl;
           console.log(`⚠️ Using summaryfiles for "${course.fullname}": ${courseImage}`);
         } else {
           console.log(`❌ No real image found for "${course.fullname}", will use fallback`);
@@ -323,17 +339,17 @@ const Courses: React.FC = () => {
            // Use the real course image we just processed
            courseimage: courseImage,
            // Ensure image fields are included
-           overviewfiles: course.overviewfiles || [],
-           summaryfiles: course.summaryfiles || []
+           overviewfiles: (course as any).overviewfiles || [],
+           summaryfiles: (course as any).summaryfiles || []
          } as Course;
       });
 
       setCourses(enhancedCourses);
       setCategories(categoriesData);
       
-      console.log('✅ Real course data loaded successfully from Moodle API!');
+      console.log('✅ Student-specific course data loaded successfully from Moodle API!');
       console.log('📊 Course Statistics:', {
-        totalCourses: enhancedCourses.length,
+        totalEnrolledCourses: enhancedCourses.length,
         coursesWithRealImages: enhancedCourses.filter(c => c.courseimage && !c.courseimage.includes('card')).length,
         coursesWithFallbackImages: enhancedCourses.filter(c => c.courseimage && c.courseimage.includes('card')).length
       });
@@ -441,19 +457,19 @@ const Courses: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="student" userName="Student">
+      <G8PlusLayout userName="Student">
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Loading courses...</p>
           </div>
         </div>
-      </DashboardLayout>
+      </G8PlusLayout>
     );
   }
 
     return (
-    <DashboardLayout userRole="student" userName="Student">
+    <G8PlusLayout userName="Student">
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -697,13 +713,20 @@ const Courses: React.FC = () => {
           <Card>
             <CardContent className="p-12 text-center">
               <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No courses found</h3>
-              <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {courses.length === 0 ? 'No enrolled courses' : 'No courses found'}
+              </h3>
+              <p className="text-gray-600">
+                {courses.length === 0 
+                  ? 'You are not enrolled in any courses yet. Contact your teacher or administrator to get enrolled.'
+                  : 'Try adjusting your search or filter criteria.'
+                }
+              </p>
             </CardContent>
           </Card>
         )}
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 

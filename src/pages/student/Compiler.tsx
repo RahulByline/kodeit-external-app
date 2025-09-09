@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Separator } from '../../components/ui/separator';
-import DashboardLayout from '../../components/DashboardLayout';
+import G8PlusLayout from '../../components/G8PlusLayout';
 import { useAuth } from '../../context/AuthContext';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
@@ -183,7 +183,7 @@ const Compiler: React.FC = () => {
   };
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+    <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -423,7 +423,7 @@ const Compiler: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 
