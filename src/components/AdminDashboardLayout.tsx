@@ -165,9 +165,9 @@ const AdminDashboardLayout: React.FC<AdminDashboardLayoutProps> = ({ children, u
       </div>
 
       {/* Main Content - offset by sidebar width on desktop, full width on mobile */}
-      <div className="lg:ml-64 min-h-screen">
+      <div className="lg:ml-64">
         {/* Fixed Top Bar */}
-        <header className="fixed top-0 left-0 lg:left-64 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
+        <header className="fixed top-0 left-0 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
           <div className="px-4 lg:px-6 py-2">
             <div className="flex items-center justify-between">
               <div className="flex-1 max-w-md">

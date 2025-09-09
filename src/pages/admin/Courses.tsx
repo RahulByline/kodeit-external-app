@@ -48,7 +48,7 @@ import {
 } from 'lucide-react';
 import AdminDashboardLayout from '../../components/AdminDashboardLayout';
 import moodleService from '../../services/moodleApi';
-import CourseDetail from '../student/CourseDetail';
+import AdminCourseDetail from './AdminCourseDetail';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -713,7 +713,7 @@ const Courses: React.FC = () => {
   return (
     <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
       {showCourseDetail && selectedCourseForDetail ? (
-        <CourseDetail
+        <AdminCourseDetail
           courseId={selectedCourseForDetail.id}
           onBack={() => {
             setShowCourseDetail(false);
@@ -830,7 +830,7 @@ const Courses: React.FC = () => {
                     <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2">
                       <div className="w-12 h-12 bg-white rounded-lg shadow-lg flex items-center justify-center border-4 border-white">
                         <div className={`w-8 h-8 bg-gradient-to-br ${category.color} rounded-md flex items-center justify-center`}>
-                          <span className="text-white font-bold text-xs">{category.icon}</span>
+                        <span className="text-white font-bold text-xs">{<BookOpen/>}</span>
               </div>
             </div>
           </div>
@@ -1035,9 +1035,9 @@ const Courses: React.FC = () => {
                     {/* Date Range */}
                     {(startDate || endDate) && (
                       <div className="text-xs text-gray-500 mb-2">
-                        {startDate && `Inicia ${startDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                        {startDate && `Start ${startDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                         {startDate && endDate && ' | '}
-                        {endDate && `Finaliza ${endDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                        {endDate && `End ${endDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                       </div>
                     )}
 
