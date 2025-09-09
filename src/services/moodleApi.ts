@@ -3207,8 +3207,8 @@ export const moodleService = {
 
     }
 
-    },
-  
+  },
+
     // Get course count for a specific category
     async getCategoryCourseCount(categoryId: number) {
       try {
@@ -3273,8 +3273,8 @@ export const moodleService = {
         return [];
       }
     },
-  
-    async getUserNotifications(userId: string) {
+
+  async getUserNotifications(userId: string) {
 
     // Mock notifications for now
 
@@ -9127,7 +9127,7 @@ export const moodleService = {
 
     try {
       console.log('🎓 Fetching student cohort for user:', userId);
-      
+
       // First, get all cohorts
       const cohortsResponse = await moodleApi.get('', {
 
@@ -9305,14 +9305,14 @@ export const moodleService = {
       console.log('✅ Using default navigation settings from storage for cohort:', cohortId);
 
       const defaultSettings = this.getDefaultNavigationSettings();
-      
+
       // Cache the settings
       setCachedData(cache.cohortSettings, cohortId, defaultSettings);
       return defaultSettings;
 
     } catch (error) {
       console.error('❌ Error reading cohort navigation settings:', error);
-      
+
       const defaultSettings = this.getDefaultNavigationSettings();
       // Cache even on error to avoid repeated failures
       setCachedData(cache.cohortSettings, cohortId, defaultSettings);
@@ -15194,7 +15194,37 @@ export const moodleService = {
 
   },
 
+  // Get enrolled users for a course
+  async getEnrolledUsers(courseId: string) {
+    try {
+      console.log(`👥 Fetching enrolled users for course ${courseId}`);
+      
+      const response = await moodleApi.get('', {
+        params: {
+          wsfunction: 'core_enrol_get_enrolled_users',
+          courseid: courseId,
+        },
+      });
 
+      if (response.data && Array.isArray(response.data)) {
+        return response.data.map((user: any) => ({
+          id: user.id,
+          username: user.username,
+          firstname: user.firstname,
+          lastname: user.lastname,
+          fullname: user.fullname,
+          email: user.email,
+          lastaccess: user.lastaccess || 0,
+          enrolled: true
+        }));
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error fetching enrolled users:', error);
+      return [];
+    }
+  },
 
   // Get course activities with completion status
 
@@ -15215,11 +15245,11 @@ export const moodleService = {
       // Get completion status for all activities in the course (single API call)
       let allCompletionStatuses = [];
       try {
-        const completionResponse = await moodleApi.get('', {
-          params: {
-            wsfunction: 'core_completion_get_activities_completion_status',
-            courseid: courseId,
-            userid: userId || await this.getCurrentUserId(),
+              const completionResponse = await moodleApi.get('', {
+                params: {
+                  wsfunction: 'core_completion_get_activities_completion_status',
+                  courseid: courseId,
+                  userid: userId || await this.getCurrentUserId(),
           },
         });
         
@@ -15459,6 +15489,238 @@ export const moodleService = {
 
     }
 
+  },
+
+  // ========================================
+  // COMPETENCY MAPPING FUNCTIONS
+  // ========================================
+
+  // Phase 1: Essential Course Competency Functions
+  async listCourseCompetencies(courseId: string) {
+    try {
+      console.log(`🔍 Fetching competencies for course ${courseId}...`);
+      
+      const response = await axios.get(`${API_BASE_URL}`, {
+        params: {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_competency_list_course_competencies',
+          moodlewsrestformat: 'json',
+          id: courseId
+        }
+      });
+
+      if (response.data && !response.data.exception) {
+        console.log(`✅ Found ${response.data.length || 0} competencies for course ${courseId}`);
+        return response.data.map((item: any) => ({
+          id: item.competency.id,
+          shortname: item.competency.shortname,
+          fullname: item.competency.shortname, // Using shortname as fullname since API doesn't provide fullname
+          description: item.competency.description,
+          ruleoutcome: item.coursecompetency.ruleoutcome,
+          sortorder: item.coursecompetency.sortorder,
+          competencyframeworkid: item.competency.competencyframeworkid,
+          courseid: item.coursecompetency.courseid,
+          competencyid: item.coursecompetency.competencyid
+        }));
+      } else {
+        console.log('⚠️ No competencies found for course or API error:', response.data);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching course competencies:', error.response?.data || error.message);
+      return [];
+    }
+  },
+
+  async addCompetencyToCourse(courseId: string, competencyId: string) {
+    try {
+      console.log(`➕ Adding competency ${competencyId} to course ${courseId}...`);
+      
+      const response = await axios.get(`${API_BASE_URL}`, {
+        params: {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_competency_add_competency_to_course',
+          moodlewsrestformat: 'json',
+          courseid: courseId,
+          competencyid: competencyId
+        }
+      });
+
+      if (response.data && !response.data.exception) {
+        console.log('✅ Competency added to course successfully');
+        return {
+          success: true,
+          data: response.data
+        };
+      } else {
+        console.log('⚠️ Failed to add competency to course:', response.data);
+        return {
+          success: false,
+          error: response.data?.message || 'Failed to add competency to course'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error adding competency to course:', error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message || 'Failed to add competency to course'
+      };
+    }
+  },
+
+  async removeCompetencyFromCourse(courseId: string, competencyId: string) {
+    try {
+      console.log(`➖ Removing competency ${competencyId} from course ${courseId}...`);
+      
+      const response = await axios.get(`${API_BASE_URL}`, {
+        params: {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_competency_remove_competency_from_course',
+          moodlewsrestformat: 'json',
+          courseid: courseId,
+          competencyid: competencyId
+        }
+      });
+
+      if (response.data && !response.data.exception) {
+        console.log('✅ Competency removed from course successfully');
+        return {
+          success: true,
+          data: response.data
+        };
+      } else {
+        console.log('⚠️ Failed to remove competency from course:', response.data);
+        return {
+          success: false,
+          error: response.data?.message || 'Failed to remove competency from course'
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error removing competency from course:', error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message || 'Failed to remove competency from course'
+      };
+    }
+  },
+
+  async searchCompetencies(query: string, filters?: { frameworkid?: string, courseid?: string }) {
+    try {
+      console.log(`🔍 Searching competencies with query: "${query}"...`);
+      
+      const params: any = {
+        wstoken: API_TOKEN,
+        wsfunction: 'core_competency_search_competencies',
+        moodlewsrestformat: 'json',
+        query: query
+      };
+
+      // Add filters if provided
+      if (filters?.frameworkid) {
+        params.filters = JSON.stringify([{ column: 'competencyframeworkid', value: filters.frameworkid }]);
+      }
+
+      const response = await axios.get(`${API_BASE_URL}`, { params });
+
+      if (response.data && !response.data.exception) {
+        console.log(`✅ Found ${response.data.length || 0} competencies matching "${query}"`);
+        return response.data.map((comp: any) => ({
+          id: comp.id,
+          shortname: comp.shortname,
+          fullname: comp.fullname,
+          description: comp.description,
+          competencyframeworkid: comp.competencyframeworkid,
+          path: comp.path
+        }));
+      } else {
+        console.log('⚠️ No competencies found or API error:', response.data);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error searching competencies:', error.response?.data || error.message);
+      return [];
+    }
+  },
+
+  async listCoursesUsingCompetency(competencyId: string) {
+    try {
+      console.log(`🔍 Fetching courses using competency ${competencyId}...`);
+      
+      const response = await axios.get(`${API_BASE_URL}`, {
+        params: {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_competency_list_courses_using_competency',
+          moodlewsrestformat: 'json',
+          id: competencyId
+        }
+      });
+
+      if (response.data && !response.data.exception) {
+        console.log(`✅ Found ${response.data.length || 0} courses using competency ${competencyId}`);
+        return response.data.map((course: any) => ({
+          id: course.id,
+          fullname: course.fullname,
+          shortname: course.shortname,
+          categoryid: course.categoryid
+        }));
+      } else {
+        console.log('⚠️ No courses found using competency or API error:', response.data);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching courses using competency:', error.response?.data || error.message);
+      return [];
+    }
+  },
+
+  async getCompetencyDetails(competencyId: string, includeMappings: boolean = true) {
+    try {
+      console.log(`🔍 Fetching details for competency ${competencyId}...`);
+      
+      const response = await axios.get(`${API_BASE_URL}`, {
+        params: {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_competency_read_competency',
+          moodlewsrestformat: 'json',
+          id: competencyId
+        }
+      });
+
+      if (response.data && !response.data.exception) {
+        const competency = response.data;
+        
+        let mappings = null;
+        if (includeMappings) {
+          mappings = await this.listCoursesUsingCompetency(competencyId);
+        }
+
+        console.log('✅ Competency details fetched successfully');
+        return {
+          id: competency.id,
+          shortname: competency.shortname,
+          fullname: competency.fullname,
+          description: competency.description,
+          competencyframeworkid: competency.competencyframeworkid,
+          path: competency.path,
+          ruletype: competency.ruletype,
+          ruleconfig: competency.ruleconfig,
+          scaleid: competency.scaleid,
+          scaleconfiguration: competency.scaleconfiguration,
+          parentid: competency.parentid,
+          sortorder: competency.sortorder,
+          timecreated: competency.timecreated,
+          timemodified: competency.timemodified,
+          usermodified: competency.usermodified,
+          mappings: mappings
+        };
+      } else {
+        console.log('⚠️ Failed to fetch competency details:', response.data);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error fetching competency details:', error.response?.data || error.message);
+      return null;
+    }
   },
 
 };
