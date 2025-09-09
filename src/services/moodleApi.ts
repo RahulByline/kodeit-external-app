@@ -3207,11 +3207,74 @@ export const moodleService = {
 
     }
 
-  },
+    },
+  
+    // Get course count for a specific category
+    async getCategoryCourseCount(categoryId: number) {
+      try {
+        const response = await moodleApi.get('', {
+          params: {
+            wsfunction: 'core_course_get_courses_by_field',
+            field: 'category',
+            value: categoryId.toString()
+          },
+        });
 
+        if (response.data && response.data.courses && Array.isArray(response.data.courses)) {
+          return response.data.courses.length;
+        }
 
+        return 0;
+      } catch (error) {
+        console.error('Error fetching category course count:', error);
+        return 0;
+      }
+    },
 
-  async getUserNotifications(userId: string) {
+    // Get courses for a specific category
+    async getCoursesByCategory(categoryId: number) {
+      try {
+        const response = await moodleApi.get('', {
+          params: {
+            wsfunction: 'core_course_get_courses_by_field',
+            field: 'category',
+            value: categoryId.toString()
+          },
+        });
+
+        if (response.data && response.data.courses && Array.isArray(response.data.courses)) {
+          return response.data.courses;
+        }
+
+        return [];
+      } catch (error) {
+        console.error('Error fetching courses for category:', error);
+        return [];
+      }
+    },
+
+    // Get all categories
+    async getCategories() {
+      try {
+        const response = await moodleApi.get('', {
+          params: {
+            wsfunction: 'core_course_get_categories'
+            // Remove criteria to get ALL categories, not just parent: 0
+          },
+        });
+
+        if (response.data && Array.isArray(response.data)) {
+          return response.data;
+        }
+
+        return [];
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        return [];
+      }
+    },
+  
+    async getUserNotifications(userId: string) {
 
     // Mock notifications for now
 
@@ -15149,7 +15212,23 @@ export const moodleService = {
 
       const activities = [];
 
-
+      // Get completion status for all activities in the course (single API call)
+      let allCompletionStatuses = [];
+      try {
+        const completionResponse = await moodleApi.get('', {
+          params: {
+            wsfunction: 'core_completion_get_activities_completion_status',
+            courseid: courseId,
+            userid: userId || await this.getCurrentUserId(),
+          },
+        });
+        
+        if (completionResponse.data && completionResponse.data.statuses) {
+          allCompletionStatuses = completionResponse.data.statuses;
+        }
+      } catch (completionError) {
+        console.warn('Could not fetch completion statuses for course:', courseId);
+      }
 
       // Extract activities from course sections
 
@@ -15159,43 +15238,10 @@ export const moodleService = {
 
           for (const module of section.modules) {
 
-            // Try to get completion status for this module
-
-            let completion = null;
-
-            try {
-
-              const completionResponse = await moodleApi.get('', {
-
-                params: {
-
-                  wsfunction: 'core_completion_get_activities_completion_status',
-
-                  courseid: courseId,
-
-                  userid: userId || await this.getCurrentUserId(),
-
-                },
-
-              });
-
-              
-
-              if (completionResponse.data && completionResponse.data.statuses) {
-
-                completion = completionResponse.data.statuses.find((status: any) => 
-
-                  status.cmid === module.id
-
-                );
-
-              }
-
-            } catch (completionError) {
-
-              console.warn('Could not fetch completion for module:', module.id);
-
-            }
+            // Find completion status for this module from the pre-fetched data
+            const completion = allCompletionStatuses.find((status: any) => 
+              status.cmid === module.id
+            );
 
 
 

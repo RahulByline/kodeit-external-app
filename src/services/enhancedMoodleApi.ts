@@ -614,7 +614,7 @@ export const enhancedMoodleService = {
 
       const frameworks = categories.map((category, index) => ({
         id: index + 1,
-        shortname: category.toLowerCase().replace(/\s+/g, '_'),
+        shortname: `${category}`,
         name: `${category} Competency Framework`,
         description: `Comprehensive competency framework for ${category} skills, knowledge, and practical applications`,
         descriptionformat: 1,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import DashboardLayout from '@/components/DashboardLayout';
+import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -216,7 +216,7 @@ const AdminReports: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -237,12 +237,12 @@ const AdminReports: React.FC = () => {
             ))}
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+    <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -411,7 +411,7 @@ const AdminReports: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

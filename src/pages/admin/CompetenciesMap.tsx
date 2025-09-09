@@ -28,729 +28,860 @@ import {
   Bookmark,
   Grid,
   List,
-  X
+  X,
+  Plus,
+  Edit,
+  Trash2,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  GripVertical,
+  Folder,
+  FolderOpen
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
-import { moodleService } from '../../services/moodleApi';
+import AdminDashboardLayout from '../../components/AdminDashboardLayout';
 import { useAuth } from '../../context/AuthContext';
-
-interface Competency {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
-  status: 'not_started' | 'in_progress' | 'completed' | 'mastered';
-  progress: number;
-  relatedCourses: string[];
-  skills: string[];
-  estimatedTime: string;
-  prerequisites: string[];
-  nextSteps: string[];
-  frameworkid?: number;
-  userid?: number;
-  grade?: number;
-  proficiency?: number;
-  timecreated?: number;
-  timemodified?: number;
-}
-
-interface CompetencyFramework {
-  id: number;
-  shortname: string;
-  name: string;
-  description: string;
-  competenciescount: number;
-  coursescount: number;
-  taxonomies: string[];
-}
-
-interface CompetencyEvidence {
-  id: string;
-  competencyid: string;
-  action: string;
-  grade: number;
-  note: string;
-  timecreated: number;
-  timemodified: number;
-}
-
-interface CompetencyCategory {
-  name: string;
-  color: string;
-  competencies: Competency[];
-}
-
-interface Course {
-  id: number;
-  fullname: string;
-  shortname: string;
-  summary: string;
-  categoryid: number;
-  categoryname: string;
-  courseimage?: string;
-  overviewfiles?: any[];
-  summaryfiles?: any[];
-  startdate?: number;
-  enddate?: number;
-  visible: number;
-  format: string;
-  modules: any[];
-  competencies?: string[];
-}
+import { competencyService, CompetencyFramework, Competency } from '../../services/competencyService';
 
 const CompetenciesMap: React.FC = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [competencies, setCompetencies] = useState<Competency[]>([]);
+  const [successMessage, setSuccessMessage] = useState('');
   const [frameworks, setFrameworks] = useState<CompetencyFramework[]>([]);
+  const [competencies, setCompetencies] = useState<Competency[]>([]);
+  const [selectedFramework, setSelectedFramework] = useState<CompetencyFramework | null>(null);
   const [selectedCompetency, setSelectedCompetency] = useState<Competency | null>(null);
-  const [competencyEvidence, setCompetencyEvidence] = useState<CompetencyEvidence[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterLevel, setFilterLevel] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedFramework, setSelectedFramework] = useState('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'timeline'>('grid');
-  const [showLearningPlans, setShowLearningPlans] = useState(false);
-  const [learningPlans, setLearningPlans] = useState<any[]>([]);
-  
-  // Real courses functionality
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [showCourses, setShowCourses] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [courseCompetencies, setCourseCompetencies] = useState<Competency[]>([]);
-  
-  // Grading functionality
-  const [showGradingModal, setShowGradingModal] = useState(false);
-  const [gradingCompetency, setGradingCompetency] = useState<Competency | null>(null);
-  const [gradeValue, setGradeValue] = useState(0);
-  const [gradeNote, setGradeNote] = useState('');
-  const [gradingLoading, setGradingLoading] = useState(false);
-  const [competencyScales, setCompetencyScales] = useState<any[]>([]);
-  const [selectedScale, setSelectedScale] = useState<any>(null);
-  
-  // Learning plan grading functionality
-  const [showPlanGradingModal, setShowPlanGradingModal] = useState(false);
-  const [planGradingCompetency, setPlanGradingCompetency] = useState<Competency | null>(null);
-  const [planGradingPlan, setPlanGradingPlan] = useState<any>(null);
-  const [planGradeValue, setPlanGradeValue] = useState(0);
-  const [planGradeNote, setPlanGradeNote] = useState('');
-  const [planGradingLoading, setPlanGradingLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateFrameworkModal, setShowCreateFrameworkModal] = useState(false);
+  const [showEditFrameworkModal, setShowEditFrameworkModal] = useState(false);
+  const [editingFramework, setEditingFramework] = useState<CompetencyFramework | null>(null);
+  const [editingCompetency, setEditingCompetency] = useState<Competency | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [frameworkCompetencies, setFrameworkCompetencies] = useState<Competency[]>([]);
+
+  // Form states for creating/editing competencies
+  const [formData, setFormData] = useState({
+    shortname: '',
+    idnumber: '',
+    description: '',
+    competencyframeworkid: 0,
+    parentid: 0,
+    sortorder: 0
+  });
+
+  // Form states for creating frameworks
+  const [frameworkFormData, setFrameworkFormData] = useState({
+    shortname: '',
+    idnumber: '',
+    description: '',
+    descriptionformat: 1,
+    visible: 1,
+    scaleid: 0,
+    scaleconfiguration: '',
+    taxonomies: ''
+  });
+
+  // Tree view states
+  interface TreeNode {
+    id: number;
+    shortname: string;
+    description: string;
+    idnumber: string;
+    competencyframeworkid: number;
+    parentid: number;
+    sortorder: number;
+    children: TreeNode[];
+    expanded: boolean;
+    level: number;
+  }
+
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
+  const [draggedNode, setDraggedNode] = useState<TreeNode | null>(null);
 
   useEffect(() => {
     fetchCompetenciesData();
-    fetchCompetencyScales();
-    fetchRealCourses();
   }, []);
 
-  const fetchCompetencyScales = async () => {
-    try {
-      const scales = await moodleService.getCompetencyScales();
-      setCompetencyScales(scales);
-      if (scales.length > 0) {
-        setSelectedScale(scales[0]);
-      }
-    } catch (error) {
-      console.warn('⚠️ Failed to load competency scales:', error);
+  // Rebuild tree structure whenever framework competencies change
+  useEffect(() => {
+    if (frameworkCompetencies.length > 0) {
+      buildTreeStructure(frameworkCompetencies);
+    } else {
+      setTreeData([]);
     }
-  };
-
-  const fetchRealCourses = async () => {
-    try {
-      console.log('🔍 Fetching real courses from IOMAD/Moodle API...');
-      const coursesData = await moodleService.getAllCourses();
-      console.log(`✅ Real courses loaded: ${coursesData.length}`);
-      
-      // Transform courses to include competency information
-      const transformedCourses = coursesData.map((course: any) => ({
-        ...course,
-        competencies: [], // Will be populated when linking competencies
-        categoryname: course.categoryname || 'General'
-      }));
-      
-      setCourses(transformedCourses);
-    } catch (error) {
-      console.warn('⚠️ Failed to load real courses:', error);
-      setCourses([]);
-    }
-  };
-
-  const handleCourseClick = (course: Course) => {
-    setSelectedCourse(course);
-    // Generate competencies for this course
-    const courseCompetencies = moodleService.generateCourseCompetencies(course, course.id);
-    setCourseCompetencies(courseCompetencies);
-  };
-
-  const linkCompetencyToCourse = (competencyId: string, courseId: number) => {
-    const courseName = courses.find(c => c.id === courseId)?.fullname || '';
-    
-    setCompetencies(prev => prev.map(comp => {
-      if (comp.id === competencyId) {
-        const newRelatedCourses = [...comp.relatedCourses];
-        if (!newRelatedCourses.includes(courseName)) {
-          newRelatedCourses.push(courseName);
-        }
-        return { ...comp, relatedCourses: newRelatedCourses };
-      }
-      return comp;
-    }));
-    
-    setCourses(prev => prev.map(course => {
-      if (course.id === courseId) {
-        const newCompetencies = [...(course.competencies || [])];
-        if (!newCompetencies.includes(competencyId)) {
-          newCompetencies.push(competencyId);
-        }
-        return { ...course, competencies: newCompetencies };
-      }
-      return course;
-    }));
-    
-    console.log(`✅ Linked competency "${competencies.find(c => c.id === competencyId)?.name}" to course "${courseName}"`);
-  };
-
-  const handleGradeCompetency = async () => {
-    if (!gradingCompetency || !currentUser) return;
-
-    setGradingLoading(true);
-    try {
-      const result = await moodleService.gradeCompetency(
-        currentUser.id || currentUser.userid,
-        parseInt(gradingCompetency.id.replace('comp_', '')),
-        gradeValue,
-        gradeNote
-      );
-
-      if (result.success) {
-        // Update the competency in the list
-        setCompetencies(prev => prev.map(comp => 
-          comp.id === gradingCompetency.id 
-            ? { ...comp, grade: gradeValue, timemodified: Math.floor(Date.now() / 1000) }
-            : comp
-        ));
-        
-        // Close modal and reset
-        setShowGradingModal(false);
-        setGradingCompetency(null);
-        setGradeValue(0);
-        setGradeNote('');
-        
-        // Show success message
-        alert('Competency graded successfully!');
-      } else {
-        alert(`Failed to grade competency: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('❌ Error grading competency:', error);
-      alert('Failed to grade competency. Please try again.');
-    } finally {
-      setGradingLoading(false);
-    }
-  };
-
-  const openGradingModal = (competency: Competency) => {
-    setGradingCompetency(competency);
-    setGradeValue(competency.grade || 0);
-    setGradeNote('');
-    setShowGradingModal(true);
-  };
-
-  const openPlanGradingModal = (competency: Competency, plan: any) => {
-    setPlanGradingCompetency(competency);
-    setPlanGradingPlan(plan);
-    setPlanGradeValue(competency.grade || 0);
-    setPlanGradeNote('');
-    setShowPlanGradingModal(true);
-  };
-
-  const handleGradeCompetencyInPlan = async () => {
-    if (!planGradingCompetency || !planGradingPlan) return;
-
-    setPlanGradingLoading(true);
-    try {
-      const result = await moodleService.gradeCompetencyInPlan(
-        planGradingPlan.id,
-        parseInt(planGradingCompetency.id.replace('comp_', '')),
-        planGradeValue,
-        planGradeNote
-      );
-
-      if (result.success) {
-        // Update the competency in the list
-        setCompetencies(prev => prev.map(comp => 
-          comp.id === planGradingCompetency.id 
-            ? { ...comp, grade: planGradeValue, timemodified: Math.floor(Date.now() / 1000) }
-            : comp
-        ));
-        
-        // Close modal and reset
-        setShowPlanGradingModal(false);
-        setPlanGradingCompetency(null);
-        setPlanGradingPlan(null);
-        setPlanGradeValue(0);
-        setPlanGradeNote('');
-        
-        // Show success message
-        alert('Competency graded in plan successfully!');
-      } else {
-        alert(`Failed to grade competency in plan: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('❌ Error grading competency in plan:', error);
-      alert('Failed to grade competency in plan. Please try again.');
-    } finally {
-      setPlanGradingLoading(false);
-    }
-  };
+  }, [frameworkCompetencies]);
 
   const fetchCompetenciesData = async () => {
     try {
       setLoading(true);
       setError('');
 
-      console.log('🔍 Fetching comprehensive competency data from IOMAD/Moodle API...');
+      console.log('🔍 Fetching competency data from Moodle API...');
       
-      // Fetch comprehensive competency data with error handling for each call
-      let frameworksResult = [];
-      let competenciesResult = [];
-      let learningPlansResult = [];
-
-      try {
-        frameworksResult = await moodleService.getCompetencyFrameworksWithCompetencies();
-        console.log(`✅ Frameworks loaded: ${frameworksResult.length}`);
-      } catch (error) {
-        console.warn('⚠️ Failed to load frameworks, using fallback:', error);
-        frameworksResult = [];
+      // Test API connection first
+      const isConnected = await competencyService.testConnection();
+      if (!isConnected) {
+        throw new Error('Unable to connect to competency API. Please check your Moodle configuration.');
       }
 
-      try {
-        // Try to get user competencies first
-        competenciesResult = await moodleService.getUserCompetencies();
-        console.log(`✅ User competencies loaded: ${competenciesResult.length}`);
-        
-        // If no user competencies, try to list all competencies
-        if (competenciesResult.length === 0) {
-          console.log('🔄 No user competencies found, trying to list all competencies...');
-          const allCompetencies = await moodleService.listCompetencies();
-          if (allCompetencies.length > 0) {
-            // Transform the raw competency data to match our interface
-            competenciesResult = allCompetencies.map((comp: any, index: number) => ({
-              id: `comp_${comp.id || index + 1}`,
-              name: comp.shortname || comp.name || `Competency ${index + 1}`,
-              category: 'General',
-              description: comp.description || 'No description available',
-              level: 'intermediate' as const,
-              status: 'not_started' as const,
-              progress: 0,
-              relatedCourses: [],
-              skills: [],
-              estimatedTime: '2-4 weeks',
-              prerequisites: [],
-              nextSteps: [],
-              frameworkid: comp.competencyframeworkid,
-              grade: 0,
-              proficiency: 0,
-              timecreated: comp.timecreated,
-              timemodified: comp.timemodified
-            }));
-            console.log(`✅ Transformed ${competenciesResult.length} competencies from list`);
-          }
-        }
-        
-        // Link competencies to real courses if we have both
-        if (competenciesResult.length > 0) {
-          console.log('🔗 Linking competencies to real courses...');
-          const allCourses = await moodleService.getAllCourses();
-          
-          competenciesResult = competenciesResult.map(comp => {
-            // Link competencies to real courses based on keywords
-            const linkedCourses = allCourses
-              .filter(course => {
-                const courseKeywords = `${course.fullname} ${course.shortname} ${course.summary || ''}`.toLowerCase();
-                const compKeywords = `${comp.name}`.toLowerCase();
-                return courseKeywords.includes(compKeywords) || 
-                       courseKeywords.includes('digital') || 
-                       courseKeywords.includes('assessment') ||
-                       courseKeywords.includes('discipline');
-              })
-              .map(course => course.fullname);
-            
-            return {
-              ...comp,
-              relatedCourses: linkedCourses
-            };
-          });
-          
-          console.log(`✅ Linked ${competenciesResult.length} competencies to courses`);
-        }
-      } catch (error) {
-        console.warn('⚠️ Failed to load competencies, using fallback:', error);
-        competenciesResult = [];
-      }
-
-      try {
-        learningPlansResult = await moodleService.getCompetencyLearningPlans();
-        console.log(`✅ Learning plans loaded: ${learningPlansResult.length}`);
-      } catch (error) {
-        console.warn('⚠️ Failed to load learning plans, using fallback:', error);
-        learningPlansResult = [];
-      }
+      // Fetch all frameworks and competencies
+      const { frameworks: fetchedFrameworks, competencies: fetchedCompetencies } = 
+        await competencyService.getAllFrameworksWithCompetencies();
       
-      // Only use real data - no mock data fallback
-      if (frameworksResult.length === 0 && competenciesResult.length === 0 && learningPlansResult.length === 0) {
-        console.log('⚠️ No real data available from IOMAD/Moodle API');
-        setError('No competency data found. Please ensure competency features are enabled in your IOMAD/Moodle instance.');
-        setLoading(false);
-        return;
-      }
+      setFrameworks(fetchedFrameworks);
+      setCompetencies(fetchedCompetencies);
       
-      setFrameworks(frameworksResult);
-      setCompetencies(competenciesResult);
-      setLearningPlans(learningPlansResult);
+      // Build tree structure
+      buildTreeStructure(fetchedCompetencies);
       
-      console.log(`✅ Final data loaded: ${frameworksResult.length} frameworks, ${competenciesResult.length} competencies, and ${learningPlansResult.length} learning plans`);
-      console.log('📊 Competency Data Summary:', {
-        frameworks: frameworksResult.length,
-        competencies: competenciesResult.length,
-        learningPlans: learningPlansResult.length,
-        categories: Array.from(new Set(competenciesResult.map(c => c.category))).length,
-        levels: Array.from(new Set(competenciesResult.map(c => c.level))),
-        statuses: Array.from(new Set(competenciesResult.map(c => c.status)))
-      });
+      console.log(`✅ Loaded ${fetchedFrameworks.length} frameworks and ${fetchedCompetencies.length} competencies`);
+      
     } catch (error) {
       console.error('❌ Error fetching competency data:', error);
-      setError('Failed to fetch competency data. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to fetch competency data. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchCompetencyEvidence = async (competencyId: string) => {
+  // Build hierarchical tree structure from flat competencies array
+  const buildTreeStructure = (competencies: Competency[]) => {
+    const competencyMap: { [key: number]: TreeNode } = {};
+    const rootNodes: TreeNode[] = [];
+
+    // First pass: create all nodes
+    competencies.forEach(comp => {
+      const node: TreeNode = {
+        id: comp.id,
+        shortname: comp.shortname,
+        description: comp.description,
+        idnumber: comp.idnumber,
+        competencyframeworkid: comp.competencyframeworkid,
+        parentid: comp.parentid,
+        sortorder: comp.sortorder,
+        children: [],
+        expanded: expandedNodes.has(comp.id),
+        level: 0
+      };
+      competencyMap[comp.id] = node;
+    });
+
+    // Second pass: build parent-child relationships
+    competencies.forEach(comp => {
+      const node = competencyMap[comp.id];
+      if (!node) return;
+
+      if (comp.parentid === 0) {
+        // Root node
+        rootNodes.push(node);
+      } else {
+        // Child node
+        const parent = competencyMap[comp.parentid];
+        if (parent) {
+          parent.children.push(node);
+          node.level = parent.level + 1;
+        } else {
+          // Parent not found, treat as root
+          rootNodes.push(node);
+        }
+      }
+    });
+
+    // Sort nodes by sortorder
+    const sortNodes = (nodes: TreeNode[]): TreeNode[] => {
+      return nodes.sort((a, b) => a.sortorder - b.sortorder).map(node => ({
+        ...node,
+        children: sortNodes(node.children)
+      }));
+    };
+
+    setTreeData(sortNodes(rootNodes));
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchCompetenciesData();
+    setRefreshing(false);
+  };
+
+  // Tree view functions
+  const toggleNode = (nodeId: number) => {
+    const newExpandedNodes = new Set(expandedNodes);
+    if (newExpandedNodes.has(nodeId)) {
+      newExpandedNodes.delete(nodeId);
+      } else {
+      newExpandedNodes.add(nodeId);
+    }
+    setExpandedNodes(newExpandedNodes);
+    
+    // Update tree data with new expanded state
+    const updateNodeExpansion = (nodes: TreeNode[]): TreeNode[] => {
+      return nodes.map(node => ({
+        ...node,
+        expanded: newExpandedNodes.has(node.id),
+        children: updateNodeExpansion(node.children)
+      }));
+    };
+    setTreeData(updateNodeExpansion(treeData));
+  };
+
+  const handleDragStart = (e: React.DragEvent, node: TreeNode) => {
+    setDraggedNode(node);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetNode: TreeNode) => {
+    e.preventDefault();
+    
+    if (!draggedNode || draggedNode.id === targetNode.id) {
+      return;
+    }
+
+    // Here you would implement the logic to update the parent-child relationship
+    // and call the API to update the competency's parentid
+    console.log(`Moving ${draggedNode.shortname} to be child of ${targetNode.shortname}`);
+    
+    // TODO: Implement API call to update competency parent
+    // await competencyService.updateCompetency(draggedNode.id, { parentid: targetNode.id });
+    
+    setDraggedNode(null);
+  };
+
+  const handleFrameworkSelect = async (framework: CompetencyFramework) => {
+    setSelectedFramework(framework);
+    setExpandedNodes(new Set()); // Clear expanded nodes when switching frameworks
+    setSelectedCompetency(null); // Clear selected competency
     try {
-      const evidence = await moodleService.getCompetencyEvidence(competencyId);
-      setCompetencyEvidence(evidence);
-    } catch (error) {
-      console.error('❌ Error fetching competency evidence:', error);
-      setCompetencyEvidence([]);
+      const competencies = await competencyService.getCompetenciesByFramework(framework.id);
+      setFrameworkCompetencies(competencies);
+      console.log(`✅ Loaded ${competencies.length} competencies for framework: ${framework.shortname}`);
+      } catch (error) {
+      console.error('❌ Error fetching framework competencies:', error);
+      setError('Failed to fetch competencies for selected framework.');
+    }
+  };
+
+  const handleShowAllCompetencies = async () => {
+    setSelectedFramework(null);
+    setExpandedNodes(new Set()); // Clear expanded nodes
+    setSelectedCompetency(null); // Clear selected competency
+    try {
+      // Get all competencies from all frameworks
+      const { competencies: allCompetencies } = await competencyService.getAllFrameworksWithCompetencies();
+      setFrameworkCompetencies(allCompetencies);
+      console.log(`✅ Loaded ${allCompetencies.length} competencies from all frameworks`);
+      } catch (error) {
+      console.error('❌ Error fetching all competencies:', error);
+      setError('Failed to fetch all competencies.');
     }
   };
 
   const handleCompetencyClick = async (competency: Competency) => {
     setSelectedCompetency(competency);
-    await fetchCompetencyEvidence(competency.id);
   };
 
-  const filteredCompetencies = competencies.filter(competency => {
-    const matchesSearch = competency.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         competency.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLevel = filterLevel === 'all' || competency.level === filterLevel;
-    const matchesStatus = filterStatus === 'all' || competency.status === filterStatus;
-    const matchesCategory = selectedCategory === 'all' || competency.category === selectedCategory;
-    const matchesFramework = selectedFramework === 'all' || competency.frameworkid?.toString() === selectedFramework;
-    return matchesSearch && matchesLevel && matchesStatus && matchesCategory && matchesFramework;
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      // If no search term, show all competencies
+      await fetchCompetenciesData();
+        return;
+      }
+      
+      try {
+      setLoading(true);
+      const searchResults = await competencyService.searchCompetencies(
+        searchTerm, 
+        selectedFramework?.id
+      );
+      setCompetencies(searchResults);
+      console.log(`✅ Found ${searchResults.length} competencies matching "${searchTerm}"`);
+    } catch (error) {
+      console.error('❌ Error searching competencies:', error);
+      setError('Failed to search competencies.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateCompetency = () => {
+    // Check if a framework is selected
+    if (!selectedFramework) {
+      setError('Please select a competency framework first before creating a competency.');
+      return;
+    }
+    
+    setFormData({
+      shortname: '',
+      idnumber: '',
+      description: '',
+      competencyframeworkid: selectedFramework.id,
+      parentid: 0,
+      sortorder: 0
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleCreateChildCompetency = (parentCompetency: Competency) => {
+    // Check if a framework is selected
+    if (!selectedFramework) {
+      setError('Please select a competency framework first before creating a competency.');
+      return;
+    }
+    
+    setFormData({
+      shortname: '',
+      idnumber: '',
+      description: '',
+      competencyframeworkid: selectedFramework.id,
+      parentid: parentCompetency.id, // Set parent ID to the clicked competency's ID
+      sortorder: 0
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleCreateFramework = () => {
+    setFrameworkFormData({
+      shortname: '',
+      idnumber: '',
+      description: '',
+      descriptionformat: 1,
+      visible: 1,
+      scaleid: 2, // Use the working scale ID
+      scaleconfiguration: '[{"scaleid":"2"},{"id":1,"scaledefault":1,"proficient":0},{"id":2,"scaledefault":0,"proficient":1}]',
+      taxonomies: ''
+    });
+    setShowCreateFrameworkModal(true);
+  };
+
+  const handleCreateFrameworkSubmit = async () => {
+    try {
+      setError(''); // Clear any previous errors
+      setSuccessMessage(''); // Clear any previous success messages
+      
+      const newFramework = await competencyService.createFramework(frameworkFormData);
+      console.log('✅ Created framework:', newFramework);
+      
+      // Refresh the frameworks list
+      await fetchCompetenciesData();
+      
+      // Close modal and reset form
+      setShowCreateFrameworkModal(false);
+      setFrameworkFormData({
+        shortname: '',
+        idnumber: '',
+        description: '',
+        descriptionformat: 1,
+        visible: 1,
+        scaleid: 2, // Use the working scale ID
+        scaleconfiguration: '[{"scaleid":"2"},{"id":1,"scaledefault":1,"proficient":0},{"id":2,"scaledefault":0,"proficient":1}]',
+        taxonomies: ''
+      });
+      
+      // Optionally select the newly created framework
+      setSelectedFramework(newFramework);
+        
+        // Show success message
+      setSuccessMessage(`🎉 Successfully created framework: "${newFramework.shortname}"`);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 5000);
+      
+    } catch (error) {
+      console.error('❌ Error creating framework:', error);
+      setError('Failed to create competency framework. Please try again.');
+    }
+  };
+
+  const handleEditCompetency = (competency: Competency) => {
+    setEditingCompetency(competency);
+    setFormData({
+      shortname: competency.shortname,
+      idnumber: competency.idnumber,
+      description: competency.description,
+      competencyframeworkid: competency.competencyframeworkid,
+      parentid: competency.parentid,
+      sortorder: competency.sortorder
+    });
+    setShowEditModal(true);
+  };
+
+  const handleDeleteCompetency = async (competency: Competency) => {
+    if (window.confirm(`Are you sure you want to delete the competency "${competency.shortname}"?`)) {
+      try {
+        setError(''); // Clear any previous errors
+        setSuccessMessage(''); // Clear any previous success messages
+        
+        console.log('🗑️ Delete competency:', competency.shortname);
+        await competencyService.deleteCompetency(competency.id);
+        
+        setSuccessMessage(`Successfully deleted competency "${competency.shortname}"`);
+        await handleRefresh();
+      } catch (error) {
+        console.error('❌ Error deleting competency:', error);
+        setError('Failed to delete competency. Please try again.');
+      }
+    }
+  };
+
+  const handleDeleteFramework = async (framework: CompetencyFramework) => {
+    const confirmMessage = `Are you sure you want to delete the framework "${framework.shortname}"?\n\nThis will also delete all competencies within this framework. This action cannot be undone.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        setError(''); // Clear any previous errors
+        setSuccessMessage(''); // Clear any previous success messages
+        
+        console.log('🗑️ Deleting framework:', framework.shortname);
+        await competencyService.deleteFramework(framework.id);
+        
+        // If the deleted framework was selected, clear the selection
+        if (selectedFramework?.id === framework.id) {
+          setSelectedFramework(null);
+          setFrameworkCompetencies([]);
+          setTreeData([]);
+        }
+        
+        // Refresh the frameworks list
+        await fetchCompetenciesData();
+        
+        // Show success message
+        setSuccessMessage(`🗑️ Successfully deleted framework: "${framework.shortname}"`);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 5000);
+        
+      } catch (error) {
+        console.error('❌ Error deleting framework:', error);
+        setError(`Failed to delete framework "${framework.shortname}". Please try again.`);
+      }
+    }
+  };
+
+  const handleEditFramework = (framework: CompetencyFramework) => {
+    setEditingFramework(framework);
+    setFrameworkFormData({
+      shortname: framework.shortname,
+      idnumber: framework.idnumber,
+      description: framework.description,
+      descriptionformat: framework.descriptionformat,
+      visible: framework.visible ? 1 : 0, // Ensure boolean is converted to integer
+      scaleid: framework.scaleid,
+      scaleconfiguration: framework.scaleconfiguration,
+      taxonomies: framework.taxonomies
+    });
+    setShowEditFrameworkModal(true);
+  };
+
+  const handleEditFrameworkSubmit = async () => {
+    if (!editingFramework) return;
+    
+    try {
+      setError(''); // Clear any previous errors
+      setSuccessMessage(''); // Clear any previous success messages
+      
+      const updatedFramework = await competencyService.updateFramework(editingFramework.id, frameworkFormData);
+      console.log('✅ Updated framework:', updatedFramework);
+      
+      // Refresh the frameworks list
+      await fetchCompetenciesData();
+      
+      // Close modal and reset form
+      setShowEditFrameworkModal(false);
+      setEditingFramework(null);
+      setFrameworkFormData({
+        shortname: '',
+        idnumber: '',
+        description: '',
+        descriptionformat: 1,
+        visible: 1,
+        scaleid: 2,
+        scaleconfiguration: '[{"scaleid":"2"},{"id":1,"scaledefault":1,"proficient":0},{"id":2,"scaledefault":0,"proficient":1}]',
+        taxonomies: ''
+      });
+      
+      // Update selected framework if it was the one being edited
+      if (selectedFramework?.id === editingFramework.id) {
+        setSelectedFramework(updatedFramework);
+      }
+      
+      // Show success message
+      setSuccessMessage(`✅ Successfully updated framework: "${updatedFramework.shortname}"`);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 5000);
+      
+    } catch (error) {
+      console.error('❌ Error updating framework:', error);
+      setError('Failed to update competency framework. Please try again.');
+    }
+  };
+
+  const filteredCompetencies = frameworkCompetencies.filter(competency => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      competency.shortname.toLowerCase().includes(searchLower) ||
+      competency.description.toLowerCase().includes(searchLower) ||
+      competency.idnumber.toLowerCase().includes(searchLower)
+    );
   });
 
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case 'beginner': return 'bg-green-100 text-green-800';
-      case 'intermediate': return 'bg-blue-100 text-blue-800';
-      case 'advanced': return 'bg-purple-100 text-purple-800';
-      case 'expert': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const getCompetencyIcon = (competency: Competency) => {
+    const name = competency.shortname.toLowerCase();
+    if (name.includes('digital') || name.includes('tech')) return <Code className="w-5 h-5" />;
+    if (name.includes('design') || name.includes('creative')) return <Palette className="w-5 h-5" />;
+    if (name.includes('math') || name.includes('calculate')) return <Calculator className="w-5 h-5" />;
+    if (name.includes('language') || name.includes('communication')) return <Globe className="w-5 h-5" />;
+    if (name.includes('science') || name.includes('research')) return <Zap className="w-5 h-5" />;
+    if (name.includes('art') || name.includes('creative')) return <Star className="w-5 h-5" />;
+    return <BookOpen className="w-5 h-5" />;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'not_started': return 'bg-gray-100 text-gray-800';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'mastered': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'not_started': return <Circle className="w-4 h-4" />;
-      case 'in_progress': return <Clock className="w-4 h-4" />;
-      case 'completed': return <CheckCircle className="w-4 h-4" />;
-      case 'mastered': return <Award className="w-4 h-4" />;
-      default: return <Circle className="w-4 h-4" />;
-    }
+  const stripHtmlTags = (html: string) => {
+    if (!html) return '';
+    // Create a temporary div element to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Programming': return <Code className="w-5 h-5" />;
-      case 'Design': return <Palette className="w-5 h-5" />;
-      case 'Mathematics': return <Calculator className="w-5 h-5" />;
-      case 'Science': return <Zap className="w-5 h-5" />;
-      case 'Language': return <Globe className="w-5 h-5" />;
-      case 'Arts': return <Star className="w-5 h-5" />;
-      default: return <BookOpen className="w-5 h-5" />;
-    }
+  const truncateText = (text: string, maxLength: number = 150) => {
+    if (!text) return '';
+    const cleanText = stripHtmlTags(text);
+    return cleanText.length > maxLength ? cleanText.substring(0, maxLength) + '...' : cleanText;
   };
-
-  const categories = Array.from(new Set(competencies.map(c => c.category)));
-
-  const completedCount = competencies.filter(c => c.status === 'completed' || c.status === 'mastered').length;
-  const inProgressCount = competencies.filter(c => c.status === 'in_progress').length;
-  const totalProgress = competencies.length > 0 ?
-    Math.round((completedCount / competencies.length) * 100) : 0;
-
-  const averageGrade = competencies.length > 0 ?
-    Math.round(competencies.reduce((sum, c) => sum + (c.grade || 0), 0) / competencies.length) : 0;
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <Loader2 className="animate-spin h-6 w-6 text-blue-600" />
-            <span className="text-gray-600">Loading competencies map...</span>
+            <span className="text-gray-600">Loading competencies...</span>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
+  // Tree Node Component
+  const TreeNodeComponent: React.FC<{ node: TreeNode }> = ({ node }) => {
+    const hasChildren = node.children.length > 0;
+    const isExpanded = expandedNodes.has(node.id);
+
   return (
-    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+      <div className="select-none">
+        <div
+          className={`flex items-center py-2 px-3 hover:bg-gray-50 rounded-lg cursor-pointer group ${
+            selectedCompetency?.id === node.id ? 'bg-blue-50 border border-blue-200' : ''
+          }`}
+          style={{ paddingLeft: `${node.level * 20 + 12}px` }}
+          draggable
+          onDragStart={(e) => handleDragStart(e, node)}
+          onDragOver={handleDragOver}
+          onDrop={(e) => handleDrop(e, node)}
+          onClick={() => setSelectedCompetency(node as any)}
+        >
+          {/* Drag Handle */}
+          <div className="mr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <GripVertical className="w-4 h-4 text-gray-400" />
+          </div>
+
+          {/* Expand/Collapse Button */}
+          {hasChildren ? (
+             <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleNode(node.id);
+              }}
+              className="mr-2 p-1 hover:bg-gray-200 rounded"
+            >
+              {isExpanded ? (
+                <ChevronDown className="w-4 h-4 text-gray-600" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-gray-600" />
+              )}
+             </button>
+          ) : (
+            <div className="w-6 mr-2" />
+          )}
+
+          {/* Node Icon */}
+          <div className="mr-3">
+            {hasChildren ? (
+              isExpanded ? (
+                <FolderOpen className="w-4 h-4 text-blue-600" />
+              ) : (
+                <Folder className="w-4 h-4 text-blue-600" />
+              )
+            ) : (
+              <Target className="w-4 h-4 text-gray-500" />
+            )}
+        </div>
+
+          {/* Node Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-medium text-gray-900 truncate">
+                  {node.shortname}
+                </h4>
+                <p className="text-xs text-gray-500 truncate">
+                  {truncateText(node.description, 60)}
+                </p>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCreateChildCompetency(node as any);
+                  }}
+                  className="p-1 hover:bg-green-100 rounded text-gray-600 hover:text-green-600"
+                  title="Add Child Competency"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingCompetency(node as any);
+                    setShowEditModal(true);
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-800"
+                  title="Edit Competency"
+                >
+                  <Edit className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteCompetency(node as any);
+                  }}
+                  className="p-1 hover:bg-red-100 rounded text-gray-600 hover:text-red-600"
+                  title="Delete Competency"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+            </div>
+          </div>
+              </div>
+            </div>
+
+        {/* Children */}
+        {hasChildren && isExpanded && (
+              <div>
+            {node.children.map((child) => (
+              <TreeNodeComponent key={child.id} node={child} />
+            ))}
+              </div>
+        )}
+            </div>
+    );
+  };
+
+  return (
+    <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
-          <div>
+              <div>
             <h1 className="text-2xl font-bold text-gray-900">Competencies Map</h1>
-            <p className="text-gray-600">Track your learning journey and skill development with real competency data</p>
-          </div>
+              <p className="text-gray-600">Manage competency frameworks and competencies</p>
+              </div>
                      <div className="flex items-center space-x-3">
              <button 
-               onClick={() => setShowLearningPlans(!showLearningPlans)}
-               className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
              >
-               <BookOpen className="w-4 h-4" />
-               <span>{showLearningPlans ? 'Hide' : 'Show'} Learning Plans</span>
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
              </button>
-             <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={handleCreateFramework}
+                className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Framework</span>
+              </button>
+              <button 
+                onClick={handleCreateCompetency}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Competency</span>
+              </button>
+              <button className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                <Download className="w-4 h-4" />
                <span>Export</span>
              </button>
-             <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-               <Share2 className="w-4 h-4" />
-               <span>Share</span>
-             </button>
-           </div>
-        </div>
+            </div>
+          </div>
 
-        {/* Progress Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Total Competencies</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{competencies.length}</h3>
+          {/* Error Display */}
+          {/* {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+                <span className="text-red-800">{error}</span>
               </div>
-              <Target className="w-8 h-8 text-blue-600" />
             </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Completed</p>
-                <h3 className="text-2xl font-bold text-green-600 mt-1">{completedCount}</h3>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">In Progress</p>
-                <h3 className="text-2xl font-bold text-yellow-600 mt-1">{inProgressCount}</h3>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-600" />
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Overall Progress</p>
-                <h3 className="text-2xl font-bold text-purple-600 mt-1">{totalProgress}%</h3>
-              </div>
-              <TrendingUp className="w-8 h-8 text-purple-600" />
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 text-sm font-medium">Average Grade</p>
-                <h3 className="text-2xl font-bold text-indigo-600 mt-1">{averageGrade}%</h3>
-              </div>
-              <BarChart3 className="w-8 h-8 text-indigo-600" />
-            </div>
+          )} */}
+
+          {/* Success Display */}
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                <span className="text-green-800">{successMessage}</span>
           </div>
                  </div>
+          )}
 
-         {/* Learning Plans Section */}
-         {showLearningPlans && (
+          {/* Framework Selection */}
            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-             <div className="flex justify-between items-center mb-6">
-               <h2 className="text-xl font-bold text-gray-900">Learning Plans</h2>
-               <span className="text-sm text-gray-500">{learningPlans.length} plans available</span>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Select Competency Framework</h2>
+                <p className="text-gray-600 mt-1">Choose a framework to view its competencies and statistics</p>
+              </div>
+              <div className="text-sm text-gray-500">
+                {frameworks.length} frameworks available
+          </div>
              </div>
              
+            {/* Framework Dropdown */}
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-               {learningPlans.map((plan) => (
-                 <div key={plan.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                   <div className="flex items-center justify-between mb-3">
-                     <h3 className="font-semibold text-gray-900">{plan.name}</h3>
+              {frameworks.map((framework) => (
+                <div 
+                  key={framework.id} 
+                  className={`group border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                    selectedFramework?.id === framework.id 
+                      ? 'border-blue-500 bg-blue-50 shadow-md' 
+                      : 'border-gray-200 hover:border-blue-300 bg-white'
+                  }`}
+                  onClick={() => handleFrameworkSelect(framework)}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-gray-900 text-sm leading-tight">{framework.shortname}</h3>
+                    <div className="flex items-center space-x-2">
                      <span className={`px-2 py-1 text-xs rounded-full ${
-                       plan.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        framework.visible ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                      }`}>
-                       {plan.status}
+                        {framework.visible ? 'Visible' : 'Hidden'}
                      </span>
-                   </div>
-                   <p className="text-sm text-gray-600 mb-3">{plan.description}</p>
-                   <div className="flex justify-between text-sm text-gray-500">
-                     <span>{plan.competenciescount} competencies</span>
-                     <span>{plan.coursescount} courses</span>
-                   </div>
-                   <div className="mt-3 pt-3 border-t border-gray-100">
-                     <div className="flex justify-between text-xs text-gray-500">
-                       <span>Due: {new Date(plan.duedate * 1000).toLocaleDateString()}</span>
-                       <span>Created: {new Date(plan.timecreated * 1000).toLocaleDateString()}</span>
-                     </div>
-                   </div>
-                   
-                   {/* Plan Competencies with Grading */}
-                   <div className="mt-4 pt-3 border-t border-gray-100">
-                     <h4 className="text-sm font-medium text-gray-900 mb-2">Plan Competencies</h4>
-                     <div className="space-y-2">
-                       {competencies
-                         .filter(comp => comp.frameworkid === plan.templateid)
-                         .slice(0, 3) // Show first 3 competencies
-                         .map((competency) => (
-                           <div key={competency.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                             <div className="flex-1">
-                               <p className="text-xs font-medium text-gray-900">{competency.name}</p>
-                               <p className="text-xs text-gray-500">{competency.status}</p>
-                             </div>
-                             <div className="flex items-center gap-2">
-                               <span className="text-xs text-gray-500">
-                                 Grade: {competency.grade || 0}
-                               </span>
+                      {/* Action Buttons */}
+                      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                <button
-                                 onClick={() => openPlanGradingModal(competency, plan)}
-                                 className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                               >
-                                 Grade
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditFramework(framework);
+                          }}
+                          className="p-1 hover:bg-blue-100 rounded text-gray-600 hover:text-blue-600"
+                          title="Edit Framework"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFramework(framework);
+                          }}
+                          className="p-1 hover:bg-red-100 rounded text-gray-600 hover:text-red-600"
+                          title="Delete Framework"
+                        >
+                          <Trash2 className="w-3 h-3" />
                                </button>
                              </div>
                            </div>
-                         ))}
-                       {competencies.filter(comp => comp.frameworkid === plan.templateid).length > 3 && (
-                         <p className="text-xs text-gray-500 text-center">
-                           +{competencies.filter(comp => comp.frameworkid === plan.templateid).length - 3} more competencies
-                         </p>
-                       )}
                      </div>
+                  <p className="text-xs text-gray-600 mb-3 line-clamp-2">{truncateText(framework.description, 80)}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-500">
+                    <span className="font-medium">{framework.competenciescount} competencies</span>
+                    <span>{formatDate(framework.timecreated)}</span>
                    </div>
-                 </div>
-               ))}
+                  {selectedFramework?.id === framework.id && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <div className="flex items-center text-blue-600 text-xs font-medium">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Selected
              </div>
            </div>
          )}
-
-         {/* Real Courses Section */}
-         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-           <div className="flex justify-between items-center mb-6">
-             <h2 className="text-xl font-bold text-gray-900">Real Courses from IOMAD/Moodle</h2>
-             <div className="flex items-center space-x-3">
-               <button 
-                 onClick={() => setShowCourses(!showCourses)}
-                 className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-               >
-                 <BookOpen className="w-4 h-4" />
-                 <span>{showCourses ? 'Hide' : 'Show'} Courses ({courses.length})</span>
-               </button>
              </div>
+               ))}
            </div>
            
-           {/* Debug: Show competency-course links */}
-           <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-             <h3 className="text-sm font-semibold text-blue-900 mb-2">🔗 Competency-Course Links Status:</h3>
-             <div className="text-xs text-blue-800">
-               <p>✅ Found {competencies.length} competencies</p>
-               <p>✅ Found {courses.length} courses</p>
-               <p>🔗 Competencies with linked courses: {competencies.filter(c => c.relatedCourses && c.relatedCourses.length > 0).length}</p>
-               <p>📊 Total competency-course links: {competencies.reduce((total, c) => total + (c.relatedCourses?.length || 0), 0)}</p>
+
              </div>
              
-             {/* Show actual competency-course mappings */}
-             <div className="mt-3 pt-3 border-t border-blue-200">
-               <h4 className="text-xs font-semibold text-blue-900 mb-2">📋 Competency-Course Mappings:</h4>
-               <div className="space-y-1">
-                 {competencies.map((comp, index) => (
-                   <div key={comp.id} className="text-xs">
-                     <span className="font-medium text-blue-900">"{comp.name}"</span>
-                     {comp.relatedCourses && comp.relatedCourses.length > 0 ? (
-                       <span className="text-blue-700"> → {comp.relatedCourses.join(', ')}</span>
-                     ) : (
-                       <span className="text-red-600"> → No courses linked</span>
-                     )}
+          {/* Statistics and Content - Only show after framework selection */}
+          {selectedFramework && (
+            <>
+              {/* Statistics Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Selected Framework</p>
+                      <h3 className="text-lg font-bold text-gray-900 mt-1 truncate">
+                        {selectedFramework.shortname}
+                      </h3>
                    </div>
-                 ))}
+                    <Map className="w-8 h-8 text-purple-600" />
                </div>
              </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Total Competencies</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mt-1">{frameworkCompetencies.length}</h3>
            </div>
-           
-           {showCourses && (
-             <div className="space-y-4">
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 {courses.map((course) => (
-                   <div 
-                     key={course.id} 
-                     className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                     onClick={() => handleCourseClick(course)}
-                   >
-                     <div className="flex items-center justify-between mb-3">
-                       <h3 className="font-semibold text-gray-900 text-sm">{course.fullname}</h3>
-                       <span className={`px-2 py-1 text-xs rounded-full ${
-                         course.visible ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                       }`}>
-                         {course.visible ? 'Active' : 'Hidden'}
-                       </span>
+                    <BookOpen className="w-8 h-8 text-green-600" />
                      </div>
-                     <p className="text-xs text-gray-600 mb-3 line-clamp-2">{course.summary}</p>
-                     <div className="flex justify-between text-xs text-gray-500">
-                       <span>ID: {course.id}</span>
-                       <span>{course.format}</span>
                      </div>
-                     <div className="mt-2 pt-2 border-t border-gray-100">
-                       <div className="flex justify-between text-xs text-gray-500">
-                         <span>Category: {course.categoryname}</span>
-                         <span>{course.competencies?.length || 0} competencies</span>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Root Competencies</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mt-1">{treeData.length}</h3>
                        </div>
+                    <Target className="w-8 h-8 text-blue-600" />
                      </div>
                    </div>
-                 ))}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-500 text-sm font-medium">Filtered Results</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mt-1">{filteredCompetencies.length}</h3>
                </div>
-               
-               {courses.length === 0 && (
-                 <div className="text-center py-8">
-                   <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                   <p className="text-gray-500">No courses found. Please check your IOMAD/Moodle connection.</p>
+                    <Filter className="w-8 h-8 text-orange-600" />
                  </div>
-               )}
              </div>
-           )}
          </div>
 
-         {/* Filters and View Controls */}
+              {/* Search and Filters - Only show after framework selection */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
@@ -758,368 +889,130 @@ const CompetenciesMap: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder="Search competencies..."
+                        placeholder={`Search competencies in ${selectedFramework.shortname}...`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
-            <select
-              value={filterLevel}
-              onChange={(e) => setFilterLevel(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Levels</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-              <option value="expert">Expert</option>
-            </select>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Status</option>
-              <option value="not_started">Not Started</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="mastered">Mastered</option>
-            </select>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Categories</option>
-              {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-            <select
-              value={selectedFramework}
-              onChange={(e) => setSelectedFramework(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Frameworks</option>
-              {frameworks.map(framework => (
-                <option key={framework.id} value={framework.id.toString()}>{framework.name}</option>
-              ))}
-            </select>
-            <div className="flex border border-gray-300 rounded-lg overflow-hidden">
               <button
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-2 ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-              >
-                <Grid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-2 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('timeline')}
-                className={`px-3 py-2 ${viewMode === 'timeline' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-              >
-                <Calendar className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Competencies Display */}
-        {viewMode === 'grid' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCompetencies.map((competency) => (
-              <div 
-                key={competency.id} 
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => handleCompetencyClick(competency)}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    {getCategoryIcon(competency.category)}
-                    <span className="text-sm font-medium text-gray-600">{competency.category}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(competency.status)}
-                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(competency.status)}`}>
-                      {competency.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                </div>
-
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{competency.name}</h3>
-                <p className="text-gray-600 text-sm mb-4 line-clamp-2">{competency.description}</p>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Progress</span>
-                    <span className="text-sm font-medium text-gray-900">{competency.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${competency.progress}%` }}
-                    ></div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Level</span>
-                    <span className={`px-2 py-1 rounded-full ${getLevelColor(competency.level)}`}>
-                      {competency.level}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Grade</span>
-                    <span className="text-gray-900">{competency.grade || 0}%</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Time</span>
-                    <span className="text-gray-900">{competency.estimatedTime}</span>
-                  </div>
-
-                  {competency.skills.length > 0 && (
-                    <div>
-                      <span className="text-sm text-gray-500">Skills:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {competency.skills.slice(0, 3).map((skill, index) => (
-                          <span key={index} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {competency.relatedCourses && competency.relatedCourses.length > 0 && (
-                    <div>
-                      <span className="text-sm text-gray-500">Linked Courses:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {competency.relatedCourses.slice(0, 2).map((courseName, index) => (
-                          <span key={index} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                            {courseName}
-                          </span>
-                        ))}
-                        {competency.relatedCourses.length > 2 && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                            +{competency.relatedCourses.length - 2} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="flex gap-2">
-                    <button 
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCompetencyClick(competency);
-                      }}
-                    >
-                      {competency.status === 'not_started' ? 'Start Learning' :
-                       competency.status === 'in_progress' ? 'Continue' : 'Review'}
-                    </button>
-                    <button 
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openGradingModal(competency);
-                      }}
-                    >
-                      Grade
-                    </button>
-                    <button 
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowCourses(true);
-                      }}
-                    >
-                      Link Course
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {viewMode === 'list' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Competency</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Level</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredCompetencies.map((competency) => (
-                    <tr key={competency.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleCompetencyClick(competency)}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{competency.name}</div>
-                          <div className="text-sm text-gray-500">{competency.description}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {getCategoryIcon(competency.category)}
-                          <span className="ml-2 text-sm text-gray-900">{competency.category}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full ${getLevelColor(competency.level)}`}>
-                          {competency.level}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {getStatusIcon(competency.status)}
-                          <span className={`ml-2 px-2 py-1 text-xs rounded-full ${getStatusColor(competency.status)}`}>
-                            {competency.status.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${competency.progress}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm text-gray-900">{competency.progress}%</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {competency.grade || 0}%
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button 
-                            className="text-blue-600 hover:text-blue-900"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCompetencyClick(competency);
-                            }}
-                          >
-                            View Details
-                          </button>
-                          <button 
-                            className="text-green-600 hover:text-green-900"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openGradingModal(competency);
-                            }}
-                          >
-                            Grade
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {viewMode === 'timeline' && (
-          <div className="space-y-4">
-            {filteredCompetencies.map((competency) => (
-              <div key={competency.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
-                      {getCategoryIcon(competency.category)}
-                      <span className="text-sm font-medium text-gray-600">{competency.category}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {getStatusIcon(competency.status)}
-                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(competency.status)}`}>
-                        {competency.status.replace('_', ' ')}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {competency.timecreated ? new Date(competency.timecreated * 1000).toLocaleDateString() : 'N/A'}
-                  </div>
-                </div>
-
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{competency.name}</h3>
-                <p className="text-gray-600 text-sm mb-4">{competency.description}</p>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <span className="text-sm text-gray-500">Progress</span>
-                    <div className="flex items-center mt-1">
-                      <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full"
-                          style={{ width: `${competency.progress}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-sm font-medium">{competency.progress}%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-500">Level</span>
-                    <div className="mt-1">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getLevelColor(competency.level)}`}>
-                        {competency.level}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-500">Grade</span>
-                    <div className="mt-1 text-sm font-medium">{competency.grade || 0}%</div>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-500">Time</span>
-                    <div className="mt-1 text-sm font-medium">{competency.estimatedTime}</div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex justify-end space-x-2">
-                  <button 
+                    onClick={handleSearch}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    onClick={() => handleCompetencyClick(competency)}
                   >
-                    View Details
-                  </button>
-                  <button 
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    onClick={() => openGradingModal(competency)}
-                  >
-                    Grade
-                  </button>
+                    Search
+              </button>
+            </div>
+          </div>
+            </>
+          )}
+
+          {/* Competencies Tree View - Only show after framework selection */}
+          {selectedFramework && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                    <h2 className="text-xl font-bold text-gray-900">Competencies Hierarchy</h2>
+                    <p className="text-sm text-blue-600 mt-1">
+                      Showing competencies from: <span className="font-medium">{selectedFramework.shortname}</span>
+                    </p>
+                      </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-500">
+                      {treeData.length} root competencies
+                          </span>
+                    <button 
+                      onClick={() => {
+                        // Expand all nodes
+                        const allNodeIds = new Set<number>();
+                        const collectNodeIds = (nodes: TreeNode[]) => {
+                          nodes.forEach(node => {
+                            allNodeIds.add(node.id);
+                            collectNodeIds(node.children);
+                          });
+                        };
+                        collectNodeIds(treeData);
+                        setExpandedNodes(allNodeIds);
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Expand All
+                    </button>
+                    <button 
+                      onClick={() => setExpandedNodes(new Set())}
+                      className="text-sm text-gray-600 hover:text-gray-800"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
+          
+              <div className="p-4">
+                {treeData.length > 0 ? (
+                  <div className="space-y-1">
+                    {treeData.map((node) => (
+                      <TreeNodeComponent key={node.id} node={node} />
+                    ))}
+            </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No competencies found</h3>
+                    <p className="text-gray-600">
+                      {searchTerm ? 'Try adjusting your search criteria.' : 'Create a new competency to get started.'}
+                    </p>
+          </div>
+        )}
+                        </div>
+                    
+                    {/* Add Competency Button - Always show when framework is selected */}
+                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                          <button 
+                        onClick={handleCreateCompetency}
+                        disabled={!selectedFramework}
+                        className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span>Add Competency</span>
+                          </button>
+                      {!selectedFramework && (
+                        <p className="text-xs text-gray-500 mt-2 text-center">
+                          Select a framework above to add competencies
+                        </p>
+                      )}
+            </div>
           </div>
         )}
 
-        {filteredCompetencies.length === 0 && (
-          <div className="text-center py-12">
-            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No competencies found</h3>
-            <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
+          {/* Welcome Message - Show when no framework is selected */}
+          {!selectedFramework && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-8 border border-blue-100">
+              <div className="text-center">
+                <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <Target className="w-8 h-8 text-blue-600" />
+                    </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Competencies Map</h3>
+                <p className="text-gray-600 mb-4">
+                  Select a competency framework above to view its competencies, statistics, and hierarchical structure.
+                </p>
+                <div className="flex justify-center space-x-4 text-sm text-gray-500">
+                  <div className="flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
+                    View competency hierarchies
+                    </div>
+                  <div className="flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
+                    Analyze framework statistics
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle className="w-4 h-4 mr-1 text-green-500" />
+                    Search and filter competencies
+                  </div>
+                </div>
+                      </div>
           </div>
         )}
 
@@ -1130,8 +1023,8 @@ const CompetenciesMap: React.FC = () => {
               <div className="p-6 border-b border-gray-200">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{selectedCompetency.name}</h2>
-                    <p className="text-gray-600 mt-1">{selectedCompetency.description}</p>
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedCompetency.shortname}</h2>
+                    <p className="text-gray-600 mt-1">{stripHtmlTags(selectedCompetency.description)}</p>
                   </div>
                   <button
                     onClick={() => setSelectedCompetency(null)}
@@ -1148,90 +1041,64 @@ const CompetenciesMap: React.FC = () => {
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Details</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Category:</span>
-                        <span className="font-medium">{selectedCompetency.category}</span>
+                        <span className="text-gray-500">ID:</span>
+                        <span className="font-medium">{selectedCompetency.id}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Level:</span>
-                        <span className={`px-2 py-1 rounded-full ${getLevelColor(selectedCompetency.level)}`}>
-                          {selectedCompetency.level}
-                        </span>
+                        <span className="text-gray-500">Short Name:</span>
+                        <span className="font-medium">{selectedCompetency.shortname}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Status:</span>
-                        <span className={`px-2 py-1 rounded-full ${getStatusColor(selectedCompetency.status)}`}>
-                          {selectedCompetency.status.replace('_', ' ')}
-                        </span>
+                        <span className="text-gray-500">ID Number:</span>
+                        <span className="font-medium">{selectedCompetency.idnumber}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Progress:</span>
-                        <span className="font-medium">{selectedCompetency.progress}%</span>
+                        <span className="text-gray-500">Framework ID:</span>
+                        <span className="font-medium">{selectedCompetency.competencyframeworkid}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Grade:</span>
-                        <span className="font-medium">{selectedCompetency.grade || 0}%</span>
+                        <span className="text-gray-500">Parent ID:</span>
+                        <span className="font-medium">{selectedCompetency.parentid}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Estimated Time:</span>
-                        <span className="font-medium">{selectedCompetency.estimatedTime}</span>
+                        <span className="text-gray-500">Sort Order:</span>
+                        <span className="font-medium">{selectedCompetency.sortorder}</span>
                       </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Scale ID:</span>
+                        <span className="font-medium">{selectedCompetency.scaleid}</span>
                     </div>
-
-                    {selectedCompetency.skills.length > 0 && (
-                      <div className="mt-6">
-                        <h4 className="text-sm font-medium text-gray-900 mb-2">Skills</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedCompetency.skills.map((skill, index) => (
-                            <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                              {skill}
-                            </span>
-                          ))}
                         </div>
-                      </div>
-                    )}
-
-                    {selectedCompetency.relatedCourses.length > 0 && (
-                      <div className="mt-6">
-                        <h4 className="text-sm font-medium text-gray-900 mb-2">Related Courses</h4>
-                        <div className="space-y-2">
-                          {selectedCompetency.relatedCourses.map((course, index) => (
-                            <div key={index} className="flex items-center space-x-2">
-                              <BookOpen className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm text-gray-600">{course}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Evidence & Progress</h3>
-                    {competencyEvidence.length > 0 ? (
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Timestamps</h3>
                       <div className="space-y-3">
-                        {competencyEvidence.map((evidence) => (
-                          <div key={evidence.id} className="border border-gray-200 rounded-lg p-3">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <div className="font-medium text-sm">{evidence.action}</div>
-                                <div className="text-sm text-gray-600">{evidence.note}</div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Created:</span>
+                        <span className="font-medium">{formatDate(selectedCompetency.timecreated)}</span>
                               </div>
-                              <div className="text-right">
-                                <div className="text-sm font-medium">{evidence.grade}%</div>
-                                <div className="text-xs text-gray-500">
-                                  {new Date(evidence.timecreated * 1000).toLocaleDateString()}
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Modified:</span>
+                        <span className="font-medium">{formatDate(selectedCompetency.timemodified)}</span>
                                 </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">User Modified:</span>
+                        <span className="font-medium">{selectedCompetency.usermodified}</span>
                               </div>
                             </div>
+
+                    <div className="mt-6">
+                      <h4 className="text-sm font-medium text-gray-900 mb-2">Path</h4>
+                      <p className="text-sm text-gray-600">{selectedCompetency.path}</p>
                           </div>
-                        ))}
+
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-900 mb-2">Rule Configuration</h4>
+                      <p className="text-sm text-gray-600">
+                        Type: {selectedCompetency.ruletype} | Outcome: {selectedCompetency.ruleoutcome}
+                      </p>
                       </div>
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                        <p>No evidence recorded yet</p>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1242,9 +1109,14 @@ const CompetenciesMap: React.FC = () => {
                   >
                     Close
                   </button>
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                    {selectedCompetency.status === 'not_started' ? 'Start Learning' :
-                     selectedCompetency.status === 'in_progress' ? 'Continue' : 'Review'}
+                <button
+                  onClick={() => {
+                      setSelectedCompetency(null);
+                      handleEditCompetency(selectedCompetency);
+                  }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    Edit Competency
                   </button>
                 </div>
               </div>
@@ -1252,278 +1124,478 @@ const CompetenciesMap: React.FC = () => {
           </div>
         )}
 
-        {/* Course Detail Modal */}
-        {selectedCourse && (
+        {/* Create/Edit Modal Placeholder */}
+        {(showCreateModal || showEditModal) && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-start mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">{selectedCourse.fullname}</h3>
-                <button
-                  onClick={() => {
-                    setSelectedCourse(null);
-                    setCourseCompetencies([]);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {showCreateModal ? (formData.parentid === 0 ? 'Create New Root Competency' : 'Create New Child Competency') : 'Edit Competency'}
+              </h3>
               
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Course Details */}
-                <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Course Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Course ID:</span>
-                        <span className="font-medium">{selectedCourse.id}</span>
+              {/* Framework Selection Display */}
+              {showCreateModal && selectedFramework && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <Map className="w-4 h-4 text-blue-600" />
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Short Name:</span>
-                        <span className="font-medium">{selectedCourse.shortname}</span>
+                    <div className="ml-2">
+                      <p className="text-sm font-medium text-blue-800">Adding to Framework:</p>
+                      <p className="text-sm text-blue-700">{selectedFramework.shortname}</p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Category:</span>
-                        <span className="font-medium">{selectedCourse.categoryname}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Format:</span>
-                        <span className="font-medium">{selectedCourse.format}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Status:</span>
-                        <span className={`font-medium ${selectedCourse.visible ? 'text-green-600' : 'text-gray-600'}`}>
-                          {selectedCourse.visible ? 'Active' : 'Hidden'}
-                        </span>
+              )}
+
+              {/* Parent Competency Display */}
+              {showCreateModal && formData.parentid !== 0 && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <Target className="w-4 h-4 text-green-600" />
                       </div>
+                    <div className="ml-2">
+                      <p className="text-sm font-medium text-green-800">Adding as child of:</p>
+                      <p className="text-sm text-green-700">
+                        {frameworkCompetencies.find(c => c.id === formData.parentid)?.shortname || 'Parent Competency'}
+                      </p>
                     </div>
                   </div>
-                  
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Course Summary</h4>
-                    <p className="text-sm text-gray-600">{selectedCourse.summary}</p>
                   </div>
-                </div>
+              )}
                 
-                {/* Course Competencies */}
                 <div className="space-y-4">
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Course Competencies</h4>
-                    {courseCompetencies.length > 0 ? (
-                      <div className="space-y-2">
-                        {courseCompetencies.map((competency) => (
-                          <div key={competency.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900">{competency.name}</p>
-                              <p className="text-xs text-gray-500">{competency.description}</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Short Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.shortname}
+                    onChange={(e) => setFormData({...formData, shortname: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(competency.status)}`}>
-                                {competency.status}
-                              </span>
-                              <button
-                                onClick={() => linkCompetencyToCourse(competency.id, selectedCourse.id)}
-                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                              >
-                                Link
-                              </button>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID Number
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.idnumber}
+                    onChange={(e) => setFormData({...formData, idnumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                             </div>
+                  
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                           </div>
-                        ))}
                       </div>
-                    ) : (
-                      <div className="text-center py-4">
-                        <BookOpen className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-500">No competencies generated for this course yet.</p>
+                
+              <div className="flex justify-end space-x-3 mt-6">
                         <button
                           onClick={() => {
-                            const newCompetencies = moodleService.generateCourseCompetencies(selectedCourse, selectedCourse.id);
-                            setCourseCompetencies(newCompetencies);
+                    setShowCreateModal(false);
+                    setShowEditModal(false);
+                    setEditingCompetency(null);
                           }}
-                          className="mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          Generate Competencies
+                  Cancel
                         </button>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 mb-2">Link to Existing Competencies</h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {competencies.slice(0, 5).map((competency) => (
-                        <div key={competency.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">{competency.name}</p>
-                            <p className="text-xs text-gray-500">{competency.category}</p>
-                          </div>
                           <button
-                            onClick={() => linkCompetencyToCourse(competency.id, selectedCourse.id)}
-                            className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                          >
-                            Link
+                          onClick={async () => {
+                    try {
+                      setError(''); // Clear any previous errors
+                      setSuccessMessage(''); // Clear any previous success messages
+                      
+                      if (showCreateModal) {
+                        // Create new competency
+                        if (!selectedFramework) {
+                          setError('No framework selected. Please select a framework first.');
+                          return;
+                        }
+                        
+                        const competencyData = {
+                          shortname: formData.shortname,
+                          idnumber: formData.idnumber,
+                          description: formData.description,
+                          descriptionformat: 1,
+                          competencyframeworkid: selectedFramework.id, // Use the selected framework
+                          parentid: formData.parentid, // Use the parent ID from form (0 for root, or parent competency ID)
+                          sortorder: formData.sortorder,
+                          ruleoutcome: 0
+                          // Note: visible is not a valid parameter for competencies
+                        };
+                        
+                        console.log('Creating competency:', competencyData);
+                        const newCompetency = await competencyService.createCompetency(competencyData);
+                        console.log('✅ Created competency:', newCompetency);
+                        
+                        // Refresh the competencies list
+                        if (selectedFramework) {
+                          const competencies = await competencyService.getCompetenciesByFramework(selectedFramework.id);
+                          setFrameworkCompetencies(competencies);
+                        }
+                        
+                        // Show success message
+                        setSuccessMessage(`🎉 Successfully created competency: "${newCompetency.shortname}"`);
+                        
+                        // Clear success message after 5 seconds
+                        setTimeout(() => {
+                          setSuccessMessage('');
+                        }, 5000);
+                        
+                      } else if (showEditModal && editingCompetency) {
+                        // Update existing competency
+                        const competencyData = {
+                          shortname: formData.shortname,
+                          idnumber: formData.idnumber,
+                          description: formData.description,
+                          descriptionformat: 1,
+                          competencyframeworkid: formData.competencyframeworkid,
+                          parentid: formData.parentid,
+                          sortorder: formData.sortorder,
+                          ruleoutcome: 0
+                          // Note: visible is not a valid parameter for competencies
+                        };
+                        
+                        console.log('Updating competency:', competencyData);
+                        const updatedCompetency = await competencyService.updateCompetency(editingCompetency.id, competencyData);
+                        console.log('✅ Updated competency:', updatedCompetency);
+                        
+                        // Refresh the competencies list
+                        if (selectedFramework) {
+                          const competencies = await competencyService.getCompetenciesByFramework(selectedFramework.id);
+                          setFrameworkCompetencies(competencies);
+                        }
+                        
+                        // Show success message
+                        setSuccessMessage(`✅ Successfully updated competency: "${updatedCompetency.shortname}"`);
+                        
+                        // Clear success message after 5 seconds
+                        setTimeout(() => {
+                          setSuccessMessage('');
+                        }, 5000);
+                      }
+                      
+                      // Close modal and reset form
+                      setShowCreateModal(false);
+                      setShowEditModal(false);
+                      setEditingCompetency(null);
+                      setFormData({
+                        shortname: '',
+                        idnumber: '',
+                        description: '',
+                        competencyframeworkid: 0,
+                        parentid: 0,
+                        sortorder: 0
+                      });
+                      
+                    } catch (error) {
+                      console.error('❌ Error saving competency:', error);
+                      setError('Failed to save competency. Please try again.');
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  {showCreateModal ? 'Create' : 'Update'}
                           </button>
                         </div>
-                      ))}
-                      {competencies.length > 5 && (
-                        <p className="text-xs text-gray-500 text-center">
-                          +{competencies.length - 5} more competencies available
-                        </p>
-                      )}
+                    </div>
+                  </div>
+        )}
+
+        {/* Create Framework Modal */}
+        {showCreateFrameworkModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900">Create Competency Framework</h2>
+                <button
+                    onClick={() => setShowCreateFrameworkModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+              
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Framework Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.shortname}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, shortname: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework name"
+                  />
+          </div>
+              
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.idnumber}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, idnumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter unique ID number"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description *
+                  </label>
+                  <textarea
+                    value={frameworkFormData.description}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, description: e.target.value})}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework description"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Visibility
+                    </label>
+                    <select
+                      value={frameworkFormData.visible}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, visible: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>Visible</option>
+                      <option value={0}>Hidden</option>
+                    </select>
+              </div>
+              
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description Format
+                    </label>
+                    <select
+                      value={frameworkFormData.descriptionformat}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, descriptionformat: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>HTML</option>
+                      <option value={0}>Moodle</option>
+                      <option value={2}>Plain Text</option>
+                      <option value={4}>Markdown</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Taxonomies
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.taxonomies}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, taxonomies: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter taxonomies (comma-separated)"
+                  />
+                </div>
+
+                {/* Scale Configuration Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-blue-800">Scale Configuration</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Using default competency scale (ID: 2) with "Not yet competent" and "Competent" levels.
+                        This configuration has been tested and works correctly.
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
               
-              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
                 <button
-                  onClick={() => {
-                    setSelectedCourse(null);
-                    setCourseCompetencies([]);
-                  }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowCreateFrameworkModal(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
-                  Close
+                  Cancel
                 </button>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  Save Changes
+                <button
+                  onClick={handleCreateFrameworkSubmit}
+                  disabled={!frameworkFormData.shortname || !frameworkFormData.idnumber || !frameworkFormData.description}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Framework
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Grading Modal */}
-        {showGradingModal && gradingCompetency && (
+        {/* Edit Framework Modal */}
+        {showEditFrameworkModal && editingFramework && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Grade Competency: {gradingCompetency.name}
-              </h3>
+            <div className="bg-white rounded-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900">Edit Competency Framework</h2>
+                  <button
+                    onClick={() => {
+                      setShowEditFrameworkModal(false);
+                      setEditingFramework(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
               
-              <div className="space-y-4">
+              <div className="p-6 space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Grade Value
+                    Framework Name *
                   </label>
                   <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={gradeValue}
-                    onChange={(e) => setGradeValue(parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    type="text"
+                    value={frameworkFormData.shortname}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, shortname: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework name"
+                  />
+              </div>
+              
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ID Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={frameworkFormData.idnumber}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, idnumber: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter unique ID number"
                   />
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Note (Optional)
+                    Description *
                   </label>
                   <textarea
-                    value={gradeNote}
-                    onChange={(e) => setGradeNote(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Add a note about this grade..."
+                    value={frameworkFormData.description}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, description: e.target.value})}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter framework description"
                   />
                 </div>
-              </div>
-              
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowGradingModal(false);
-                    setGradingCompetency(null);
-                    setGradeValue(0);
-                    setGradeNote('');
-                  }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleGradeCompetency}
-                  disabled={gradingLoading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {gradingLoading ? 'Grading...' : 'Submit Grade'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Plan Grading Modal */}
-        {showPlanGradingModal && planGradingCompetency && planGradingPlan && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Grade Competency in Plan: {planGradingCompetency.name}
-              </h3>
-              
-              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  <strong>Plan:</strong> {planGradingPlan.name}
-                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Visibility
+                    </label>
+                    <select
+                      value={frameworkFormData.visible}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, visible: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>Visible</option>
+                      <option value={0}>Hidden</option>
+                    </select>
               </div>
               
-              <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description Format
+                    </label>
+                    <select
+                      value={frameworkFormData.descriptionformat}
+                      onChange={(e) => setFrameworkFormData({...frameworkFormData, descriptionformat: parseInt(e.target.value)})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value={1}>HTML</option>
+                      <option value={0}>Moodle</option>
+                      <option value={2}>Plain Text</option>
+                      <option value={4}>Markdown</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Grade Value
+                    Taxonomies
                   </label>
                   <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={planGradeValue}
-                    onChange={(e) => setPlanGradeValue(parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    type="text"
+                    value={frameworkFormData.taxonomies}
+                    onChange={(e) => setFrameworkFormData({...frameworkFormData, taxonomies: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Enter taxonomies (comma-separated)"
                   />
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Note (Optional)
-                  </label>
-                  <textarea
-                    value={planGradeNote}
-                    onChange={(e) => setPlanGradeNote(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Add a note about this grade..."
-                  />
+
+                {/* Scale Configuration Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-blue-800">Scale Configuration</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Using existing scale configuration. Scale ID: {editingFramework.scaleid}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
               
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
                 <button
                   onClick={() => {
-                    setShowPlanGradingModal(false);
-                    setPlanGradingCompetency(null);
-                    setPlanGradingPlan(null);
-                    setPlanGradeValue(0);
-                    setPlanGradeNote('');
+                    setShowEditFrameworkModal(false);
+                    setEditingFramework(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleGradeCompetencyInPlan}
-                  disabled={planGradingLoading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  onClick={handleEditFrameworkSubmit}
+                  disabled={!frameworkFormData.shortname || !frameworkFormData.idnumber || !frameworkFormData.description}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {planGradingLoading ? 'Grading...' : 'Submit Grade'}
+                  Update Framework
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 
