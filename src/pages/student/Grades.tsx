@@ -18,7 +18,7 @@ import {
   AlertCircle,
   FileText
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import G8PlusLayout from '../../components/G8PlusLayout';
 import { moodleService } from '../../services/moodleApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -214,16 +214,16 @@ const Grades: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+      <G8PlusLayout userName={currentUser?.fullname || "Student"}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      </DashboardLayout>
+      </G8PlusLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+    <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -467,7 +467,7 @@ const Grades: React.FC = () => {
           </Card>
         )}
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 

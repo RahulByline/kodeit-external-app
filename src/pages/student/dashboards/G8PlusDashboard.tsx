@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   BookOpen, 
@@ -20,11 +20,15 @@ import {
   Users,
   Activity,
   Circle,
-  ArrowRight
+  ArrowRight,
+  Bookmark,
+  Star,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { Skeleton } from '../../../components/ui/skeleton';
 import G8PlusLayout from '../../../components/G8PlusLayout';
+import { moodleService } from '../../../services/moodleApi';
 
 interface Stats {
   enrolledCourses: number;
@@ -85,13 +89,13 @@ interface Course {
 }
 
 interface G8PlusDashboardProps {
-  stats: Stats;
-  userCourses: Course[];
-  courseProgress: CourseProgress[];
-  studentActivities: StudentActivity[];
-  recentActivities: RecentActivity[];
-  userAssignments: any[];
-  loadingStates: {
+  stats?: Stats;
+  userCourses?: Course[];
+  courseProgress?: CourseProgress[];
+  studentActivities?: StudentActivity[];
+  recentActivities?: RecentActivity[];
+  userAssignments?: any[];
+  loadingStates?: {
     stats: boolean;
     courseProgress: boolean;
     studentActivities: boolean;
@@ -103,17 +107,50 @@ interface G8PlusDashboardProps {
 }
 
 const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
-  stats,
-  userCourses,
-  courseProgress,
-  studentActivities,
-  recentActivities,
-  userAssignments,
-  loadingStates
+  stats: propStats,
+  userCourses: propUserCourses,
+  courseProgress: propCourseProgress,
+  studentActivities: propStudentActivities,
+  recentActivities: propRecentActivities,
+  userAssignments: propUserAssignments,
+  loadingStates: propLoadingStates
 }) => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
+
+  // Internal state management
+  const [internalStats, setInternalStats] = useState<Stats>({
+    enrolledCourses: 0,
+    completedAssignments: 0,
+    pendingAssignments: 0,
+    averageGrade: 0,
+    totalActivities: 0,
+    activeStudents: 0
+  });
+  const [internalUserCourses, setInternalUserCourses] = useState<Course[]>([]);
+  const [internalCourseProgress, setInternalCourseProgress] = useState<CourseProgress[]>([]);
+  const [internalStudentActivities, setInternalStudentActivities] = useState<StudentActivity[]>([]);
+  const [internalRecentActivities, setInternalRecentActivities] = useState<RecentActivity[]>([]);
+  const [internalUserAssignments, setInternalUserAssignments] = useState<any[]>([]);
+  const [internalLoadingStates, setInternalLoadingStates] = useState({
+    stats: false,
+    courseProgress: false,
+    studentActivities: false,
+    recentActivities: false,
+    userCourses: false,
+    userAssignments: false,
+    profile: false
+  });
+
+  // Use props if provided, otherwise use internal state
+  const stats = propStats || internalStats;
+  const userCourses = propUserCourses || internalUserCourses;
+  const courseProgress = propCourseProgress || internalCourseProgress;
+  const studentActivities = propStudentActivities || internalStudentActivities;
+  const recentActivities = propRecentActivities || internalRecentActivities;
+  const userAssignments = propUserAssignments || internalUserAssignments;
+  const loadingStates = propLoadingStates || internalLoadingStates;
 
   // Function to handle image loading state
   const handleImageLoad = (courseId: string) => {
@@ -123,6 +160,35 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
   const handleImageError = (courseId: string) => {
     setImageLoadingStates(prev => ({ ...prev, [courseId]: false }));
   };
+
+  // Data fetching effect - only runs when component mounts or currentUser changes
+  useEffect(() => {
+    if (currentUser?.id && !propStats) {
+      // Only fetch data if props are not provided (internal state management)
+      const fetchDashboardData = async () => {
+        try {
+          setInternalLoadingStates(prev => ({ ...prev, userCourses: true }));
+          
+          // Fetch user courses
+          const courses = await moodleService.getUserCourses(currentUser.id.toString());
+          setInternalUserCourses(courses || []);
+          
+          // Update stats based on courses
+          setInternalStats(prev => ({
+            ...prev,
+            enrolledCourses: courses?.length || 0
+          }));
+          
+          setInternalLoadingStates(prev => ({ ...prev, userCourses: false }));
+        } catch (error) {
+          console.error('Error fetching dashboard data:', error);
+          setInternalLoadingStates(prev => ({ ...prev, userCourses: false }));
+        }
+      };
+
+      fetchDashboardData();
+    }
+  }, [currentUser?.id, propStats]);
 
   // Initialize image loading states when courses are loaded
   useEffect(() => {
@@ -210,10 +276,10 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
     }
   };
 
-  return (
-
+  // Memoize the dashboard content to prevent unnecessary re-renders
+  const dashboardContent = useMemo(() => (
     <G8PlusLayout userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-6">
+      <div className="space-y-8 px-2 lg:px-3 py-4 lg:py-5">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -648,10 +714,154 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
             ))
           )}
         </div>
+
+        {/* E-books Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Featured E-books</h2>
+              <p className="text-gray-600 mt-1">Access digital learning materials and resources</p>
+            </div>
+            <Link to="/dashboard/student/ebooks" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+              View All E-books →
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Mock E-books Data */}
+            {[
+              {
+                id: '1',
+                title: 'Introduction to Python Programming',
+                author: 'Dr. Sarah Johnson',
+                description: 'A comprehensive guide to Python programming fundamentals with practical examples.',
+                category: 'Programming',
+                format: 'pdf',
+                rating: 4.8,
+                downloads: 1250,
+                pages: 320,
+                thumbnail: '/api/placeholder/300/200',
+                isBookmarked: false,
+                tags: ['Python', 'Programming', 'Beginner']
+              },
+              {
+                id: '2',
+                title: 'Web Development with React',
+                author: 'Mike Chen',
+                description: 'Learn modern web development using React.js with hands-on projects.',
+                category: 'Web Development',
+                format: 'interactive',
+                rating: 4.9,
+                downloads: 890,
+                pages: 450,
+                thumbnail: '/api/placeholder/300/200',
+                isBookmarked: true,
+                tags: ['React', 'JavaScript', 'Frontend']
+              },
+              {
+                id: '3',
+                title: 'Data Science Fundamentals',
+                author: 'Dr. Emily Rodriguez',
+                description: 'Master the basics of data science including statistics and machine learning.',
+                category: 'Data Science',
+                format: 'video',
+                rating: 4.7,
+                downloads: 2100,
+                pages: 280,
+                duration: '8h 30m',
+                thumbnail: '/api/placeholder/300/200',
+                isBookmarked: false,
+                tags: ['Data Science', 'Statistics', 'ML']
+              }
+            ].map(ebook => (
+              <div key={ebook.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                {/* Thumbnail */}
+                <div className="relative h-32 bg-gradient-to-br from-blue-50 to-purple-50">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <BookOpen className="w-12 h-12 text-blue-500" />
+                  </div>
+                  <div className="absolute top-2 right-2">
+                    <button className={`p-1.5 rounded-full ${ebook.isBookmarked ? 'bg-blue-100 text-blue-600' : 'bg-white text-gray-400'} hover:bg-blue-100 hover:text-blue-600 transition-colors`}>
+                      <Bookmark className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="absolute bottom-2 left-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      ebook.format === 'pdf' ? 'bg-red-100 text-red-600' :
+                      ebook.format === 'interactive' ? 'bg-green-100 text-green-600' :
+                      ebook.format === 'video' ? 'bg-purple-100 text-purple-600' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {ebook.format.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Content */}
+                <div className="p-4">
+                  <h3 className="font-semibold text-gray-900 text-sm line-clamp-2 mb-1">{ebook.title}</h3>
+                  <p className="text-xs text-gray-600 mb-2">{ebook.author}</p>
+                  <p className="text-xs text-gray-500 line-clamp-2 mb-3">{ebook.description}</p>
+                  
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3 text-xs text-gray-500">
+                      <div className="flex items-center">
+                        <Star className="w-3 h-3 text-yellow-400 mr-1" />
+                        <span>{ebook.rating}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <Download className="w-3 h-3 mr-1" />
+                        <span>{ebook.downloads.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {ebook.tags.slice(0, 2).map(tag => (
+                      <span key={tag} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Action Button */}
+                  <Link 
+                    to="/dashboard/student/ebooks"
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center text-xs"
+                  >
+                    <Eye className="w-3 h-3 mr-1" />
+                    Read Now
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick Stats */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">12</div>
+                <div className="text-sm text-gray-600">Total E-books</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">4</div>
+                <div className="text-sm text-gray-600">Bookmarked</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-purple-600">15.2K</div>
+                <div className="text-sm text-gray-600">Total Downloads</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       </div>
     </G8PlusLayout>
-  );
+  ), [currentUser?.fullname, stats, userCourses, courseProgress, studentActivities, recentActivities, userAssignments, loadingStates, imageLoadingStates]);
+
+  return dashboardContent;
 };
 
   export default G8PlusDashboard;

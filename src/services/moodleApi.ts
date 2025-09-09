@@ -3207,8 +3207,8 @@ export const moodleService = {
 
     }
 
-    },
-  
+  },
+
     // Get course count for a specific category
     async getCategoryCourseCount(categoryId: number) {
       try {
@@ -3273,8 +3273,8 @@ export const moodleService = {
         return [];
       }
     },
-  
-    async getUserNotifications(userId: string) {
+
+  async getUserNotifications(userId: string) {
 
     // Mock notifications for now
 
@@ -9127,7 +9127,7 @@ export const moodleService = {
 
     try {
       console.log('🎓 Fetching student cohort for user:', userId);
-      
+
       // First, get all cohorts
       const cohortsResponse = await moodleApi.get('', {
 
@@ -9305,14 +9305,14 @@ export const moodleService = {
       console.log('✅ Using default navigation settings from storage for cohort:', cohortId);
 
       const defaultSettings = this.getDefaultNavigationSettings();
-      
+
       // Cache the settings
       setCachedData(cache.cohortSettings, cohortId, defaultSettings);
       return defaultSettings;
 
     } catch (error) {
       console.error('❌ Error reading cohort navigation settings:', error);
-      
+
       const defaultSettings = this.getDefaultNavigationSettings();
       // Cache even on error to avoid repeated failures
       setCachedData(cache.cohortSettings, cohortId, defaultSettings);
@@ -15215,11 +15215,11 @@ export const moodleService = {
       // Get completion status for all activities in the course (single API call)
       let allCompletionStatuses = [];
       try {
-        const completionResponse = await moodleApi.get('', {
-          params: {
-            wsfunction: 'core_completion_get_activities_completion_status',
-            courseid: courseId,
-            userid: userId || await this.getCurrentUserId(),
+              const completionResponse = await moodleApi.get('', {
+                params: {
+                  wsfunction: 'core_completion_get_activities_completion_status',
+                  courseid: courseId,
+                  userid: userId || await this.getCurrentUserId(),
           },
         });
         
