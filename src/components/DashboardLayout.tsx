@@ -34,7 +34,7 @@ import { useAuth } from '../context/AuthContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  userRole: 'admin' | 'school_admin' | 'teacher' | 'student';
+  userRole: 'school_admin' | 'teacher' | 'student';
   userName: string;
 }
 
@@ -121,51 +121,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
       }
     ];
 
-    if (userRole === 'admin') {
-      return [
-        {
-          title: 'DASHBOARD',
-          items: [
-            { name: 'Admin Dashboard', icon: LayoutDashboard, path: '/dashboard/admin' },
-            { name: 'Community', icon: Users, path: '/dashboard/admin/community' },
-            { name: 'Enrollments', icon: GraduationCap, path: '/dashboard/admin/enrollments' },
-          ]
-        },
-        {
-          title: 'TEACHERS',
-          items: [
-            { name: 'Teachers', icon: Users, path: '/dashboard/admin/teachers' },
-            { name: 'Master Trainers', icon: Award, path: '/dashboard/admin/master-trainers' },
-          ]
-        },
-        {
-          title: 'COURSES & PROGRAMS',
-          items: [
-            { name: 'Courses & Programs', icon: BookOpen, path: '/dashboard/admin/courses' },
-            { name: 'Certifications', icon: GraduationCap, path: '/dashboard/admin/certifications' },
-            { name: 'Assessments', icon: FileText, path: '/dashboard/admin/assessments' },
-            { name: 'Schools', icon: School, path: '/dashboard/admin/schools' },
-          ]
-        },
-        {
-          title: 'INSIGHTS',
-          items: [
-            { name: 'Analytics', icon: BarChart3, path: '/dashboard/admin/analytics' },
-            { name: 'Predictive Models', icon: TrendingUp, path: '/dashboard/admin/predictive' },
-            { name: 'Reports', icon: FileText, path: '/dashboard/admin/reports' },
-            { name: 'Competencies Map', icon: Map, path: '/dashboard/admin/competencies' },
-          ]
-        },
-        {
-          title: 'SETTINGS',
-          items: [
-            { name: 'System Settings', icon: Settings, path: '/dashboard/admin/settings' },
-            { name: 'User Management', icon: Users, path: '/dashboard/admin/users' },
-            { name: 'Cohort Navigation', icon: Users, path: '/dashboard/admin/cohort-navigation' },
-          ]
-        }
-      ];
-    }
+    // Admin role removed - now handled by AdminDashboardLayout
 
     if (userRole === 'school_admin') {
       return [
@@ -467,7 +423,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
       {/* Main Content - offset by sidebar width on desktop, full width on mobile */}
       <div className="lg:ml-64 min-h-screen">
         {/* Fixed Top Bar */}
-        <header className="fixed top-0 left-0 lg:left-64 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
+        <header className="fixed top-0 left-0 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
           <div className="px-4 lg:px-6 py-2">
             <div className="flex items-center justify-between">
               <div className="flex-1 max-w-md">

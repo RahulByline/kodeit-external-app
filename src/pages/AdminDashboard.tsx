@@ -16,7 +16,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
-import DashboardLayout from '../components/DashboardLayout';
+import AdminDashboardLayout from '../components/AdminDashboardLayout';
 import { moodleService } from '../services/moodleApi';
 import { useAuth } from '../context/AuthContext';
 
@@ -613,7 +613,7 @@ const AdminDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin User"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin User"}>
         <div className="p-6 space-y-6">
           {/* Header Skeleton */}
           <div className="space-y-4">
@@ -793,13 +793,13 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   if (error) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin User"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin User"}>
         <div className="space-y-6">
           {/* Enhanced Warning Banner */}
           <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-6 shadow-sm">
@@ -1349,13 +1349,13 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   console.log('AdminDashboard - Rendering main dashboard');
   return (
-    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin User"}>
+    <AdminDashboardLayout userName={currentUser?.fullname || "Admin User"}>
       <div className="space-y-6">
         {/* Enhanced Header */}
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
@@ -2024,7 +2024,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

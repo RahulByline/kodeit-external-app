@@ -39,7 +39,7 @@ import {
   Folder,
   FolderOpen
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import AdminDashboardLayout from '../../components/AdminDashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { competencyService, CompetencyFramework, Competency } from '../../services/competencyService';
 
@@ -572,14 +572,14 @@ const CompetenciesMap: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <Loader2 className="animate-spin h-6 w-6 text-blue-600" />
             <span className="text-gray-600">Loading competencies...</span>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
@@ -588,7 +588,7 @@ const CompetenciesMap: React.FC = () => {
     const hasChildren = node.children.length > 0;
     const isExpanded = expandedNodes.has(node.id);
 
-    return (
+  return (
       <div className="select-none">
         <div
           className={`flex items-center py-2 px-3 hover:bg-gray-50 rounded-lg cursor-pointer group ${
@@ -608,7 +608,7 @@ const CompetenciesMap: React.FC = () => {
 
           {/* Expand/Collapse Button */}
           {hasChildren ? (
-            <button
+             <button 
               onClick={(e) => {
                 e.stopPropagation();
                 toggleNode(node.id);
@@ -620,7 +620,7 @@ const CompetenciesMap: React.FC = () => {
               ) : (
                 <ChevronRight className="w-4 h-4 text-gray-600" />
               )}
-            </button>
+             </button>
           ) : (
             <div className="w-6 mr-2" />
           )}
@@ -636,7 +636,7 @@ const CompetenciesMap: React.FC = () => {
             ) : (
               <Target className="w-4 h-4 text-gray-500" />
             )}
-          </div>
+        </div>
 
           {/* Node Content */}
           <div className="flex-1 min-w-0">
@@ -683,32 +683,32 @@ const CompetenciesMap: React.FC = () => {
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
-              </div>
             </div>
           </div>
-        </div>
+              </div>
+            </div>
 
         {/* Children */}
         {hasChildren && isExpanded && (
-          <div>
+              <div>
             {node.children.map((child) => (
               <TreeNodeComponent key={child.id} node={child} />
             ))}
-          </div>
+              </div>
         )}
-      </div>
+            </div>
     );
   };
 
   return (
-    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+    <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
-          <div>
+              <div>
             <h1 className="text-2xl font-bold text-gray-900">Competencies Map</h1>
               <p className="text-gray-600">Manage competency frameworks and competencies</p>
-          </div>
+              </div>
                      <div className="flex items-center space-x-3">
              <button 
                 onClick={handleRefresh}
@@ -736,8 +736,8 @@ const CompetenciesMap: React.FC = () => {
                <Download className="w-4 h-4" />
                <span>Export</span>
              </button>
-           </div>
-        </div>
+            </div>
+          </div>
 
           {/* Error Display */}
           {/* {error && (
@@ -756,11 +756,11 @@ const CompetenciesMap: React.FC = () => {
                 <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
                 <span className="text-green-800">{successMessage}</span>
           </div>
-              </div>
+                 </div>
           )}
 
           {/* Framework Selection */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Select Competency Framework</h2>
@@ -769,8 +769,8 @@ const CompetenciesMap: React.FC = () => {
               <div className="text-sm text-gray-500">
                 {frameworks.length} frameworks available
           </div>
-                 </div>
-
+             </div>
+             
             {/* Framework Dropdown */}
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {frameworks.map((framework) => (
@@ -1595,7 +1595,7 @@ const CompetenciesMap: React.FC = () => {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

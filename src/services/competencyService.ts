@@ -1018,6 +1018,95 @@ export const competencyService = {
       console.error('❌ Competency API connection failed:', error);
       return false;
     }
+  },
+
+  /**
+   * Add a competency to a course
+   * @param courseId - Course ID
+   * @param competencyId - Competency ID
+   * @returns Promise<boolean>
+   */
+  async addCompetencyToCourse(courseId: number, competencyId: number): Promise<boolean> {
+    try {
+      console.log(`🔗 Adding competency ${competencyId} to course ${courseId}...`);
+      
+      const apiParams = {
+        wsfunction: 'core_competency_add_competency_to_course',
+        courseid: courseId,
+        competencyid: competencyId
+      };
+
+      const response = await makeApiCall(apiParams);
+      
+      if (response === true || response === 1) {
+        console.log(`✅ Successfully added competency ${competencyId} to course ${courseId}`);
+        return true;
+      } else {
+        throw new Error('Failed to add competency to course');
+      }
+    } catch (error) {
+      console.error(`❌ Error adding competency ${competencyId} to course ${courseId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Remove a competency from a course
+   * @param courseId - Course ID
+   * @param competencyId - Competency ID
+   * @returns Promise<boolean>
+   */
+  async removeCompetencyFromCourse(courseId: number, competencyId: number): Promise<boolean> {
+    try {
+      console.log(`🔗 Removing competency ${competencyId} from course ${courseId}...`);
+      
+      const apiParams = {
+        wsfunction: 'core_competency_remove_competency_from_course',
+        courseid: courseId,
+        competencyid: competencyId
+      };
+
+      const response = await makeApiCall(apiParams);
+      
+      if (response === true || response === 1) {
+        console.log(`✅ Successfully removed competency ${competencyId} from course ${courseId}`);
+        return true;
+      } else {
+        throw new Error('Failed to remove competency from course');
+      }
+    } catch (error) {
+      console.error(`❌ Error removing competency ${competencyId} from course ${courseId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get competencies linked to a course
+   * @param courseId - Course ID
+   * @returns Promise<Competency[]>
+   */
+  async getCourseCompetencies(courseId: number): Promise<Competency[]> {
+    try {
+      console.log(`🔍 Fetching competencies for course ${courseId}...`);
+      
+      const apiParams = {
+        wsfunction: 'core_competency_list_course_competencies',
+        courseid: courseId
+      };
+
+      const response = await makeApiCall(apiParams);
+      
+      if (response && Array.isArray(response)) {
+        console.log(`✅ Found ${response.length} competencies for course ${courseId}`);
+        return response;
+      } else {
+        console.log(`⚠️ No competencies found for course ${courseId}`);
+        return [];
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching competencies for course ${courseId}:`, error);
+      throw error;
+    }
   }
 };
 

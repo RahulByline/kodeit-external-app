@@ -212,7 +212,7 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
 
   return (
     <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-3">
+      <div className="space-y-6 p-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>

@@ -11,7 +11,7 @@ import {
   AlertCircle,
   Info
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import AdminDashboardLayout from '../../components/AdminDashboardLayout';
 import { moodleService } from '../../services/moodleApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -271,19 +271,19 @@ const CohortNavigationSettings: React.FC = () => {
 
   if (loading && !selectedCohort) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
             <span className="text-gray-600">Loading cohorts...</span>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+    <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -433,7 +433,7 @@ const CohortNavigationSettings: React.FC = () => {
                       {Object.entries(sectionItems).map(([itemKey, isEnabled]) => (
                         <div key={itemKey} className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
-                            {isEnabled ? (
+                            {isEnabled as boolean ? (
                               <Eye className="w-4 h-4 text-green-600" />
                             ) : (
                               <EyeOff className="w-4 h-4 text-gray-400" />
@@ -444,7 +444,7 @@ const CohortNavigationSettings: React.FC = () => {
                           </div>
                           
                           <Switch
-                            checked={isEnabled}
+                            checked={isEnabled as boolean}
                             onCheckedChange={(value) => 
                               handleSettingChange(sectionKey as keyof NavigationSettings, itemKey, value)
                             }
@@ -516,7 +516,7 @@ const CohortNavigationSettings: React.FC = () => {
           </Card>
         )}
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

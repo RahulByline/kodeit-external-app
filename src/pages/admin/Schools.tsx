@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import DashboardLayout from '@/components/DashboardLayout';
+import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { moodleService } from '@/services/moodleApi';
 
 interface School {
@@ -113,19 +113,19 @@ const Schools: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName="Admin">
+      <AdminDashboardLayout userName="Admin">
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Loading schools...</p>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="admin" userName="Admin">
+    <AdminDashboardLayout userName="Admin">
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -335,7 +335,7 @@ const Schools: React.FC = () => {
           </Card>
         )}
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

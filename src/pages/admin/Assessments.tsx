@@ -20,7 +20,7 @@ import {
   XCircle,
   Clock as ClockIcon
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import AdminDashboardLayout from '../../components/AdminDashboardLayout';
 import { moodleService } from '../../services/moodleApi';
 import { useAuth } from '../../context/AuthContext';
 
@@ -272,19 +272,19 @@ const Assessments: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin User"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin User"}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <Loader2 className="animate-spin h-6 w-6 text-blue-600" />
             <span className="text-gray-600">Loading assessment data...</span>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin User"}>
+    <AdminDashboardLayout userName={currentUser?.fullname || "Admin User"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -515,7 +515,7 @@ const Assessments: React.FC = () => {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

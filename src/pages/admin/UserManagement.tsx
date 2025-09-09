@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import DashboardLayout from '@/components/DashboardLayout';
+import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { moodleService } from '@/services/moodleApi';
 
 interface User {
@@ -1569,19 +1569,19 @@ const UserManagement: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName="Admin">
+      <AdminDashboardLayout userName="Admin">
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Loading users...</p>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="admin" userName="Admin">
+    <AdminDashboardLayout userName="Admin">
       <div className="p-6 space-y-6">
         {/* Enhanced IOMAD Admin Header */}
         <div className="flex justify-between items-center">
@@ -2894,7 +2894,7 @@ const UserManagement: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

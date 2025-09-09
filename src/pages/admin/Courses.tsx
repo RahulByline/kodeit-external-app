@@ -46,7 +46,7 @@ import {
   Bell,
   Info
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import AdminDashboardLayout from '../../components/AdminDashboardLayout';
 import moodleService from '../../services/moodleApi';
 import CourseDetail from '../student/CourseDetail';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -238,102 +238,176 @@ const Courses: React.FC = () => {
       setLoading(true);
       setError('');
       
-      console.log('🔍 Fetching real courses from IOMAD Moodle API...');
+      console.log('🔍 Fetching categories and course counts (optimized)...');
 
-      if (!currentUser?.id) {
-        throw new Error('No current user ID available');
-      }
-
-      console.log('👤 Current user:', currentUser);
-
-      // Fetch real user courses from IOMAD API
-      const userCourses = await moodleService.getUserCourses(currentUser.id);
-
-      console.log('📊 Real user courses fetched:', userCourses.length);
-
-      // Process real course data - NO MOCK DATA
-      const enrolledCourses = userCourses.filter(course =>
-        course.visible !== 0 && course.categoryid && course.categoryid > 0
-      );
-
-      let processedCourses: Course[] = [];
-
-      if (enrolledCourses && enrolledCourses.length > 0) {
-        // Process real enrolled course data from IOMAD API - NO MOCK DATA
-        processedCourses = await Promise.all(enrolledCourses.map(async (course) => {
-          // Fetch real completion data for each course
-          const courseCompletion = await moodleService.getCourseCompletion(course.id);
-          const courseContents = await moodleService.getCourseContents(course.id);
-
-          // Calculate real progress and statistics from actual data
-          const totalModules = courseContents?.length || 0;
-          const completedModules = courseCompletion?.completionstatus?.completed || 0;
-          const progress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-        
-        return {
-            id: course.id,
-          fullname: course.fullname,
-          shortname: course.shortname,
-            progress,
-            grade: courseCompletion?.completionstatus?.grade || 0,
-            lastAccess: course.startdate,
-            completionDate: course.enddate,
-            status: progress === 100 ? 'completed' :
-              progress > 0 ? 'in_progress' : 'not_started',
-            categoryname: course.categoryname || 'General',
-            categoryid: course.categoryid,
-          startdate: course.startdate,
-          enddate: course.enddate,
-            visible: course.visible,
-            description: course.summary || '',
-            instructor: (course as any).instructor || '',
-            enrolledStudents: (course as any).enrolledusercount || 0,
-            totalModules,
-            completedModules,
-            courseimage: course.courseimage,
-            overviewfiles: (course as any).overviewfiles,
-            summaryfiles: (course as any).summaryfiles
-          };
-        }));
-
-        setCourses(processedCourses);
-        console.log('✅ Real enrolled courses processed successfully:', processedCourses.length);
-        
-        // Debug: Log all courses with their category information
-        console.log('📊 All processed courses:', processedCourses.map(course => ({
-          id: course.id,
-          fullname: course.fullname,
-          categoryid: course.categoryid,
-          categoryname: course.categoryname,
-          visible: course.visible
-        })));
-        
-        // Fetch real categories from IOMAD Moodle API
-        await fetchRealCategories(processedCourses);
-      } else {
-        console.log('⚠️ No enrolled courses found');
+      // Fetch categories first - this is much faster
+      await fetchCategoriesOnly();
+      
+      // Don't load detailed course data yet - only when category is clicked
       setCourses([]);
-        setError('No enrolled courses available.');
-      }
+      console.log('✅ Categories loaded, course details will load on demand');
 
     } catch (error: any) {
-      console.error('❌ Error fetching courses:', error);
-      setError('Failed to load courses. Please try again.');
+      console.error('❌ Error fetching categories:', error);
+      setError('Failed to load categories. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchCategoriesOnly = async () => {
+    try {
+      console.log('🔍 Fetching categories from Moodle API...');
+      
+      // Fetch all categories
+      const allCategories = await moodleService.getCategories();
+      console.log('📊 All categories fetched:', allCategories.length);
+      
+      // Fetch course counts for each category (single API call per category)
+      const categoriesWithCounts = await Promise.all(allCategories.map(async (category) => {
+        try {
+          const courseCount = await moodleService.getCategoryCourseCount(category.id);
+          return {
+            id: category.id.toString(),
+            name: category.name,
+            courseCount,
+            icon: 'BookOpen',
+            color: 'blue',
+            description: category.description || 'General course content and skills',
+            categoryId: category.id,
+            parent: category.parent,
+            sortorder: category.sortorder,
+            visible: category.visible,
+            timemodified: category.timemodified
+          };
+        } catch (error) {
+          console.warn(`Failed to get course count for category ${category.id}:`, error);
+          return {
+            id: category.id.toString(),
+            name: category.name,
+            courseCount: 0,
+            icon: 'BookOpen',
+            color: 'blue',
+            description: category.description || 'General course content and skills',
+            categoryId: category.id,
+            parent: category.parent,
+            sortorder: category.sortorder,
+            visible: category.visible,
+            timemodified: category.timemodified
+          };
+        }
+      }));
+
+      // Organize categories into parent-child structure first
+      const organizedCategories = organizeCategories(categoriesWithCounts);
+      
+      // Then filter to show only categories that have courses OR have subcategories with courses
+      const visibleCategories = organizedCategories.filter(category => {
+        // Show if category has courses directly
+        if (category.courseCount > 0) return true;
+        
+        // Show if category has subcategories with courses
+        if (category.subcategories && category.subcategories.length > 0) {
+          const hasSubcategoriesWithCourses = category.subcategories.some(sub => sub.courseCount > 0);
+          return hasSubcategoriesWithCourses;
+        }
+        
+        return false;
+      });
+      
+      setCategories(visibleCategories);
+      console.log('✅ Categories organized:', visibleCategories.length);
+      
+    } catch (error) {
+      console.error('❌ Error fetching categories:', error);
+      throw error;
+    }
+  };
+
+  const organizeCategories = (categories: any[]) => {
+    // Find root categories (parent = 0 or no parent)
+    const rootCategories = categories.filter(cat => !cat.parent || cat.parent === 0);
+    
+    // Find subcategories
+    const subcategories = categories.filter(cat => cat.parent && cat.parent !== 0);
+    
+    // Organize subcategories under their parents
+    const organized = rootCategories.map(root => {
+      const children = subcategories.filter(sub => sub.parent === root.categoryId);
+      
+      // Calculate total course count including subcategories
+      const totalCourseCount = root.courseCount + children.reduce((sum, child) => sum + child.courseCount, 0);
+      
+      return {
+        ...root,
+        courseCount: totalCourseCount, // Update with total count including subcategories
+        subcategories: children.length > 0 ? children : undefined
+      };
+    });
+    
+    return organized;
+  };
+
   const handleCourseClick = async (course: Course) => {
+    // For admin view, no need to load progress data
     setSelectedCourseForDetail(course);
     setShowCourseDetail(true);
   };
 
-  const handleCategoryClick = (categoryId: string) => {
+  const loadCourseProgress = async (course: Course): Promise<Course> => {
+    try {
+      console.log(`🔍 Loading progress for course ${course.id}...`);
+      
+      // Load completion data and course contents
+      const [courseCompletion, courseContents] = await Promise.all([
+        moodleService.getCourseCompletion(course.id).catch(error => {
+          console.warn(`⚠️ Could not get completion data for course ${course.id}:`, error.message);
+          return null; // Return null if not enrolled or other error
+        }),
+        moodleService.getCourseContents(course.id).catch(error => {
+          console.warn(`⚠️ Could not get course contents for course ${course.id}:`, error.message);
+          return null; // Return null if error
+        })
+      ]);
+
+      // Calculate real progress and statistics
+      const totalModules = courseContents?.length || 0;
+      const completedModules = courseCompletion?.completionstatus?.completed || 0;
+      const progress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+      
+      // Determine real status
+      let status: 'completed' | 'in_progress' | 'not_started' = 'not_started';
+      if (progress === 100) {
+        status = 'completed';
+      } else if (progress > 0) {
+        status = 'in_progress';
+      }
+
+      // If user is not enrolled, show appropriate status
+      if (!courseCompletion) {
+        status = 'not_started';
+        console.log(`📝 User not enrolled in course ${course.id}, showing as not started`);
+      }
+
+      return {
+        ...course,
+        progress,
+        grade: courseCompletion?.completionstatus?.grade || 0,
+        status,
+        totalModules,
+        completedModules,
+        enrolledStudents: courseCompletion?.completionstatus?.enrolledusercount || 0
+      };
+    } catch (error) {
+      console.error(`❌ Error loading progress for course ${course.id}:`, error);
+      return course; // Return original course if progress loading fails
+    }
+  };
+
+  const handleCategoryClick = async (categoryId: string) => {
     console.log('🎯 Category clicked:', categoryId);
     const selectedCat = categories.find(cat => cat.id === categoryId);
     console.log('📋 Selected category:', selectedCat);
-    console.log('📚 Available courses:', courses.length);
     
     setSelectedCategory(categoryId);
     
@@ -341,9 +415,59 @@ const Courses: React.FC = () => {
       console.log('📂 Category has subcategories, navigating to subcategories view');
       setViewMode('subcategories');
     } else {
-      console.log('📚 Category has no subcategories, navigating directly to courses');
+      console.log('📚 Category has no subcategories, loading courses directly');
+      await loadCoursesForCategory(selectedCat!.categoryId!);
       setViewMode('courses');
     }
+  };
+
+  const loadCoursesForCategory = async (categoryId: number) => {
+    let processedCourses: Course[] = [];
+    
+    try {
+      setLoading(true);
+      console.log(`🔍 Loading courses for category ${categoryId}...`);
+      
+      // Fetch courses for this specific category
+      const categoryCourses = await moodleService.getCoursesByCategory(categoryId);
+      console.log(`📊 Found ${categoryCourses.length} courses in category ${categoryId}`);
+      
+      // Process courses with basic information (no detailed completion data yet)
+      processedCourses = categoryCourses.map(course => ({
+        id: course.id,
+        fullname: course.fullname,
+        shortname: course.shortname,
+        progress: 0, // Will load on demand
+        grade: 0,
+        lastAccess: course.startdate,
+        completionDate: course.enddate,
+        status: 'not_started' as const,
+        categoryname: course.categoryname || 'General',
+        categoryid: course.categoryid,
+        startdate: course.startdate,
+        enddate: course.enddate,
+        visible: course.visible,
+        description: course.summary || '',
+        instructor: (course as any).instructor || '',
+        enrolledStudents: 0, // Will load on demand
+        totalModules: 0, // Will load on demand
+        completedModules: 0,
+        courseimage: course.courseimage,
+        overviewfiles: (course as any).overviewfiles,
+        summaryfiles: (course as any).summaryfiles
+      }));
+      
+      setCourses(processedCourses);
+      console.log('✅ Courses loaded for category:', processedCourses.length);
+      
+    } catch (error) {
+      console.error('❌ Error loading courses for category:', error);
+      setError('Failed to load courses for this category.');
+    } finally {
+      setLoading(false);
+    }
+    
+    // Progress loading removed for admin view - not needed for course management
   };
 
   const handleBackToCategories = () => {
@@ -352,13 +476,19 @@ const Courses: React.FC = () => {
     setSelectedSubcategory('');
   };
 
-  const handleSubcategoryClick = (subcategoryId: string) => {
+  const handleSubcategoryClick = async (subcategoryId: string) => {
     console.log('🎯 Subcategory clicked:', subcategoryId);
     const selectedCat = categories.find(cat => cat.id === selectedCategory);
     const selectedSubcat = selectedCat?.subcategories?.find(sub => sub.id === subcategoryId);
     console.log('📋 Selected subcategory:', selectedSubcat);
     
     setSelectedSubcategory(subcategoryId);
+    
+    // Load courses for this subcategory
+    if (selectedSubcat?.categoryId) {
+      await loadCoursesForCategory(selectedSubcat.categoryId);
+    }
+    
     setViewMode('courses');
   };
 
@@ -551,20 +681,20 @@ const Courses: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
             <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
             <span className="text-gray-600">Loading...</span>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   if (error) {
   return (
-      <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+      <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 text-red-800 mb-2">
             <AlertCircle className="w-5 h-5" />
@@ -576,12 +706,12 @@ const Courses: React.FC = () => {
             Try Again
           </Button>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="admin" userName={currentUser?.fullname || "Admin"}>
+    <AdminDashboardLayout userName={currentUser?.fullname || "Admin"}>
       {showCourseDetail && selectedCourseForDetail ? (
         <CourseDetail
           courseId={selectedCourseForDetail.id}
@@ -916,18 +1046,8 @@ const Courses: React.FC = () => {
                       {course.fullname}
                     </CardTitle>
 
-                    {/* Progress Info */}
-                     <div className="flex items-center space-x-2 mb-3">
-                       <RefreshCw className={`w-4 h-4 text-blue-600 ${course.status === 'in_progress' ? 'animate-spin' : ''}`} />
-                       <span className="text-sm text-gray-600">
-                         {currentUnit > 0 
-                           ? `Currently in: Unit ${currentUnit} '${unitName}'`
-                           : course.status === 'completed' 
-                             ? 'Course Completed'
-                             : 'Course Not Started'
-                         }
-                                </span>
-                      </div>
+                    {/* Course Status - Hidden for Admin View */}
+                     {/* Progress Info removed for admin view - not relevant for course management */}
 
                     {/* Course Description */}
                     <p className="text-sm text-gray-600 mb-4 line-clamp-2">
@@ -958,19 +1078,8 @@ const Courses: React.FC = () => {
                                 )}
                               </div>
 
-                    {/* Progress Bar */}
-                     <div className="mb-4">
-                       <div className="flex justify-between text-sm mb-1">
-                         <span className="text-gray-600">Progress</span>
-                         <span className="font-medium text-gray-900">{course.progress}%</span>
-                            </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${course.progress}%` }}
-                        ></div>
-                        </div>
-                      </div>
+                    {/* Progress Bar - Hidden for Admin View */}
+                     {/* Progress bar removed for admin view - not relevant for course management */}
 
                     {/* Action Button */}
                      <Button 
@@ -997,7 +1106,7 @@ const Courses: React.FC = () => {
         )}
       </div>
       )}
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 

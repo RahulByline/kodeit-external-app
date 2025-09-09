@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import DashboardLayout from '@/components/DashboardLayout';
+import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { moodleService } from '@/services/moodleApi';
 
 interface AnalyticsData {
@@ -170,20 +170,20 @@ const Analytics: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="admin" userName="Admin">
+      <AdminDashboardLayout userName="Admin">
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Loading analytics...</p>
           </div>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   if (!analyticsData) {
     return (
-      <DashboardLayout userRole="admin" userName="Admin">
+      <AdminDashboardLayout userName="Admin">
         <div className="p-6">
           <Card>
             <CardContent className="p-12 text-center">
@@ -193,12 +193,12 @@ const Analytics: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-      </DashboardLayout>
+      </AdminDashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="admin" userName="Admin">
+    <AdminDashboardLayout userName="Admin">
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -424,7 +424,7 @@ const Analytics: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </AdminDashboardLayout>
   );
 };
 
