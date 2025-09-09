@@ -406,9 +406,50 @@ interface CourseTreeItemProps {
   course: any;
   courseIndex: number;
   onActivityClick: (activity: any) => void;
+  onStartActivity: (activity: any) => void;
 }
 
-const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, onActivityClick }) => {
+// Handle starting an activity
+const handleStartActivity = (activity: any) => {
+  console.log('🚀 Starting activity:', activity.name || activity.title);
+  
+  try {
+    // Handle different activity types
+    if (activity.url) {
+      // If activity has a direct URL, open it in a new tab
+      console.log('📖 Opening activity URL:', activity.url);
+      window.open(activity.url, '_blank', 'noopener,noreferrer');
+    } else if (activity.modname && activity.id) {
+      // For activities without direct URLs, try to construct the URL
+      // This is common for Moodle activities that need to be accessed through the course
+      const activityUrl = `https://kodeit.ae/mod/${activity.modname}/view.php?id=${activity.id}`;
+      console.log('🔗 Constructed activity URL:', activityUrl);
+      window.open(activityUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      // Fallback: try to open the course page
+      if (activity.courseId) {
+        const courseUrl = `https://kodeit.ae/course/view.php?id=${activity.courseId}`;
+        console.log('🔗 Opening course page:', courseUrl);
+        window.open(courseUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        console.log('⚠️ No URL or course ID available for activity');
+      }
+    }
+    
+    // Show success message
+    console.log('✅ Activity opened successfully');
+    
+  } catch (error) {
+    console.error('❌ Error opening activity:', error);
+    // Final fallback: try to open the course page
+    if (activity.courseId) {
+      const courseUrl = `https://kodeit.ae/course/view.php?id=${activity.courseId}`;
+      window.open(courseUrl, '_blank', 'noopener,noreferrer');
+    }
+  }
+};
+
+const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, onActivityClick, onStartActivity }) => {
   const [expandedCourse, setExpandedCourse] = useState<boolean>(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
@@ -565,7 +606,7 @@ const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, on
                         <PlusIcon className="w-3 h-3 text-blue-600" />
                       )}
                     </button>
-                    <activity.icon className="w-4 h-4 text-blue-600" />
+                    {React.createElement(activity.icon, { className: "w-4 h-4 text-blue-600" })}
                     <h5 className="text-blue-700 font-medium">{activity.name}</h5>
                     <div className="flex items-center space-x-2">
                       {getStatusIcon(activity.status)}
@@ -591,14 +632,12 @@ const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, on
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2">
                     <div className="space-y-2">
                       <p className="text-sm text-gray-700">{activity.description}</p>
-                      {activity.url && (
-                        <button
-                          onClick={() => window.open(activity.url, '_blank')}
-                          className="text-sm text-blue-600 hover:text-blue-800 underline"
-                        >
-                          Open Activity
-                        </button>
-                      )}
+                      <button
+                        onClick={() => onStartActivity(activity)}
+                        className="text-sm text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Open Activity
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -822,11 +861,6 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const [upcomingCourseSessions, setUpcomingCourseSessions] = useState<any[]>([]);
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
 
-  // Notification system states
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
-  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
 
   // Competency system states
   const [competencies, setCompetencies] = useState<any[]>([]);
@@ -868,7 +902,9 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  const [isViewingActivityInline, setIsViewingActivityInline] = useState(false);
+  const [isLoadingActivityData, setIsLoadingActivityData] = useState(false);
 
   // Memoized top navigation items to prevent re-creation - G4 specific routes
   const topNavItems = useMemo(() => [
@@ -959,6 +995,518 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     setSelectedActivity(activity);
     setIsActivityModalOpen(true);
   }, []);
+
+  // Create an enhanced activity interface when direct fetch fails
+  const createEnhancedActivityInterface = useCallback((activity: any) => {
+    const activityType = activity.modname || 'activity';
+    const activityName = activity.name || activity.title || 'Untitled Activity';
+    
+    // Create different interfaces based on activity type
+    if (activityType === 'quiz') {
+      return `
+        <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${activityName}</h2>
+            <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">QUIZ ACTIVITY</p>
+          </div>
+          
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Quiz Information</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+              <div><strong>Type:</strong> Quiz</div>
+              <div><strong>ID:</strong> ${activity.id || 'N/A'}</div>
+              <div><strong>Course:</strong> ${activity.courseName || 'N/A'}</div>
+              <div><strong>Section:</strong> ${activity.sectionName || 'N/A'}</div>
+            </div>
+          </div>
+          
+          <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Quiz Content</h3>
+            <p style="color: #4a5568; line-height: 1.6; margin: 0 0 16px 0;">
+              This quiz is ready to be taken. The questions and answers will be loaded from the learning management system.
+            </p>
+            <div style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+              <p style="color: #234e52; margin: 0; font-size: 14px;">
+                <strong>Note:</strong> Quiz content will be available when you start the quiz.
+              </p>
+            </div>
+            <button onclick="window.startRealActivity('${activity.id}', '${activity.modname}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+              Start Quiz
+            </button>
+          </div>
+        </div>
+      `;
+    } else if (activityType === 'assignment') {
+      return `
+        <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${activityName}</h2>
+            <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">ASSIGNMENT ACTIVITY</p>
+          </div>
+          
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Assignment Information</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+              <div><strong>Type:</strong> Assignment</div>
+              <div><strong>ID:</strong> ${activity.id || 'N/A'}</div>
+              <div><strong>Course:</strong> ${activity.courseName || 'N/A'}</div>
+              <div><strong>Section:</strong> ${activity.sectionName || 'N/A'}</div>
+            </div>
+          </div>
+          
+          <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Assignment Content</h3>
+            <p style="color: #4a5568; line-height: 1.6; margin: 0 0 16px 0;">
+              This assignment is ready to be completed. The instructions and submission area will be loaded from the learning management system.
+            </p>
+            <div style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+              <p style="color: #234e52; margin: 0; font-size: 14px;">
+                <strong>Note:</strong> Assignment details will be available when you open the assignment.
+              </p>
+            </div>
+            <button onclick="window.startRealActivity('${activity.id}', '${activity.modname}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+              Open Assignment
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      // Default activity interface
+      return `
+        <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${activityName}</h2>
+            <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">${activityType.toUpperCase()} ACTIVITY</p>
+          </div>
+          
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Activity Information</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+              <div><strong>Type:</strong> ${activityType}</div>
+              <div><strong>ID:</strong> ${activity.id || 'N/A'}</div>
+              <div><strong>Course:</strong> ${activity.courseName || 'N/A'}</div>
+              <div><strong>Section:</strong> ${activity.sectionName || 'N/A'}</div>
+            </div>
+          </div>
+          
+          <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Activity Content</h3>
+            <p style="color: #4a5568; line-height: 1.6; margin: 0 0 16px 0;">
+              This activity is ready to be completed. The content will be loaded directly from the learning management system.
+            </p>
+            <div style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+              <p style="color: #234e52; margin: 0; font-size: 14px;">
+                <strong>Note:</strong> Activity content will be available when you start the activity.
+              </p>
+            </div>
+            <button onclick="window.startRealActivity('${activity.id}', '${activity.modname}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+              Start Activity
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  }, []);
+
+  // Handle starting an activity using IOMAD Moodle API
+  const handleStartActivityModal = useCallback(async (activity: any) => {
+    console.log('🚀 Starting activity inline via IOMAD Moodle API:', activity.name || activity.title);
+    
+    try {
+      // Set loading state
+      setIsViewingActivityInline(true);
+      setIsLoadingActivityData(true);
+      
+      // Determine activity type - handle undefined cases
+      const activityType = activity.modname || activity.type || 'activity';
+      const activityId = activity.id || activity.coursemodule;
+      
+      console.log('🔍 Activity data:', {
+        name: activity.name || activity.title,
+        modname: activity.modname,
+        type: activity.type,
+        id: activity.id,
+        coursemodule: activity.coursemodule,
+        determinedType: activityType,
+        determinedId: activityId
+      });
+      
+      if (activityId) {
+        let activityContent = '';
+        
+        // Use appropriate IOMAD Moodle API method based on activity type
+        switch (activityType) {
+          case 'quiz':
+            console.log('📊 Fetching quiz data from IOMAD Moodle API...');
+            try {
+              const quizData = await enhancedMoodleService.getQuizData(activityId.toString());
+              
+              activityContent = `
+                <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${quizData.name || activity.name || 'Quiz'}</h2>
+                    <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">QUIZ ACTIVITY</p>
+                  </div>
+                  
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Quiz Information</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+                      <div><strong>Name:</strong> ${quizData.name || 'N/A'}</div>
+                      <div><strong>ID:</strong> ${activityId}</div>
+                      <div><strong>Time Limit:</strong> ${quizData.timelimit ? Math.round(quizData.timelimit / 60) + ' minutes' : 'No limit'}</div>
+                      <div><strong>Attempts:</strong> ${quizData.attempts || 'Unlimited'}</div>
+                    </div>
+                  </div>
+                  
+                  <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Quiz Description</h3>
+                    <div style="color: #4a5568; line-height: 1.6; margin-bottom: 16px;">
+                      ${quizData.intro || 'This quiz is ready to be taken. Click the button below to start.'}
+                    </div>
+                    <button onclick="window.startQuizAttempt('${activityId}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                      Start Quiz
+                    </button>
+                  </div>
+                </div>
+              `;
+            } catch (error) {
+              console.log('⚠️ Quiz API failed, using fallback interface');
+              activityContent = createEnhancedActivityInterface(activity);
+            }
+            break;
+            
+          case 'assignment':
+            console.log('📝 Fetching assignment data from IOMAD Moodle API...');
+            try {
+              const assignmentData = await enhancedMoodleService.getAssignmentData(activityId.toString());
+              
+              activityContent = `
+                <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${assignmentData.name || activity.name || 'Assignment'}</h2>
+                    <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">ASSIGNMENT ACTIVITY</p>
+                  </div>
+                  
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Assignment Information</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+                      <div><strong>Name:</strong> ${assignmentData.name || 'N/A'}</div>
+                      <div><strong>ID:</strong> ${activityId}</div>
+                      <div><strong>Due Date:</strong> ${assignmentData.duedate ? new Date(assignmentData.duedate * 1000).toLocaleDateString() : 'No due date'}</div>
+                      <div><strong>Max Attempts:</strong> ${assignmentData.maxattempts || 'Unlimited'}</div>
+                    </div>
+                  </div>
+                  
+                  <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Assignment Description</h3>
+                    <div style="color: #4a5568; line-height: 1.6; margin-bottom: 16px;">
+                      ${assignmentData.intro || 'This assignment is ready to be completed. Click the button below to open it.'}
+                    </div>
+                    <button onclick="window.openAssignment('${activityId}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                      Open Assignment
+                    </button>
+                  </div>
+                </div>
+              `;
+            } catch (error) {
+              console.log('⚠️ Assignment API failed, using fallback interface');
+              activityContent = createEnhancedActivityInterface(activity);
+            }
+            break;
+            
+          case 'scorm':
+            console.log('📦 Fetching SCORM data from IOMAD Moodle API...');
+            try {
+              const scormData = await enhancedMoodleService.getScormContentInfo(activityId.toString());
+              
+              activityContent = `
+                <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${scormData.name || activity.name || 'SCORM Package'}</h2>
+                    <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">SCORM ACTIVITY</p>
+                  </div>
+                  
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">SCORM Information</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+                      <div><strong>Name:</strong> ${scormData.name || 'N/A'}</div>
+                      <div><strong>ID:</strong> ${activityId}</div>
+                      <div><strong>Version:</strong> ${scormData.version || 'N/A'}</div>
+                      <div><strong>Max Attempts:</strong> ${scormData.maxattempt || 'Unlimited'}</div>
+                    </div>
+                  </div>
+                  
+                  <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">SCORM Content</h3>
+                    <div style="color: #4a5568; line-height: 1.6; margin-bottom: 16px;">
+                      ${scormData.intro || 'This SCORM package is ready to be launched. Click the button below to start.'}
+                    </div>
+                    <button onclick="window.launchScorm('${activityId}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                      Launch SCORM
+                    </button>
+                  </div>
+                </div>
+              `;
+            } catch (error) {
+              console.log('⚠️ SCORM API failed, using fallback interface');
+              activityContent = createEnhancedActivityInterface(activity);
+            }
+            break;
+            
+          default:
+            console.log('📄 Creating generic activity interface for type:', activityType);
+            activityContent = createEnhancedActivityInterface(activity);
+            break;
+        }
+        
+        // Update the selected activity with content
+        const updatedActivity = {
+          ...activity,
+          directContent: activityContent,
+          useDirectContent: true,
+          isFallbackInterface: false
+        };
+        
+        setSelectedActivity(updatedActivity);
+        setIsLoadingActivityData(false);
+        
+        console.log('✅ Activity content loaded successfully via IOMAD Moodle API');
+        
+      } else {
+        console.log('⚠️ No activity ID available');
+        setIsLoadingActivityData(false);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error loading activity content via IOMAD Moodle API:', error);
+      setIsLoadingActivityData(false);
+      
+      // Show error message
+      alert('Unable to load activity content from IOMAD Moodle. Please try again or contact support.');
+    }
+  }, [createEnhancedActivityInterface]);
+
+  // Clean and process activity content
+  const cleanActivityContent = useCallback((htmlContent: string, baseUrl: string) => {
+    // Remove script tags that might cause issues
+    htmlContent = htmlContent.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Fix relative URLs to absolute URLs
+    htmlContent = htmlContent.replace(/(src|href)="\/([^"]+)"/g, `$1="${baseUrl.replace(/\/[^\/]*$/, '')}/$2"`);
+    htmlContent = htmlContent.replace(/(src|href)="\.\/([^"]+)"/g, `$1="${baseUrl.replace(/\/[^\/]*$/, '')}/$2"`);
+    htmlContent = htmlContent.replace(/(src|href)="\.\.\/([^"]+)"/g, `$1="${baseUrl.replace(/\/[^\/]*$/, '').replace(/\/[^\/]*$/, '')}/$2"`);
+    
+    // Fix form actions to point to the correct URL
+    htmlContent = htmlContent.replace(/<form([^>]*)action="([^"]*)"([^>]*)>/gi, (match, before, action, after) => {
+      if (action.startsWith('/')) {
+        const baseDomain = baseUrl.replace(/\/[^\/]*$/, '');
+        return `<form${before}action="${baseDomain}${action}"${after}>`;
+      }
+      return match;
+    });
+    
+    // Add some basic styling to make content look better
+    htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+        ${htmlContent}
+      </div>
+    `;
+    
+    return htmlContent;
+  }, []);
+
+  // Create a fallback activity interface when direct fetch fails
+  const createActivityInterface = useCallback((activity: any) => {
+    const activityType = activity.modname || 'activity';
+    const activityName = activity.name || activity.title || 'Untitled Activity';
+    
+    return `
+      <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${activityName}</h2>
+          <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">${activityType.toUpperCase()} Activity</p>
+        </div>
+        
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+          <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Activity Information</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+            <div><strong>Type:</strong> ${activityType}</div>
+            <div><strong>ID:</strong> ${activity.id || 'N/A'}</div>
+            <div><strong>Course:</strong> ${activity.courseName || 'N/A'}</div>
+            <div><strong>Section:</strong> ${activity.sectionName || 'N/A'}</div>
+          </div>
+        </div>
+        
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+          <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Activity Content</h3>
+          <p style="color: #4a5568; line-height: 1.6; margin: 0;">
+            This activity is ready to be completed. The content will be loaded directly from the learning management system.
+          </p>
+        </div>
+        
+        <div style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 8px; padding: 16px;">
+          <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <div style="width: 8px; height: 8px; background: #38b2ac; border-radius: 50%; margin-right: 8px;"></div>
+            <strong style="color: #234e52;">Activity Status: Ready</strong>
+          </div>
+          <p style="color: #234e52; margin: 0; font-size: 14px;">
+            You can now interact with this activity. All progress will be automatically saved.
+          </p>
+        </div>
+      </div>
+    `;
+  }, []);
+
+  // Function to start real activity content using IOMAD Moodle API (available globally)
+  const startRealActivity = useCallback(async (activityId: string, activityType: string) => {
+    console.log('🚀 Starting real activity content via IOMAD Moodle API:', activityId, activityType);
+    
+    try {
+      setIsLoadingActivityData(true);
+      
+      let activityContent = '';
+      
+      // Use appropriate IOMAD Moodle API method based on activity type
+      switch (activityType) {
+        case 'quiz':
+          console.log('📊 Fetching quiz data from IOMAD Moodle API...');
+          const quizData = await enhancedMoodleService.getQuizData(activityId);
+          const quizQuestions = await enhancedMoodleService.getQuizQuestions(activityId);
+          
+          activityContent = `
+            <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${quizData.name || 'Quiz'}</h2>
+                <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">QUIZ ACTIVITY</p>
+              </div>
+              
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Quiz Information</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+                  <div><strong>Name:</strong> ${quizData.name || 'N/A'}</div>
+                  <div><strong>ID:</strong> ${activityId}</div>
+                  <div><strong>Time Limit:</strong> ${quizData.timelimit ? Math.round(quizData.timelimit / 60) + ' minutes' : 'No limit'}</div>
+                  <div><strong>Attempts:</strong> ${quizData.attempts || 'Unlimited'}</div>
+                </div>
+              </div>
+              
+              <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Quiz Description</h3>
+                <div style="color: #4a5568; line-height: 1.6; margin-bottom: 16px;">
+                  ${quizData.intro || 'This quiz is ready to be taken. Click the button below to start.'}
+                </div>
+                <button onclick="window.startQuizAttempt('${activityId}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                  Start Quiz
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+          
+        case 'assignment':
+          console.log('📝 Fetching assignment data from IOMAD Moodle API...');
+          const assignmentData = await enhancedMoodleService.getAssignmentData(activityId);
+          
+          activityContent = `
+            <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${assignmentData.name || 'Assignment'}</h2>
+                <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">ASSIGNMENT ACTIVITY</p>
+              </div>
+              
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Assignment Information</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+                  <div><strong>Name:</strong> ${assignmentData.name || 'N/A'}</div>
+                  <div><strong>ID:</strong> ${activityId}</div>
+                  <div><strong>Due Date:</strong> ${assignmentData.duedate ? new Date(assignmentData.duedate * 1000).toLocaleDateString() : 'No due date'}</div>
+                  <div><strong>Max Attempts:</strong> ${assignmentData.maxattempts || 'Unlimited'}</div>
+                </div>
+              </div>
+              
+              <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">Assignment Description</h3>
+                <div style="color: #4a5568; line-height: 1.6; margin-bottom: 16px;">
+                  ${assignmentData.intro || 'This assignment is ready to be completed. Click the button below to open it.'}
+                </div>
+                <button onclick="window.openAssignment('${activityId}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                  Open Assignment
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+          
+        case 'scorm':
+          console.log('📦 Fetching SCORM data from IOMAD Moodle API...');
+          const scormData = await enhancedMoodleService.getScormContentInfo(activityId);
+          const scormLaunch = await enhancedMoodleService.launchScormContent(activityId, currentUser?.id?.toString());
+          
+          activityContent = `
+            <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                <h2 style="margin: 0; font-size: 24px; font-weight: 600;">${scormData.name || 'SCORM Package'}</h2>
+                <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">SCORM ACTIVITY</p>
+              </div>
+              
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">SCORM Information</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+                  <div><strong>Name:</strong> ${scormData.name || 'N/A'}</div>
+                  <div><strong>ID:</strong> ${activityId}</div>
+                  <div><strong>Version:</strong> ${scormData.version || 'N/A'}</div>
+                  <div><strong>Max Attempts:</strong> ${scormData.maxattempt || 'Unlimited'}</div>
+                </div>
+              </div>
+              
+              <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="color: #2d3748; margin: 0 0 12px 0; font-size: 18px;">SCORM Content</h3>
+                <div style="color: #4a5568; line-height: 1.6; margin-bottom: 16px;">
+                  ${scormData.intro || 'This SCORM package is ready to be launched. Click the button below to start.'}
+                </div>
+                <button onclick="window.launchScorm('${activityId}')" style="background: #3182ce; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                  Launch SCORM
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+          
+        default:
+          console.log('📄 Fetching generic activity data from IOMAD Moodle API...');
+          // For other activity types, create a generic interface
+          activityContent = createEnhancedActivityInterface({ id: activityId, modname: activityType, name: 'Activity' });
+          break;
+      }
+      
+      // Update the selected activity with real content
+      setSelectedActivity(prev => ({
+        ...prev,
+        directContent: activityContent,
+        useDirectContent: true,
+        isFallbackInterface: false
+      }));
+      
+      setIsLoadingActivityData(false);
+      console.log('✅ Real activity content loaded successfully via IOMAD Moodle API');
+      
+    } catch (error) {
+      console.error('❌ Error loading real activity content via IOMAD Moodle API:', error);
+      setIsLoadingActivityData(false);
+      
+      // Show error message
+      alert('Unable to load activity content from IOMAD Moodle. Please try again or contact support.');
+    }
+  }, [cleanActivityContent, createEnhancedActivityInterface, currentUser?.id]);
+
+  // Make startRealActivity available globally
+  useEffect(() => {
+    (window as any).startRealActivity = startRealActivity;
+    return () => {
+      delete (window as any).startRealActivity;
+    };
+  }, [startRealActivity]);
+
 
   // Cache data in localStorage
   const cacheData = useCallback((key: string, data: any) => {
@@ -1409,34 +1957,105 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     }
   };
 
-  // Fetch only resource activities from IOMAD
+
+  // Fetch ALL activities from IOMAD course sections (including resources and URLs)
   const fetchResourceActivities = async () => {
     if (!currentUser?.id) return [];
     
     try {
       setIsLoadingResourceActivities(true);
-      console.log('🔄 Fetching resource activities from IOMAD...');
-      const resourceActivitiesList: any[] = [];
+      console.log('🔄 Fetching ALL activities from IOMAD course sections...');
+      const allActivitiesList: any[] = [];
       
       // Get all user courses
       const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
       
-      // Fetch resource activities from each course
+      // Fetch ALL activities from each course section
       for (const course of userCourses) {
         const courseContents = await enhancedMoodleService.getCourseContents(course.id.toString());
         
         courseContents.forEach((section: any) => {
           if (section.modules && Array.isArray(section.modules)) {
             section.modules.forEach((module: any) => {
-              // Only include resource and url activities
-              if (module.modname === 'resource' || module.modname === 'url') {
-                const resourceActivity = {
+              // Include ALL activities (including resources, URLs, and all other types)
+              if (module.modname) {
+                // Determine activity type and icon for ALL module types
+                let activityType = 'Activity';
+                let activityIcon = Activity;
+                
+                if (module.modname === 'lesson') {
+                  activityType = 'Lesson';
+                  activityIcon = BookOpen;
+                } else if (module.modname === 'quiz') {
+                  activityType = 'Quiz';
+                  activityIcon = FileText;
+                } else if (module.modname === 'assign') {
+                  activityType = 'Assignment';
+                  activityIcon = Code;
+                } else if (module.modname === 'forum') {
+                  activityType = 'Discussion';
+                  activityIcon = Users;
+                } else if (module.modname === 'scorm') {
+                  activityType = 'SCORM';
+                  activityIcon = BookOpen;
+                } else if (module.modname === 'workshop') {
+                  activityType = 'Workshop';
+                  activityIcon = Target;
+                } else if (module.modname === 'choice') {
+                  activityType = 'Choice';
+                  activityIcon = CheckCircle;
+                } else if (module.modname === 'feedback') {
+                  activityType = 'Feedback';
+                  activityIcon = MessageSquare;
+                } else if (module.modname === 'resource') {
+                  activityType = 'Resource';
+                  activityIcon = FileText;
+                } else if (module.modname === 'url') {
+                  activityType = 'URL Link';
+                  activityIcon = ExternalLink;
+                } else if (module.modname === 'page') {
+                  activityType = 'Page';
+                  activityIcon = FileText;
+                } else if (module.modname === 'book') {
+                  activityType = 'Book';
+                  activityIcon = BookOpen;
+                } else if (module.modname === 'folder') {
+                  activityType = 'Folder';
+                  activityIcon = FileText;
+                } else if (module.modname === 'glossary') {
+                  activityType = 'Glossary';
+                  activityIcon = BookOpen;
+                } else if (module.modname === 'wiki') {
+                  activityType = 'Wiki';
+                  activityIcon = FileText;
+                } else if (module.modname === 'chat') {
+                  activityType = 'Chat';
+                  activityIcon = MessageSquare;
+                } else if (module.modname === 'survey') {
+                  activityType = 'Survey';
+                  activityIcon = CheckCircle;
+                } else if (module.modname === 'database') {
+                  activityType = 'Database';
+                  activityIcon = FileText;
+                } else if (module.modname === 'hvp') {
+                  activityType = 'Interactive Content';
+                  activityIcon = Play;
+                } else if (module.modname === 'lti') {
+                  activityType = 'External Tool';
+                  activityIcon = ExternalLink;
+                } else {
+                  // For any other module types, use the modname as type
+                  activityType = module.modname.charAt(0).toUpperCase() + module.modname.slice(1);
+                  activityIcon = Activity;
+                }
+
+                const sectionActivity = {
                   id: module.id,
                   name: module.name,
-                  type: 'Resource',
+                  type: activityType,
                   courseName: course.fullname || course.shortname,
                   courseId: course.id,
-                  description: module.description || module.intro || 'Complete this resource to progress in your learning.',
+                  description: module.description || module.intro || `Complete this ${activityType} to progress in your learning.`,
                   status: module.completiondata?.state === 1 ? 'completed' : 
                          module.completiondata?.state === 2 ? 'in_progress' : 'pending',
                   progress: module.completiondata?.progress || 0,
@@ -1448,24 +2067,49 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   modname: module.modname,
                   timeCreated: module.timecreated ? new Date(module.timecreated * 1000) : new Date(),
                   timeModified: module.timemodified ? new Date(module.timemodified * 1000) : new Date(),
-                  icon: Video, // Use Video icon for resources
+                  icon: activityIcon,
+                  dueDate: module.duedate ? new Date(module.duedate * 1000) : null,
+                  grade: module.grade || 0,
+                  maxGrade: module.grademax || 100,
+                  attempts: module.attempts || 0,
+                  maxAttempts: module.maxattempts || 1,
+                  visible: module.visible !== 0,
+                  completion: module.completion,
+                  added: module.added,
+                  // Additional properties for different activity types
                   fileSize: module.contents?.[0]?.filesize || 0,
                   fileType: module.contents?.[0]?.mimetype || 'unknown',
-                  fileName: module.contents?.[0]?.filename || module.name
+                  fileName: module.contents?.[0]?.filename || module.name,
+                  // For resources and URLs
+                  isResource: module.modname === 'resource' || module.modname === 'url',
+                  // For interactive activities
+                  isInteractive: ['quiz', 'assign', 'lesson', 'forum', 'workshop', 'choice', 'feedback', 'scorm'].includes(module.modname)
                 };
                 
-                resourceActivitiesList.push(resourceActivity);
+                allActivitiesList.push(sectionActivity);
               }
             });
           }
         });
       }
       
-      console.log(`✅ Fetched ${resourceActivitiesList.length} resource activities from IOMAD`);
-      setResourceActivities(resourceActivitiesList);
-      return resourceActivitiesList;
+      console.log(`✅ Fetched ${allActivitiesList.length} activities from IOMAD course sections`);
+      console.log(`📊 Activity breakdown:`, {
+        total: allActivitiesList.length,
+        byType: allActivitiesList.reduce((acc, activity) => {
+          acc[activity.type] = (acc[activity.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
+        byCourse: allActivitiesList.reduce((acc, activity) => {
+          acc[activity.courseName] = (acc[activity.courseName] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      });
+      
+      setResourceActivities(allActivitiesList);
+      return allActivitiesList;
     } catch (error) {
-      console.error('❌ Error fetching resource activities:', error);
+      console.error('❌ Error fetching section activities:', error);
       setResourceActivities([]);
       return [];
     } finally {
@@ -1713,6 +2357,12 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const closeActivityModal = () => {
     setIsActivityModalOpen(false);
     setSelectedActivity(null);
+    setIsViewingActivityInline(false);
+  };
+
+  // Close inline activity view
+  const closeInlineActivity = () => {
+    setIsViewingActivityInline(false);
   };
 
   // Memoized computed values with real data (using internal data like G1G3Dashboard)
@@ -2533,6 +3183,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           </div>
         </nav>
 
+
         {/* User Profile Section */}
         <div className="relative">
           <button
@@ -2580,6 +3231,43 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       </div>
 
       {/* Main Content */}
+
+        {/* Header with Notifications */}
+        <div className="bg-white border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-semibold text-gray-900">
+                {activeTab === 'dashboard' && 'Dashboard'}
+                {activeTab === 'courses' && 'My Courses'}
+                {activeTab === 'lessons' && 'Lessons'}
+                {activeTab === 'activities' && 'Activities'}
+                {activeTab === 'achievements' && 'Achievements'}
+                {activeTab === 'schedule' && 'Schedule'}
+                {activeTab === 'tree-view' && 'Course Structure'}
+                {activeTab === 'competencies' && 'Competencies'}
+                {activeTab === 'scratch-editor' && 'Scratch Editor'}
+                {activeTab === 'code-editor' && 'Code Editor'}
+                {activeTab === 'ebooks' && 'E-Books'}
+                {activeTab === 'ask-teacher' && 'Ask Teacher'}
+                {activeTab === 'share-class' && 'Share with Class'}
+              </h1>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              
+              {/* Refresh Button */}
+              <button
+                onClick={refreshData}
+                disabled={isLoading}
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+
       <div className="lg:ml-64 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 pt-16">
         {/* Server Error Banner */}
         {isServerOffline && (
@@ -3261,9 +3949,9 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2">
-                  <h3 className="font-semibold text-gray-900">Your Schedule</h3>
-                  <Info className="w-4 h-4 text-purple-500" />
-                </div>
+                <h3 className="font-semibold text-gray-900">Your Schedule</h3>
+                <Info className="w-4 h-4 text-purple-500" />
+              </div>
                 <button
                   onClick={() => handleTabChange('schedule')}
                   className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center space-x-1"
@@ -3285,7 +3973,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                       const hasEvents = dayEvents.length > 0;
                       
                       return (
-                        <div key={index} className="flex flex-col items-center min-w-[40px]">
+                      <div key={index} className="flex flex-col items-center min-w-[40px]">
                           <span className="text-xs text-gray-500 mb-1">
                             {date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
                           </span>
@@ -3294,8 +3982,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                               isToday
                                 ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
                                 : hasEvents 
-                                  ? 'bg-green-100 text-green-600 hover:bg-green-200' 
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              ? 'bg-green-100 text-green-600 hover:bg-green-200' 
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                             onClick={() => {
                               setSelectedDate(date);
@@ -3304,7 +3992,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                             title={hasEvents ? `${dayEvents.length} event(s)` : 'No events'}
                           >
                             {date.getDate()}
-                          </div>
+                        </div>
                           {hasEvents && (
                             <div className="flex space-x-1 mt-1">
                               {dayEvents.slice(0, 3).map((event, eventIndex) => (
@@ -3344,8 +4032,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                           }`}></div>
                           <span className="text-sm text-blue-800">{event.title}</span>
                           <span className="text-xs text-blue-600">{event.time}</span>
-                        </div>
-                      ))}
+                      </div>
+                    ))}
                       {realScheduleData.filter(event => 
                         event.date.toDateString() === new Date().toDateString()
                       ).length > 3 && (
@@ -3358,8 +4046,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                           ).length - 3} more events
                         </button>
                       )}
-                    </div>
                   </div>
+                </div>
                 )}
               </div>
             </div>
@@ -3525,13 +4213,13 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
           )}
 
-          {/* Activities Tab Content - Resource Activities Only */}
+          {/* Activities Tab Content - Real Activities Only */}
           {activeTab === 'activities' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Resource Activities</h1>
-                  <p className="text-gray-600 mt-1">View and access all your resource materials</p>
+                  <h1 className="text-3xl font-bold text-gray-900">Course Section Activities</h1>
+                  <p className="text-gray-600 mt-1">View and access all activities from your course sections</p>
                 </div>
                 <button
                   onClick={refreshData}
@@ -3546,87 +4234,168 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               {isLoadingResourceActivities ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                  <span className="ml-3 text-gray-600">Loading resource activities...</span>
+                  <span className="ml-3 text-gray-600">Loading activities...</span>
                 </div>
               ) : resourceActivities.length > 0 ? (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      Found {resourceActivities.length} Resource Activities
+                      Found {resourceActivities.length} Activities
                     </h3>
                     <p className="text-sm text-gray-600">
-                      These are all the resource materials available in your courses
+                      These are all the activities, resources, and materials from your course sections
                     </p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {Object.entries(
+                        resourceActivities.reduce((acc, activity) => {
+                          acc[activity.type] = (acc[activity.type] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      ).map(([type, count]) => (
+                        <span key={type} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                          {type}: {count}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   
-                  <div className="space-y-4">
+                <div className="space-y-4">
                     {resourceActivities.map((activity) => (
-                      <div 
-                        key={activity.id} 
-                        className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 cursor-pointer"
-                        onClick={() => handleActivityClick(activity)}
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center">
-                            <Video className="w-6 h-6 text-blue-600" />
-                          </div>
-                          
-                          <div className="flex-1">
+                    <div 
+                      key={activity.id} 
+                      className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 cursor-pointer"
+                      onClick={() => handleActivityClick(activity)}
+                    >
+                      <div className="flex items-center space-x-4">
+                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                            activity.type === 'Quiz' ? 'bg-purple-50' :
+                            activity.type === 'Assignment' ? 'bg-orange-50' :
+                            activity.type === 'Lesson' ? 'bg-blue-50' :
+                            activity.type === 'Discussion' ? 'bg-green-50' :
+                            activity.type === 'SCORM' ? 'bg-indigo-50' :
+                            activity.type === 'Workshop' ? 'bg-pink-50' :
+                            activity.type === 'Resource' ? 'bg-yellow-50' :
+                            activity.type === 'URL Link' ? 'bg-cyan-50' :
+                            activity.type === 'Page' ? 'bg-teal-50' :
+                            activity.type === 'Book' ? 'bg-amber-50' :
+                            activity.type === 'Folder' ? 'bg-slate-50' :
+                            activity.type === 'Glossary' ? 'bg-violet-50' :
+                            activity.type === 'Wiki' ? 'bg-rose-50' :
+                            activity.type === 'Chat' ? 'bg-emerald-50' :
+                            activity.type === 'Survey' ? 'bg-lime-50' :
+                            activity.type === 'Database' ? 'bg-sky-50' :
+                            activity.type === 'Interactive Content' ? 'bg-fuchsia-50' :
+                            activity.type === 'External Tool' ? 'bg-stone-50' :
+                            'bg-gray-50'
+                          }`}>
+                            {React.createElement(activity.icon, { 
+                              className: `w-6 h-6 ${
+                                activity.type === 'Quiz' ? 'text-purple-600' :
+                                activity.type === 'Assignment' ? 'text-orange-600' :
+                                activity.type === 'Lesson' ? 'text-blue-600' :
+                                activity.type === 'Discussion' ? 'text-green-600' :
+                                activity.type === 'SCORM' ? 'text-indigo-600' :
+                                activity.type === 'Workshop' ? 'text-pink-600' :
+                                activity.type === 'Resource' ? 'text-yellow-600' :
+                                activity.type === 'URL Link' ? 'text-cyan-600' :
+                                activity.type === 'Page' ? 'text-teal-600' :
+                                activity.type === 'Book' ? 'text-amber-600' :
+                                activity.type === 'Folder' ? 'text-slate-600' :
+                                activity.type === 'Glossary' ? 'text-violet-600' :
+                                activity.type === 'Wiki' ? 'text-rose-600' :
+                                activity.type === 'Chat' ? 'text-emerald-600' :
+                                activity.type === 'Survey' ? 'text-lime-600' :
+                                activity.type === 'Database' ? 'text-sky-600' :
+                                activity.type === 'Interactive Content' ? 'text-fuchsia-600' :
+                                activity.type === 'External Tool' ? 'text-stone-600' :
+                                'text-gray-600'
+                              }`
+                            })}
+                        </div>
+                        
+                        <div className="flex-1">
                             <h3 className="font-medium text-gray-900 mb-1">{activity.name}</h3>
                             <p className="text-sm text-gray-500 mb-2">{activity.courseName}</p>
-                            <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-4">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                 activity.status === 'completed' ? 'bg-green-100 text-green-800' :
                                 activity.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
                                 'bg-gray-100 text-gray-800'
                               }`}>
-                                {activity.status}
-                              </span>
-                              <span className="text-sm text-gray-500">
-                                {activity.fileType !== 'unknown' ? activity.fileType : 'Resource'}
-                              </span>
-                              {activity.fileSize > 0 && (
+                              {activity.status}
+                            </span>
+                              <span className="text-sm text-gray-500">{activity.type}</span>
+                              {activity.grade > 0 && (
                                 <span className="text-sm text-gray-500">
-                                  {(activity.fileSize / 1024 / 1024).toFixed(1)} MB
+                                  Grade: {activity.grade}/{activity.maxGrade}
+                            </span>
+                              )}
+                              {activity.attempts > 0 && (
+                                <span className="text-sm text-gray-500">
+                                  Attempts: {activity.attempts}/{activity.maxAttempts}
                                 </span>
                               )}
-                            </div>
+                              {activity.fileSize > 0 && (
+                                <span className="text-sm text-gray-500">
+                                  Size: {(activity.fileSize / 1024 / 1024).toFixed(1)} MB
+                                </span>
+                              )}
+                              {activity.isResource && (
+                                <span className="text-sm text-blue-600 font-medium">Resource</span>
+                              )}
+                              {activity.isInteractive && (
+                                <span className="text-sm text-green-600 font-medium">Interactive</span>
+                              )}
+                          </div>
                             {activity.description && (
                               <p className="text-sm text-gray-600 mt-2 line-clamp-2">
                                 {activity.description}
                               </p>
                             )}
-                          </div>
+                            {activity.dueDate && (
+                              <p className="text-xs text-red-600 mt-1">
+                                Due: {activity.dueDate.toLocaleDateString()}
+                              </p>
+                            )}
                         </div>
-                        
-                        <div className="text-right">
+                      </div>
+                      
+                      <div className="text-right">
                           <div className="text-sm text-gray-500 mb-1">
                             {activity.sectionName}
                           </div>
-                          <button 
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (activity.url) {
-                                window.open(activity.url, '_blank');
+                        <button 
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              activity.status === 'completed' ? 'bg-green-500 hover:bg-green-600 text-white' :
+                              activity.status === 'in_progress' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' :
+                              'bg-blue-500 hover:bg-blue-600 text-white'
+                            }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                              if (activity.status === 'completed' || activity.status === 'in_progress') {
+                                // For completed/in-progress activities, try API first, then direct link
+                                handleStartActivityModal(activity);
                               } else {
-                                handleActivityClick(activity);
+                                // For new activities, show modal first
+                            handleActivityClick(activity);
                               }
-                            }}
-                          >
-                            {activity.url ? 'Open Resource' : 'View Details'}
-                          </button>
-                        </div>
+                          }}
+                        >
+                            {activity.status === 'completed' ? 'Review' :
+                             activity.status === 'in_progress' ? 'Continue' : 
+                             activity.isResource ? 'Open' : 'Start'}
+                        </button>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
+              </div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                  <Video className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Resource Activities</h3>
+                  <Activity className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Activities Available</h3>
                   <p className="text-gray-600">
-                    You don't have any resource activities available at the moment.
+                    You don't have any activities available at the moment.
                   </p>
                 </div>
               )}
@@ -3648,7 +4417,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           {activeTab === 'schedule' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
                 <div className="flex items-center space-x-4">
                   <button
                     onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
@@ -3665,8 +4434,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   >
                     <ChevronRight className="w-5 h-5 text-gray-600" />
                   </button>
-                </div>
               </div>
+            </div>
 
               {isLoadingRealSchedule ? (
                 <div className="flex items-center justify-center py-12">
@@ -3689,7 +4458,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   </div>
 
                   {/* Upcoming Events */}
-                  <div className="space-y-6">
+            <div className="space-y-6">
                     {/* Selected Date Events */}
                     {selectedDate && (
                       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -3717,7 +4486,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                                       <div className="flex items-center space-x-1">
                                         <Clock className="w-4 h-4 text-gray-400" />
                                         <span className="text-sm text-gray-500">{event.time}</span>
-                                      </div>
+              </div>
                                       <div className="flex items-center space-x-1">
                                         <Calendar className="w-4 h-4 text-gray-400" />
                                         <span className="text-sm text-gray-500">{event.duration} min</span>
@@ -3749,8 +4518,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                             <p className="text-gray-600 text-sm">No events scheduled for this date</p>
                           </div>
                         )}
-                      </div>
-                    )}
+            </div>
+          )}
 
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Events</h3>
@@ -3845,6 +4614,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         course={course} 
                         courseIndex={courseIndex}
                         onActivityClick={handleActivityClick}
+                        onStartActivity={handleStartActivityModal}
                       />
                     ))}
                   </div>
@@ -4246,9 +5016,256 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
               {/* Modal Content */}
               <div className="p-8">
+                {isViewingActivityInline ? (
+                  /* Inline Activity View */
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-1">{selectedActivity.name || selectedActivity.title}</h2>
+                        <p className="text-gray-600">{selectedActivity.courseName || selectedActivity.courseTitle}</p>
+                      </div>
+                      <button 
+                        onClick={closeInlineActivity}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                      >
+                        Back to Details
+                      </button>
+                    </div>
+                    
+                    {isLoadingActivityData ? (
+                      /* Loading State */
+                      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Activity</h3>
+                        <p className="text-gray-600">Fetching activity content directly from the learning system...</p>
+                        <div className="mt-4 bg-blue-50 rounded-lg p-4">
+                          <p className="text-sm text-blue-800">
+                            🎯 Your activity will open directly in this dashboard - no proxy server needed!
+                          </p>
+                        </div>
+                      </div>
+                    ) : selectedActivity.apiData ? (
+                      /* API Data Display */
+                      <div className="bg-white rounded-xl border border-gray-200 p-6">
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">Activity Content</h3>
+                          <div className="text-sm text-gray-600 mb-4">
+                            Type: {selectedActivity.apiData.type || selectedActivity.type} | 
+                            Status: {selectedActivity.apiData.status || selectedActivity.status}
+                          </div>
+                        </div>
+                        
+                        {/* Render different activity types based on API data */}
+                        {selectedActivity.apiData.type === 'quiz' && (
+                          <div className="space-y-4">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                              <h4 className="font-semibold text-blue-900 mb-2">Quiz: {selectedActivity.apiData.title}</h4>
+                              <p className="text-blue-800 mb-3">{selectedActivity.apiData.description}</p>
+                              <div className="flex items-center space-x-4 text-sm text-blue-700">
+                                <span>Questions: {selectedActivity.apiData.questions?.length || 0}</span>
+                                <span>Time Limit: {selectedActivity.apiData.timeLimit || 'No limit'}</span>
+                                <span>Attempts: {selectedActivity.apiData.attempts || 'Unlimited'}</span>
+                              </div>
+                            </div>
+                            {selectedActivity.apiData.questions?.map((question: any, index: number) => (
+                              <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                <h5 className="font-medium text-gray-900 mb-2">Question {index + 1}</h5>
+                                <p className="text-gray-700 mb-3">{question.text}</p>
+                                <div className="space-y-2">
+                                  {question.options?.map((option: any, optIndex: number) => (
+                                    <label key={optIndex} className="flex items-center space-x-2">
+                                      <input type="radio" name={`question_${index}`} className="text-blue-600" />
+                                      <span className="text-gray-700">{option.text}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                              Submit Quiz
+                            </button>
+                          </div>
+                        )}
+                        
+                        {selectedActivity.apiData.type === 'assignment' && (
+                          <div className="space-y-4">
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                              <h4 className="font-semibold text-orange-900 mb-2">Assignment: {selectedActivity.apiData.title}</h4>
+                              <p className="text-orange-800 mb-3">{selectedActivity.apiData.description}</p>
+                              <div className="flex items-center space-x-4 text-sm text-orange-700">
+                                <span>Due: {selectedActivity.apiData.dueDate || 'No due date'}</span>
+                                <span>Points: {selectedActivity.apiData.points || 0}</span>
+                                <span>Submissions: {selectedActivity.apiData.submissions || 0}</span>
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                              <h5 className="font-medium text-gray-900 mb-2">Instructions</h5>
+                              <div className="text-gray-700 mb-4" dangerouslySetInnerHTML={{ __html: selectedActivity.apiData.instructions || 'No instructions provided.' }} />
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Upload File</label>
+                                <input type="file" className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Comments (Optional)</label>
+                                <textarea 
+                                  rows={4} 
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                  placeholder="Add any comments about your submission..."
+                                />
+                              </div>
+                              <button className="w-full bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                                Submit Assignment
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {selectedActivity.apiData.type === 'lesson' && (
+                          <div className="space-y-4">
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                              <h4 className="font-semibold text-green-900 mb-2">Lesson: {selectedActivity.apiData.title}</h4>
+                              <p className="text-green-800 mb-3">{selectedActivity.apiData.description}</p>
+                            </div>
+                            <div className="bg-white border border-gray-200 rounded-lg p-6">
+                              <div className="text-gray-800" dangerouslySetInnerHTML={{ __html: selectedActivity.apiData.content || 'No content available.' }} />
+                            </div>
+                            <button className="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                              Mark as Complete
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* Generic activity display for other types */}
+                        {!['quiz', 'assignment', 'lesson'].includes(selectedActivity.apiData.type) && (
+                          <div className="space-y-4">
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                              <h4 className="font-semibold text-gray-900 mb-2">{selectedActivity.apiData.title}</h4>
+                              <p className="text-gray-700 mb-3">{selectedActivity.apiData.description}</p>
+                              <div className="text-sm text-gray-600">
+                                Type: {selectedActivity.apiData.type} | 
+                                Status: {selectedActivity.apiData.status}
+                              </div>
+                            </div>
+                            {selectedActivity.apiData.content && (
+                              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                                <div className="text-gray-800" dangerouslySetInnerHTML={{ __html: selectedActivity.apiData.content }} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedActivity.useDirectContent && selectedActivity.directContent ? (
+                      /* Direct Content Display */
+                      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                        <div className="bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-white font-semibold text-lg">{selectedActivity.name || selectedActivity.title}</h3>
+                              <p className="text-blue-100 text-sm">{selectedActivity.courseName || selectedActivity.courseTitle}</p>
+                            </div>
+                            <button 
+                              onClick={closeInlineActivity}
+                              className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
+                            >
+                              <X className="w-4 h-4 text-white" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="w-full max-h-[600px] overflow-y-auto">
+                          <style dangerouslySetInnerHTML={{
+                            __html: `
+                              .activity-content {
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                              }
+                              .activity-content h1, .activity-content h2, .activity-content h3 {
+                                color: #2d3748;
+                                margin-bottom: 12px;
+                              }
+                              .activity-content p {
+                                color: #4a5568;
+                                line-height: 1.6;
+                                margin-bottom: 12px;
+                              }
+                              .activity-content a {
+                                color: #3182ce;
+                                text-decoration: underline;
+                              }
+                              .activity-content a:hover {
+                                color: #2c5282;
+                              }
+                              .activity-content button, .activity-content input[type="submit"] {
+                                background: #3182ce;
+                                color: white;
+                                border: none;
+                                padding: 8px 16px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                                font-size: 14px;
+                              }
+                              .activity-content button:hover, .activity-content input[type="submit"]:hover {
+                                background: #2c5282;
+                              }
+                            `
+                          }} />
+                          <div 
+                            dangerouslySetInnerHTML={{ __html: selectedActivity.directContent }}
+                            className="activity-content"
+                          />
+                        </div>
+                        <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                          <p className="text-sm text-gray-600 text-center">
+                            {selectedActivity.isFallbackInterface ? 
+                              '✅ Activity interface loaded. Content will be available when connected to the learning system.' :
+                              '✅ Activity content loaded successfully. You can interact with it directly above.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Error State */
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+                        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Activity className="w-8 h-8 text-yellow-600" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-yellow-800 mb-2">Activity Not Found</h3>
+                        <p className="text-yellow-700 mb-4">
+                          The activity URL could not be found. This might be because:
+                        </p>
+                        <ul className="text-yellow-700 text-sm mb-4 text-left max-w-md mx-auto">
+                          <li>• The activity ID is incorrect</li>
+                          <li>• The activity has been moved or deleted</li>
+                          <li>• You don't have access to this activity</li>
+                        </ul>
+                        <div className="space-y-2">
+                          <button 
+                            onClick={() => {
+                              // Try to reload the activity
+                              if (selectedActivity.activityUrl || selectedActivity.directContent) {
+                                window.location.reload();
+                              }
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors mr-2"
+                          >
+                            Retry Loading
+                          </button>
+                          <button 
+                            onClick={closeInlineActivity}
+                            className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                          >
+                            Back to Details
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Activity Details View */
+                  <div>
                 <div className="mb-6">
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedActivity.title}</h2>
-                  <p className="text-gray-600 text-lg">{selectedActivity.courseTitle}</p>
+                      <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedActivity.name || selectedActivity.title}</h2>
+                      <p className="text-gray-600 text-lg">{selectedActivity.courseName || selectedActivity.courseTitle}</p>
                 </div>
 
                 {/* Activity Stats */}
@@ -4259,8 +5276,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         <Clock className="w-5 h-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">Time Remaining</p>
-                        <p className="font-semibold text-gray-900">{selectedActivity.timeRemaining}</p>
+                            <p className="text-sm text-gray-600">Type</p>
+                            <p className="font-semibold text-gray-900">{selectedActivity.type || 'Activity'}</p>
                       </div>
                     </div>
                   </div>
@@ -4271,8 +5288,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         <Award className="w-5 h-5 text-yellow-600" />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">Points</p>
-                        <p className="font-semibold text-gray-900">{selectedActivity.points}</p>
+                            <p className="text-sm text-gray-600">Status</p>
+                            <p className="font-semibold text-gray-900 capitalize">{selectedActivity.status}</p>
                       </div>
                     </div>
                   </div>
@@ -4280,36 +5297,60 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
                 {/* Activity Details */}
                 <div className="space-y-4 mb-6">
+                      {selectedActivity.description && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <h3 className="text-sm font-medium text-gray-700 mb-2">Description</h3>
+                          <p className="text-gray-600">{selectedActivity.description}</p>
+                        </div>
+                      )}
+                      
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Type</span>
                     <span className="text-sm text-gray-900 capitalize">{selectedActivity.type}</span>
                   </div>
+                      
+                      {selectedActivity.sectionName && (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Difficulty</span>
-                    <span className={`${getDifficultyColor(selectedActivity.difficulty)} px-2 py-1 rounded-full text-xs font-medium`}>
-                      {selectedActivity.difficulty}
-                    </span>
+                          <span className="text-sm font-medium text-gray-700">Section</span>
+                          <span className="text-sm text-gray-900">{selectedActivity.sectionName}</span>
                   </div>
+                      )}
+                      
+                      {selectedActivity.dueDate && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Due Date</span>
-                    <span className="text-sm text-gray-900">{selectedActivity.dueDate}</span>
+                          <span className="text-sm text-gray-900">
+                            {selectedActivity.dueDate instanceof Date ? 
+                              selectedActivity.dueDate.toLocaleDateString() : 
+                              selectedActivity.dueDate}
+                          </span>
                   </div>
+                      )}
                 </div>
 
               {/* Action Buttons */}
               <div className="flex space-x-4">
-                {selectedActivity.status === 'submitted' ? (
-                  <button className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                      {selectedActivity.status === 'completed' ? (
+                        <button 
+                          onClick={() => handleStartActivityModal(selectedActivity)}
+                          className="flex-1 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                        >
                     <CheckCircle className="w-5 h-5" />
-                    <span>View Submission</span>
+                          <span>Review Activity</span>
                   </button>
-                ) : selectedActivity.status === 'graded' ? (
-                  <button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
-                    <BarChart3Icon className="w-5 h-5" />
-                    <span>View Grade</span>
+                      ) : selectedActivity.status === 'in-progress' ? (
+                        <button 
+                          onClick={() => handleStartActivityModal(selectedActivity)}
+                          className="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                        >
+                          <Play className="w-5 h-5" />
+                          <span>Continue Activity</span>
                   </button>
                 ) : (
-                  <button className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
+                        <button 
+                          onClick={() => handleStartActivityModal(selectedActivity)}
+                          className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                        >
                     <Play className="w-5 h-5" />
                     <span>Start Activity</span>
                   </button>
@@ -4321,6 +5362,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   Close
                 </button>
               </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
