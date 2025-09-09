@@ -508,7 +508,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
       </div>
 
       {/* Main Content - offset by sidebar width on desktop, full width on mobile */}
-      <div className="lg:ml-64">
+      <div className="lg:ml-64 lg:pl-4">
 
         {/* Fixed Top Bar */}
         <header className="fixed top-0 left-0 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
@@ -584,8 +584,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           </div>
         </header>
 
-        {/* Main Content Area - with proper top padding */}
-        <main className="bg-gray-50 min-h-screen pt-16 px-2 lg:px-4">
+        {/* Main Content Area - with proper top padding and sidebar spacing */}
+        <main className="bg-gray-50 min-h-screen pt-16 px-4 lg:px-8">
           <div className="w-full">
             {children}
           </div>
