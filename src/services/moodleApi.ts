@@ -16154,16 +16154,12 @@ export const moodleService = {
       try {
         const packageUrl = await this.getScormPackageUrl(courseId, moduleId);
         
-        // For iframe embedding, we need to create a custom viewer
-        // Since the ZIP file can't be directly embedded, we'll use a different approach
         console.log(`📦 SCORM package URL found: ${packageUrl}`);
         
-        // Return a custom SCORM viewer URL that can handle the package
-        const baseUrl = API_BASE_URL.replace('/webservice/rest/server.php', '');
-        const viewerUrl = `${baseUrl}/mod/scorm/view.php?id=${moduleId}&wstoken=${API_TOKEN}&embed=1`;
-        
-        console.log(`✅ SCORM content URL for iframe: ${viewerUrl}`);
-        return viewerUrl;
+        // Since we can now access the package URL, let's use it directly
+        // The package URL is the actual SCORM content that we can embed
+        console.log(`✅ Using SCORM package URL directly: ${packageUrl}`);
+        return packageUrl;
       } catch (packageError) {
         console.log('⚠️ Could not get package URL, using alternative method');
       }

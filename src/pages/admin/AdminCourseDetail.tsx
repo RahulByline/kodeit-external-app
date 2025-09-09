@@ -40,6 +40,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import ScormPlayer from '../../components/ScormPlayer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { moodleService } from '../../services/moodleApi';
 import { competencyService } from '../../services/competencyService';
@@ -1652,134 +1653,11 @@ const AdminCourseDetail: React.FC<AdminCourseDetailProps> = ({ courseId, onBack 
       {showScormViewer && (
         <div className={`fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center ${isFullscreen ? 'p-0' : 'p-4'}`}>
           <div className={`bg-white rounded-lg shadow-xl ${isFullscreen ? 'w-full h-full rounded-none' : 'w-11/12 h-5/6 max-w-6xl'}`}>
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Code className="w-4 h-4 text-gray-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{scormActivityName}</h3>
-                  <p className="text-sm text-gray-600">SCORM Package • ID: {scormModuleId}</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleFullscreen}
-                  className="text-gray-600 hover:text-gray-700"
-                  title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-                >
-                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => window.open(scormViewerUrl, '_blank')}
-                  className="text-gray-600 hover:text-gray-700"
-                  title="Open in New Tab"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={closeScormViewer}
-                  className="text-gray-600 hover:text-gray-700"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* SCORM Content */}
-            <div className="flex-1 h-full relative">
-              {scormLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading SCORM package...</p>
-                  </div>
-                </div>
-              )}
-              
-              {scormError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-red-50">
-                  <div className="text-center p-6">
-                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <X className="w-6 h-6 text-red-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-red-800 mb-2">Failed to Load SCORM</h3>
-                    <p className="text-red-600 mb-4">{scormError}</p>
-                    <div className="space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(scormViewerUrl, '_blank')}
-                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                      >
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Open in New Tab
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={closeScormViewer}
-                      >
-                        Close
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {!scormLoading && !scormError && (
-                <iframe
-                  src={scormViewerUrl}
-                  className="w-full h-full border-0"
-                  title={`SCORM Package: ${scormActivityName}`}
-                  allow="fullscreen; autoplay; encrypted-media; picture-in-picture; microphone; camera"
-                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-downloads"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  loading="lazy"
-                  onLoad={() => {
-                    setScormLoading(false);
-                    console.log('✅ SCORM iframe loaded successfully');
-                  }}
-                  onError={() => {
-                    setScormLoading(false);
-                    setScormError('Failed to load SCORM content. This may be due to X-Frame-Options restrictions. Try opening in a new tab.');
-                    console.error('❌ SCORM iframe failed to load');
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between p-4 border-t border-gray-200 bg-gray-50">
-              <div className="text-sm text-gray-600">
-                SCORM content is loaded from Moodle. Some features may require authentication.
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(scormViewerUrl, '_blank')}
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open in New Tab
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={closeScormViewer}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
+            <ScormPlayer
+              packageUrl={scormViewerUrl}
+              title={scormActivityName}
+              onClose={closeScormViewer}
+            />
           </div>
         </div>
       )}
