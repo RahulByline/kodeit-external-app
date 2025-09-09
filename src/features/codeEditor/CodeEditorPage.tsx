@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import * as monaco from "monaco-editor";
 import clsx from "clsx";
-import DashboardLayout from "../../components/DashboardLayout";
+import G8PlusLayout from "../../components/G8PlusLayout";
 import {
   File,
   Play,
@@ -614,7 +614,7 @@ const CodeEditorPage: React.FC = () => {
   }, [isDropdownOpen]);
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+    <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="vscode-editor">
           {/* Header */}
           <div className="vscode-header">
@@ -960,7 +960,7 @@ const CodeEditorPage: React.FC = () => {
             </div>
           )}
         </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 

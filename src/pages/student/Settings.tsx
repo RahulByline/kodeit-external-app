@@ -13,7 +13,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import G8PlusLayout from '../../components/G8PlusLayout';
 import moodleService from '../../services/moodleApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -161,20 +161,20 @@ const StudentSettings: React.FC = () => {
 
   if (loading) {
     return (
-          <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+          <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center space-x-2">
           <RefreshCw className="animate-spin h-6 w-6 text-blue-600" />
           <span className="text-gray-600">Loading profile from Moodle API...</span>
         </div>
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
     );
   }
 
   if (error && !profile) {
     return (
-          <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+          <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <div className="flex items-center space-x-2 text-red-800 mb-2">
           <AlertCircle className="w-5 h-5" />
@@ -186,12 +186,12 @@ const StudentSettings: React.FC = () => {
           Try Again
         </Button>
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
     );
   }
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+    <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -504,7 +504,7 @@ const StudentSettings: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 

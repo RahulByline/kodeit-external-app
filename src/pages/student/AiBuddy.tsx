@@ -33,7 +33,7 @@ import {
   Rocket,
   Target
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import G8PlusLayout from '../../components/G8PlusLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -271,7 +271,7 @@ def example_function():
   };
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+    <G8PlusLayout userName={currentUser?.fullname || "Student"}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -608,7 +608,7 @@ def example_function():
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 

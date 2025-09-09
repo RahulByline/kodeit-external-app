@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Building,
@@ -62,9 +62,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { enhancedMoodleService } from '../../../services/enhancedMoodleApi';
+import { authService } from '../../../services/authService';
 import logo from '../../../assets/logo.png';
 import ScratchEmulator from '../../../components/dashboard/Emulator/ScratchEmulator';
 import CodeEditorContent from '../../../features/codeEditor/CodeEditorContent';
+import LogoutDialog from '../../../components/ui/logout-dialog';
 
 // Helper functions for course data processing
 const getCourseImageFallback = (categoryname?: string, fullname?: string): string => {
@@ -94,6 +96,35 @@ const getCourseImageFallback = (categoryname?: string, fullname?: string): strin
       return '/card1.webp';
     }
   }
+};
+
+// Helper function to get the best available course image
+const getBestCourseImage = (course: any): string => {
+  // Priority order: courseimage -> imageurl -> overviewfiles -> fallback
+  if (course.courseimage && course.courseimage.trim() !== '') {
+    console.log(`🖼️ Using courseimage for course ${course.fullname}:`, course.courseimage);
+    return course.courseimage;
+  }
+  
+  if (course.imageurl && course.imageurl.trim() !== '') {
+    console.log(`🖼️ Using imageurl for course ${course.fullname}:`, course.imageurl);
+    return course.imageurl;
+  }
+  
+  if (course.overviewfiles && Array.isArray(course.overviewfiles) && course.overviewfiles.length > 0) {
+    const imageFile = course.overviewfiles.find((file: any) => 
+      file.mimetype && file.mimetype.startsWith('image/')
+    );
+    if (imageFile && imageFile.fileurl) {
+      console.log(`🖼️ Using overviewfiles image for course ${course.fullname}:`, imageFile.fileurl);
+      return imageFile.fileurl;
+    }
+  }
+  
+  // Fallback to category-based image
+  const fallbackImage = getCourseImageFallback(course.categoryname, course.fullname);
+  console.log(`🖼️ Using fallback image for course ${course.fullname}:`, fallbackImage);
+  return fallbackImage;
 };
 
 const getCourseDifficulty = (categoryname?: string, fullname?: string): 'Beginner' | 'Intermediate' | 'Advanced' => {
@@ -208,6 +239,45 @@ const getActivityImage = (activityType: string, courseImage?: string): string =>
   return typeImages[activityType] || courseImage || '/card1.webp';
 };
 
+// Helper function to get the best available lesson image
+const getBestLessonImage = (lesson: any): string => {
+  // Priority order: image -> imageurl -> overviewfiles -> introfiles -> fallback
+  if (lesson.image && lesson.image.trim() !== '') {
+    console.log(`🖼️ Using lesson image for ${lesson.name}:`, lesson.image);
+    return lesson.image;
+  }
+  
+  if (lesson.imageurl && lesson.imageurl.trim() !== '') {
+    console.log(`🖼️ Using lesson imageurl for ${lesson.name}:`, lesson.imageurl);
+    return lesson.imageurl;
+  }
+  
+  if (lesson.overviewfiles && Array.isArray(lesson.overviewfiles) && lesson.overviewfiles.length > 0) {
+    const imageFile = lesson.overviewfiles.find((file: any) => 
+      file.mimetype && file.mimetype.startsWith('image/')
+    );
+    if (imageFile && imageFile.fileurl) {
+      console.log(`🖼️ Using lesson overviewfiles image for ${lesson.name}:`, imageFile.fileurl);
+      return imageFile.fileurl;
+    }
+  }
+  
+  if (lesson.lessonDetails?.introfiles && Array.isArray(lesson.lessonDetails.introfiles) && lesson.lessonDetails.introfiles.length > 0) {
+    const imageFile = lesson.lessonDetails.introfiles.find((file: any) => 
+      file.mimetype && file.mimetype.startsWith('image/')
+    );
+    if (imageFile && imageFile.fileurl) {
+      console.log(`🖼️ Using lesson introfiles image for ${lesson.name}:`, imageFile.fileurl);
+      return imageFile.fileurl;
+    }
+  }
+  
+  // Fallback to activity type-based image
+  const fallbackImage = getActivityImage(lesson.moduleType);
+  console.log(`🖼️ Using fallback image for lesson ${lesson.name}:`, fallbackImage);
+  return fallbackImage;
+};
+
 interface Course {
   id: string;
   title: string;
@@ -320,7 +390,7 @@ const transformCoursesToLessons = (courses: any[]): Lesson[] => {
       status: course.progress > 80 ? 'completed' : course.progress > 0 ? 'in-progress' : 'not-started',
       progress: course.progress || 0,
       isNew: false,
-      image: course.courseimage || getCourseImageFallback(course.categoryname, course.fullname)
+      image: getBestCourseImage(course)
     });
   });
   
@@ -452,6 +522,7 @@ const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, on
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   const toggleCourse = () => {
     setExpandedCourse(!expandedCourse);
@@ -486,9 +557,9 @@ const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, on
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'text-green-600';
-      case 'in_progress': return 'text-yellow-600';
-      default: return 'text-gray-600';
+      case 'completed': return 'text-green-600 bg-green-50';
+      case 'in_progress': return 'text-yellow-600 bg-yellow-50';
+      default: return 'text-gray-600 bg-gray-50';
     }
   };
 
@@ -500,23 +571,34 @@ const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, on
     }
   };
 
+  const getProgressColor = (progress: number) => {
+    if (progress >= 80) return 'bg-green-500';
+    if (progress >= 50) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
   return (
-    <div className="relative">
-      {/* Root Course Level - Pink background like in the image */}
+    <div className="relative group">
+      {/* Root Course Level - Enhanced styling */}
       <div 
-        className={`relative bg-pink-100 border border-pink-200 rounded-lg p-4 mb-2 cursor-pointer transition-all duration-200 ${
-          selectedItem === `course-${course.id}` ? 'ring-2 ring-pink-300 shadow-md' : 'hover:shadow-sm'
+        className={`relative bg-gradient-to-r from-pink-50 to-purple-50 border-2 border-pink-200 rounded-2xl p-6 mb-4 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] hover:shadow-xl ${
+          selectedItem === `course-${course.id}` ? 'ring-4 ring-pink-300 shadow-2xl scale-[1.02]' : 'hover:shadow-lg'
         }`}
         onClick={() => handleItemClick(`course-${course.id}`, course)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+        {/* Course Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 toggleCourse();
               }}
-              className="w-6 h-6 bg-pink-200 rounded-full flex items-center justify-center hover:bg-pink-300 transition-colors"
+              className={`w-8 h-8 bg-pink-200 rounded-full flex items-center justify-center hover:bg-pink-300 transition-all duration-200 transform hover:scale-110 ${
+                expandedCourse ? 'bg-pink-300' : ''
+              }`}
             >
               {expandedCourse ? (
                 <Minus className="w-4 h-4 text-pink-700" />
@@ -524,118 +606,275 @@ const CourseTreeItem: React.FC<CourseTreeItemProps> = ({ course, courseIndex, on
                 <PlusIcon className="w-4 h-4 text-pink-700" />
               )}
             </button>
-            <h3 className="text-pink-800 font-semibold text-lg">{course.name}</h3>
-            <div className="flex items-center space-x-2">
-              {getStatusIcon('completed')}
-              <span className="text-sm text-pink-600">({course.progress}% Complete)</span>
+            <div>
+              <h3 className="text-pink-800 font-bold text-xl">{course.name}</h3>
+              <p className="text-pink-600 text-sm">{course.categoryname || 'General Course'}</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-pink-600">{course.sectionCount} sections</span>
-            <ChevronDown className={`w-4 h-4 text-pink-600 transition-transform duration-200 ${expandedCourse ? 'rotate-180' : ''}`} />
+          <div className="flex items-center space-x-3">
+            <div className="text-right">
+              <div className="text-sm text-pink-600 font-medium">{course.sectionCount} sections</div>
+              <div className="text-xs text-pink-500">{course.activityCount || 0} activities</div>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-pink-600 transition-transform duration-300 ${expandedCourse ? 'rotate-180' : ''}`} />
+          </div>
+        </div>
+
+        {/* Enhanced Progress Bar */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-pink-700">Course Progress</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-bold text-pink-800">{course.progress || 0}%</span>
+              <div className="text-xs text-pink-600">
+                ({course.completedActivities || 0}/{course.activityCount || 0} activities)
+              </div>
+            </div>
+          </div>
+          <div className="w-full bg-pink-200 rounded-full h-3 overflow-hidden shadow-inner">
+            <div 
+              className={`h-full transition-all duration-700 ease-out ${getProgressColor(course.progress || 0)} relative`}
+              style={{ width: `${course.progress || 0}%` }}
+            >
+              {/* Progress bar shimmer effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-1 text-xs text-pink-600">
+            <span>{course.completedSections || 0} of {course.totalSections || 0} sections completed</span>
+            <span>{course.inProgressActivities || 0} in progress</span>
+          </div>
+        </div>
+
+        {/* Status and Stats */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor('completed')}`}>
+              {getStatusIcon('completed')}
+              <span>Active</span>
+            </div>
+            <div className="text-sm text-pink-600">
+              {course.completedSections || 0} of {course.totalSections || 0} sections completed
+          </div>
+          </div>
+          <div className="text-xs text-pink-500">
+            Last updated: {new Date().toLocaleDateString()}
           </div>
         </div>
       </div>
 
-      {/* Sections Level - White background with green connecting line */}
+      {/* Sections Level - Enhanced styling with animations */}
       {expandedCourse && course.sections && course.sections.map((section: any, sectionIndex: number) => (
-        <div key={section.id} className="relative ml-6">
-          {/* Green connecting line */}
-          <div className="absolute left-0 top-0 w-0.5 h-6 bg-green-300"></div>
+        <div key={section.id} className="relative ml-8 animate-in slide-in-from-top-2 duration-300">
+          {/* Enhanced connecting line */}
+          <div className="absolute left-0 top-0 w-1 h-8 bg-gradient-to-b from-green-400 to-green-300 rounded-full"></div>
           
           <div 
-            className={`relative bg-white border border-gray-200 rounded-lg p-3 mb-2 cursor-pointer transition-all duration-200 ${
-              selectedItem === `section-${section.id}` ? 'ring-2 ring-green-300 shadow-md' : 'hover:shadow-sm'
+            className={`relative bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-4 mb-3 cursor-pointer transition-all duration-300 transform hover:scale-[1.01] hover:shadow-lg ${
+              selectedItem === `section-${section.id}` ? 'ring-2 ring-green-400 shadow-xl scale-[1.01]' : 'hover:shadow-md'
             }`}
             onClick={() => handleItemClick(`section-${section.id}`, section)}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-4">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleSection(section.id);
                   }}
-                  className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors"
+                  className={`w-6 h-6 bg-green-200 rounded-full flex items-center justify-center hover:bg-green-300 transition-all duration-200 transform hover:scale-110 ${
+                    expandedSections.has(section.id) ? 'bg-green-300' : ''
+                  }`}
                 >
                   {expandedSections.has(section.id) ? (
-                    <Minus className="w-3 h-3 text-green-600" />
+                    <Minus className="w-3 h-3 text-green-700" />
                   ) : (
-                    <PlusIcon className="w-3 h-3 text-green-600" />
+                    <PlusIcon className="w-3 h-3 text-green-700" />
                   )}
                 </button>
-                <h4 className="text-green-700 font-medium">{section.name}</h4>
-                <div className="flex items-center space-x-2">
-                  {getStatusIcon('completed')}
-                  <span className="text-sm text-green-600">({section.progress}% Complete)</span>
+                <div>
+                  <h4 className="text-green-800 font-semibold text-lg">{section.name}</h4>
+                  <p className="text-green-600 text-sm">Section {sectionIndex + 1}</p>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-green-600">{section.activityCount} activities</span>
-                <ChevronDown className={`w-4 h-4 text-green-600 transition-transform duration-200 ${expandedSections.has(section.id) ? 'rotate-180' : ''}`} />
+              <div className="flex items-center space-x-3">
+                <div className="text-right">
+                  <div className="text-sm text-green-700 font-medium">{section.activityCount} activities</div>
+                  <div className="text-xs text-green-600">{section.progress || 0}% complete</div>
+              </div>
+                <ChevronDown className={`w-4 h-4 text-green-600 transition-transform duration-300 ${expandedSections.has(section.id) ? 'rotate-180' : ''}`} />
+            </div>
+          </div>
+
+            {/* Enhanced Section Progress Bar */}
+            <div className="mb-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-green-700">Section Progress</span>
+                <span className="text-xs font-bold text-green-800">{section.progress || 0}%</span>
+              </div>
+              <div className="w-full bg-green-200 rounded-full h-2 overflow-hidden shadow-inner">
+                <div 
+                  className={`h-full transition-all duration-700 ease-out ${getProgressColor(section.progress || 0)} relative`}
+                  style={{ width: `${section.progress || 0}%` }}
+                >
+                  {/* Progress bar shimmer effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-1 text-xs text-green-600">
+                <span>{section.completedActivities || 0} of {section.totalActivities || 0} completed</span>
+                <span>{section.inProgressActivities || 0} in progress</span>
+              </div>
+            </div>
+
+            {/* Section Status */}
+            <div className="flex items-center justify-between">
+              <div className={`flex items-center space-x-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor('completed')}`}>
+                {getStatusIcon('completed')}
+                <span>Active Section</span>
+              </div>
+              <div className="text-xs text-green-600">
+                {section.completedActivities || 0} of {section.totalActivities || 0} completed
               </div>
             </div>
           </div>
 
-          {/* Activities Level - Blue connecting line */}
+          {/* Activities Level - Enhanced styling */}
           {expandedSections.has(section.id) && section.activities && section.activities.map((activity: any, activityIndex: number) => (
-            <div key={activity.id} className="relative ml-6">
-              {/* Blue connecting line */}
-              <div className="absolute left-0 top-0 w-0.5 h-6 bg-blue-300"></div>
+            <div key={activity.id} className="relative ml-8 animate-in slide-in-from-top-2 duration-300">
+              {/* Enhanced connecting line */}
+              <div className="absolute left-0 top-0 w-1 h-6 bg-gradient-to-b from-blue-400 to-blue-300 rounded-full"></div>
               
               <div 
-                className={`relative bg-white border border-gray-200 rounded-lg p-3 mb-2 cursor-pointer transition-all duration-200 ${
-                  selectedItem === `activity-${activity.id}` ? 'ring-2 ring-blue-300 shadow-md bg-blue-50' : 'hover:shadow-sm'
+                className={`relative bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 mb-3 cursor-pointer transition-all duration-300 transform hover:scale-[1.01] hover:shadow-md ${
+                  selectedItem === `activity-${activity.id}` ? 'ring-2 ring-blue-400 shadow-lg scale-[1.01] bg-blue-100' : 'hover:shadow-sm'
                 }`}
                 onClick={() => handleItemClick(`activity-${activity.id}`, activity)}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleActivity(activity.id);
                       }}
-                      className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center hover:bg-blue-200 transition-colors"
+                      className={`w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center hover:bg-blue-300 transition-all duration-200 transform hover:scale-110 ${
+                        expandedActivities.has(activity.id) ? 'bg-blue-300' : ''
+                      }`}
                     >
                       {expandedActivities.has(activity.id) ? (
-                        <Minus className="w-3 h-3 text-blue-600" />
+                        <Minus className="w-3 h-3 text-blue-700" />
                       ) : (
-                        <PlusIcon className="w-3 h-3 text-blue-600" />
+                        <PlusIcon className="w-3 h-3 text-blue-700" />
                       )}
                     </button>
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                     {React.createElement(activity.icon, { className: "w-4 h-4 text-blue-600" })}
-                    <h5 className="text-blue-700 font-medium">{activity.name}</h5>
-                    <div className="flex items-center space-x-2">
+                    </div>
+                    <div>
+                      <h5 className="text-blue-800 font-semibold">{activity.name}</h5>
+                      <p className="text-blue-600 text-sm">{activity.type || 'Activity'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className={`flex items-center space-x-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(activity.status)}`}>
                       {getStatusIcon(activity.status)}
-                      <span className={`text-sm ${getStatusColor(activity.status)}`}>
+                      <span>
                         {activity.status === 'completed' ? 'Completed' : 
                          activity.status === 'in_progress' ? 'In Progress' : 'Pending'}
                       </span>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-blue-600">{activity.type}</span>
                     <ChevronRight className="w-4 h-4 text-blue-600" />
                   </div>
                 </div>
+
+                {/* Activity Progress Bar */}
+                {activity.progress > 0 && (
+                  <div className="ml-11 mb-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-blue-700">Activity Progress</span>
+                      <span className="text-xs font-bold text-blue-800">{activity.progress}%</span>
+              </div>
+                    <div className="w-full bg-blue-200 rounded-full h-1.5 overflow-hidden shadow-inner">
+                      <div 
+                        className={`h-full transition-all duration-700 ease-out ${getProgressColor(activity.progress)} relative`}
+                        style={{ width: `${activity.progress}%` }}
+                      >
+                        {/* Progress bar shimmer effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Activity Description */}
+                {activity.description && (
+                  <div className="ml-11 mb-2">
+                    <p className="text-sm text-blue-700 line-clamp-2">{activity.description}</p>
+                  </div>
+                )}
+
+                {/* Activity Actions */}
+                <div className="ml-11 flex items-center space-x-3">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartActivity(activity);
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      activity.status === 'completed' 
+                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                        : activity.status === 'in_progress'
+                        ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
+                  >
+                    {activity.status === 'completed' ? 'Review' : 
+                     activity.status === 'in_progress' ? 'Continue' : 'Start Activity'}
+                  </button>
+                  <span className="text-xs text-blue-600">
+                    {activity.duration || 'No time limit'}
+                  </span>
+                  {activity.points > 0 && (
+                    <span className="text-xs text-blue-600 font-medium">
+                      {activity.points} pts
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Activity Details Level - Purple connecting line */}
+              {/* Activity Details Level - Enhanced styling */}
               {expandedActivities.has(activity.id) && (
-                <div className="relative ml-6">
-                  {/* Purple connecting line */}
-                  <div className="absolute left-0 top-0 w-0.5 h-6 bg-purple-300"></div>
+                <div className="relative ml-8 animate-in slide-in-from-top-2 duration-300">
+                  {/* Enhanced connecting line */}
+                  <div className="absolute left-0 top-0 w-1 h-6 bg-gradient-to-b from-purple-400 to-purple-300 rounded-full"></div>
                   
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2">
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-700">{activity.description}</p>
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-4 mb-3">
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <div className="w-6 h-6 bg-purple-200 rounded-full flex items-center justify-center">
+                          <Activity className="w-3 h-3 text-purple-700" />
+                        </div>
+                        <h6 className="text-purple-800 font-semibold">Activity Details</h6>
+                      </div>
+                      
+                      {activity.description && (
+                        <p className="text-sm text-purple-700 leading-relaxed">{activity.description}</p>
+                      )}
+                      
+                      <div className="flex items-center justify-between pt-2 border-t border-purple-200">
+                        <div className="flex items-center space-x-4 text-xs text-purple-600">
+                          <span>Type: {activity.type || 'Activity'}</span>
+                          <span>Duration: {activity.duration || 'No limit'}</span>
+                          <span>Status: {activity.status || 'Pending'}</span>
+                        </div>
                       <button
                         onClick={() => onStartActivity(activity)}
-                        className="text-sm text-blue-600 hover:text-blue-800 underline"
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors transform hover:scale-105"
                       >
-                        Open Activity
+                          Launch Activity
                       </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -782,10 +1021,44 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const location = useLocation();
 
   // Main dashboard state (completely self-contained like G1G3Dashboard)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies' | 'grades' | 'badges' | 'settings'>('dashboard');
   const [codeEditorTab, setCodeEditorTab] = useState<'output' | 'errors' | 'terminal'>('output');
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Refs for dropdown management
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+  const notificationDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Mock notification data
+  const notifications = [
+    {
+      id: 1,
+      title: 'New Assignment Posted',
+      message: 'Introduction to Programming - Assignment 3 is now available',
+      time: '2 hours ago',
+      type: 'assignment',
+      isRead: false
+    },
+    {
+      id: 2,
+      title: 'Course Update',
+      message: 'Web Development course has new content added',
+      time: '1 day ago',
+      type: 'course',
+      isRead: false
+    },
+    {
+      id: 3,
+      title: 'Grade Posted',
+      message: 'Your quiz score for Python Basics has been posted',
+      time: '2 days ago',
+      type: 'grade',
+      isRead: true
+    }
+  ];
   const [isServerOffline, setIsServerOffline] = useState(false);
   const [serverError, setServerError] = useState<string>('');
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -815,6 +1088,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
   // Real IOMAD data states (like G1G3Dashboard)
   const [realLessons, setRealLessons] = useState<any[]>([]);
+  const [realSections, setRealSections] = useState<any[]>([]);
   const [realActivities, setRealActivities] = useState<any[]>([]);
   const [realTreeData, setRealTreeData] = useState<any[]>([]);
   const [isLoadingRealData, setIsLoadingRealData] = useState(false);
@@ -826,6 +1100,11 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const [isLoadingTreeView, setIsLoadingTreeView] = useState(false);
   const [expandedTreeItems, setExpandedTreeItems] = useState<Set<string>>(new Set());
   const [selectedTreeItem, setSelectedTreeItem] = useState<string | null>(null);
+
+  // Grades specific states
+  const [gradesData, setGradesData] = useState<any[]>([]);
+  const [isLoadingGrades, setIsLoadingGrades] = useState(false);
+  const [gradeStatistics, setGradeStatistics] = useState<any>(null);
 
   // Schedule specific states
   const [realScheduleData, setRealScheduleData] = useState<any[]>([]);
@@ -866,6 +1145,13 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   const [isLoadingCompetencies, setIsLoadingCompetencies] = useState(false);
   const [selectedCompetency, setSelectedCompetency] = useState<any>(null);
   const [showCompetencyDetail, setShowCompetencyDetail] = useState(false);
+
+  // Badges system states
+  const [badges, setBadges] = useState<any[]>([]);
+  const [userBadges, setUserBadges] = useState<any[]>([]);
+  const [isLoadingBadges, setIsLoadingBadges] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<any>(null);
+  const [showBadgeDetail, setShowBadgeDetail] = useState(false);
 
   // Course detail states with sections
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
@@ -932,7 +1218,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
   }, [navigate]);
 
   // Tab change handler
-  const handleTabChange = useCallback((tab: 'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies') => {
+  const handleTabChange = useCallback((tab: 'dashboard' | 'courses' | 'lessons' | 'activities' | 'achievements' | 'schedule' | 'tree-view' | 'scratch-editor' | 'code-editor' | 'ebooks' | 'ask-teacher' | 'share-class' | 'competencies' | 'grades' | 'badges' | 'settings') => {
     setActiveTab(tab);
     // Reset course detail view when changing tabs
     if (tab !== 'courses') {
@@ -956,6 +1242,73 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
     setShowCourseDetail(true);
     setCurrentPage('course-detail');
     fetchCourseDetail(course.id.toString());
+  }, []);
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      setShowLogoutDialog(false);
+      setShowProfileDropdown(false);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  // Handle route changes to set active tab
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes('/settings')) {
+      setActiveTab('settings');
+    } else if (path.includes('/courses')) {
+      setActiveTab('courses');
+    } else if (path.includes('/lessons')) {
+      setActiveTab('lessons');
+    } else if (path.includes('/activities')) {
+      setActiveTab('activities');
+    } else if (path.includes('/achievements')) {
+      setActiveTab('achievements');
+    } else if (path.includes('/schedule')) {
+      setActiveTab('schedule');
+    } else if (path.includes('/tree-view')) {
+      setActiveTab('tree-view');
+    } else if (path.includes('/scratch-editor')) {
+      setActiveTab('scratch-editor');
+    } else if (path.includes('/code-editor')) {
+      setActiveTab('code-editor');
+    } else if (path.includes('/ebooks')) {
+      setActiveTab('ebooks');
+    } else if (path.includes('/ask-teacher')) {
+      setActiveTab('ask-teacher');
+    } else if (path.includes('/share-class')) {
+      setActiveTab('share-class');
+    } else if (path.includes('/competencies')) {
+      setActiveTab('competencies');
+    } else if (path.includes('/grades')) {
+      setActiveTab('grades');
+    } else if (path.includes('/badges')) {
+      setActiveTab('badges');
+    } else {
+      setActiveTab('dashboard');
+    }
+  }, [location.pathname]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+      if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target as Node)) {
+        setShowNotificationDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // Handle lesson click to open lesson content
@@ -1521,14 +1874,18 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       console.log('🚀 G4G7 Dashboard: Loading data with parallel API calls...');
       
       // Fetch all data in parallel for better performance
-      const [dashboardData, realLessonsData, realActivitiesData, realTreeData, realScheduleData, userProfileData, resourceActivitiesData] = await Promise.all([
+      const [dashboardData, realLessonsData, realSectionsData, realActivitiesData, realTreeData, realScheduleData, userProfileData, resourceActivitiesData, realGradesData, realCompetenciesData, realBadgesData] = await Promise.all([
         enhancedMoodleService.getDashboardData(currentUser.id.toString()),
           fetchRealLessons(),
+          fetchRealSections(),
           fetchRealActivities(),
           fetchRealTreeViewData(),
           fetchRealScheduleData(),
           fetchUserProfile(),
-          fetchResourceActivities()
+          fetchResourceActivities(),
+          fetchRealGrades(),
+          fetchRealCompetencies(),
+          fetchRealBadges()
         ]);
 
       // Set main dashboard data
@@ -1538,12 +1895,16 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       
       // Set additional IOMAD data
         setRealLessons(realLessonsData);
+        setRealSections(realSectionsData);
         setRealActivities(realActivitiesData);
         setRealTreeData(realTreeData);
+        setGradesData(realGradesData);
+        setCompetencies(realCompetenciesData);
+        setBadges(realBadgesData);
 
       console.log(`✅ G4G7 Dashboard loaded successfully:`);
       console.log(`📊 Courses: ${dashboardData.courses.length}, Activities: ${dashboardData.activities.length}, Assignments: ${dashboardData.assignments.length}`);
-      console.log(`📚 Real Data: ${realLessonsData.length} lessons, ${realActivitiesData.length} activities, ${realTreeData.length} tree items`);
+      console.log(`📚 Real Data: ${realLessonsData.length} lessons, ${realSectionsData.length} sections, ${realActivitiesData.length} activities, ${realTreeData.length} tree items`);
 
     } catch (error: any) {
       console.error('❌ Error in G4G7 dashboard data loading:', error);
@@ -1563,17 +1924,20 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       setRealLessons([]);
       setRealActivities([]);
       setRealTreeData([]);
+      setGradesData([]);
+      setCompetencies([]);
+      setBadges([]);
     } finally {
               setIsLoading(false);
     }
   };
 
-  // Fetch real IOMAD lessons data (same as G1G3Dashboard)
+  // Fetch real IOMAD lessons data with images
   const fetchRealLessons = async () => {
     if (!currentUser?.id) return [];
     
     try {
-      console.log('🔄 Fetching real IOMAD lessons data...');
+      console.log('🔄 Fetching real IOMAD lessons data with images...');
       const allLessons: any[] = [];
       
       // Get all user courses
@@ -1585,8 +1949,32 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         
         courseContents.forEach((section: any) => {
           if (section.modules && Array.isArray(section.modules)) {
-            section.modules.forEach((module: any) => {
+            section.modules.forEach(async (module: any) => {
               if (module.modname === 'lesson' || module.modname === 'resource' || module.modname === 'url') {
+                // Try to get lesson details with images
+                let lessonImage = null;
+                let lessonDetails = null;
+                
+                try {
+                  // For lessons, try to get detailed information
+                  if (module.modname === 'lesson') {
+                    lessonDetails = await enhancedMoodleService.getLessonDetails(module.id.toString());
+                    lessonImage = lessonDetails?.imageurl || lessonDetails?.overviewfiles?.[0]?.fileurl;
+                  }
+                  
+                  // For resources and URLs, check for attached files
+                  if (module.contents && Array.isArray(module.contents)) {
+                    const imageFile = module.contents.find((content: any) => 
+                      content.mimetype && content.mimetype.startsWith('image/')
+                    );
+                    if (imageFile && imageFile.fileurl) {
+                      lessonImage = imageFile.fileurl;
+                    }
+                  }
+                } catch (error) {
+                  console.warn(`⚠️ Could not fetch image for lesson ${module.id}:`, error);
+                }
+                
                 allLessons.push({
                   id: module.id,
                   name: module.name,
@@ -1607,7 +1995,15 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                   completion: module.completion,
                   completiondata: module.completiondata,
                   timemodified: module.timemodified,
-                  added: module.added
+                  added: module.added,
+                  // Image information
+                  image: lessonImage,
+                  imageurl: lessonImage,
+                  overviewfiles: module.contents || [],
+                  // Additional lesson details
+                  lessonDetails: lessonDetails,
+                  lastAccessed: module.lastAccessed,
+                  timeSpent: module.timeSpent || 0
                 });
               }
             });
@@ -1615,11 +2011,832 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         });
       }
       
-      console.log(`✅ Fetched ${allLessons.length} real lessons from IOMAD`);
+      console.log(`✅ Fetched ${allLessons.length} real lessons with images from IOMAD`);
       return allLessons;
       } catch (error) {
       console.error('❌ Error fetching real lessons:', error);
       return [];
+    }
+  };
+
+  // Fetch real IOMAD course sections data
+  const fetchRealSections = async () => {
+    if (!currentUser?.id) return [];
+    
+    try {
+      console.log('🔄 Fetching real course sections from IOMAD...');
+      const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+      const allSections: any[] = [];
+      
+      for (const course of userCourses) {
+        try {
+          const courseContents = await enhancedMoodleService.getCourseContents(course.id.toString());
+          
+          for (const section of courseContents) {
+            if (section.name && section.name.trim() !== '') {
+              // Calculate section progress based on module completions
+              const totalModules = section.modules ? section.modules.length : 0;
+              const completedModules = section.modules ? section.modules.filter((module: any) => 
+                module.completiondata && module.completiondata.state === 1
+              ).length : 0;
+              const progress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+              
+              // Get section status
+              let status = 'not-started';
+              if (progress === 100) {
+                status = 'completed';
+              } else if (progress > 0) {
+                status = 'in-progress';
+              }
+              
+              // Get section image from first module or course
+              let sectionImage = '';
+              if (section.modules && section.modules.length > 0) {
+                const firstModule = section.modules[0];
+                if (firstModule.imageurl) {
+                  sectionImage = firstModule.imageurl;
+                } else if (firstModule.overviewfiles && firstModule.overviewfiles.length > 0) {
+                  const imageFile = firstModule.overviewfiles.find((file: any) => 
+                    file.mimetype && file.mimetype.startsWith('image/')
+                  );
+                  if (imageFile && imageFile.fileurl) {
+                    sectionImage = imageFile.fileurl;
+                  }
+                }
+              }
+              
+              // Fallback to course image
+              if (!sectionImage) {
+                sectionImage = getBestCourseImage(course);
+              }
+              
+              allSections.push({
+                id: section.id,
+                name: section.name,
+                courseId: course.id,
+                courseTitle: course.fullname,
+                summary: section.summary || '',
+                progress: progress,
+                status: status,
+                totalModules: totalModules,
+                completedModules: completedModules,
+                image: sectionImage,
+                lastAccessed: section.lastaccess ? new Date(section.lastaccess * 1000).toISOString() : undefined,
+                timeSpent: section.timespent || 0,
+                visible: section.visible !== 0
+              });
+            }
+          }
+        } catch (error) {
+          console.warn(`⚠️ Could not fetch sections for course ${course.id}:`, error);
+        }
+      }
+      
+      console.log(`✅ Fetched ${allSections.length} real course sections from IOMAD`);
+      return allSections;
+    } catch (error) {
+      console.error('❌ Error fetching real sections:', error);
+      return [];
+    }
+  };
+
+  // Fetch real IOMAD grades data
+  const fetchRealGrades = async () => {
+    if (!currentUser?.id) return [];
+    
+    try {
+      setIsLoadingGrades(true);
+      console.log('🔄 Fetching real IOMAD grades data...');
+      const allGrades: any[] = [];
+      
+      // Try to get all grades at once first (more efficient for IOMAD)
+      let allUserGrades = await enhancedMoodleService.getAllUserGrades(currentUser.id.toString());
+      
+      if (allUserGrades.length > 0) {
+        console.log(`✅ Found ${allUserGrades.length} grades using getAllUserGrades method`);
+        // Process the all-user grades data
+        allUserGrades.forEach((grade: any) => {
+          const gradeValue = grade.grade || grade.rawgrade || grade.finalgrade || 0;
+          const maxGrade = grade.grademax || grade.grademax || 100;
+          const itemName = grade.itemname || grade.name || 'Assignment';
+          const itemType = grade.itemtype || grade.itemmodule || 'assignment';
+          const feedback = grade.feedback || grade.feedbacktext || '';
+          const timeModified = grade.timemodified || grade.gradedate || Date.now() / 1000;
+          const grader = grade.grader || grade.gradername || 'System';
+          const category = grade.category || grade.categoryname || 'General';
+          const weight = grade.weight || grade.aggregationcoef || 0;
+
+          allGrades.push({
+            id: grade.id || `grade_${grade.itemid || grade.iteminstance}`,
+            courseId: grade.courseid || grade.course,
+            courseName: grade.coursename || 'Unknown Course',
+            courseImage: '/card1.webp', // Default image
+            itemName: itemName,
+            itemType: itemType,
+            grade: gradeValue,
+            maxGrade: maxGrade,
+            percentage: gradeValue ? Math.round((gradeValue / maxGrade) * 100) : 0,
+            feedback: feedback,
+            timeModified: new Date(timeModified * 1000),
+            grader: grader,
+            isPassed: gradeValue && maxGrade ? (gradeValue / maxGrade) >= 0.6 : false,
+            letterGrade: getLetterGrade(gradeValue, maxGrade),
+            category: category,
+            weight: weight,
+            rawGrade: grade.rawgrade || gradeValue,
+            finalGrade: grade.finalgrade || gradeValue,
+            gradeDate: grade.gradedate ? new Date(grade.gradedate * 1000) : new Date(),
+            gradeStatus: grade.status || 'graded',
+            gradeScale: grade.gradescale || null,
+            gradeItemId: grade.itemid || grade.iteminstance,
+            gradeItemModule: grade.itemmodule || itemType,
+            gradeItemInstance: grade.iteminstance || grade.itemid
+          });
+        });
+      } else {
+        // Fallback: Get all user courses and fetch grades from each course
+        console.log('📊 Fallback: Fetching grades per course...');
+        const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+        
+        // Fetch grades from each course
+        for (const course of userCourses) {
+        try {
+          // Get course grades
+          const courseGrades = await enhancedMoodleService.getCourseGrades(course.id.toString(), currentUser.id.toString());
+          
+          if (courseGrades && Array.isArray(courseGrades)) {
+            courseGrades.forEach((grade: any) => {
+              // Handle different grade data formats from different API methods
+              const gradeValue = grade.grade || grade.rawgrade || grade.finalgrade || 0;
+              const maxGrade = grade.grademax || grade.grademax || 100;
+              const itemName = grade.itemname || grade.name || 'Assignment';
+              const itemType = grade.itemtype || grade.itemmodule || 'assignment';
+              const feedback = grade.feedback || grade.feedbacktext || '';
+              const timeModified = grade.timemodified || grade.gradedate || Date.now() / 1000;
+              const grader = grade.grader || grade.gradername || 'System';
+              const category = grade.category || grade.categoryname || 'General';
+              const weight = grade.weight || grade.aggregationcoef || 0;
+
+              allGrades.push({
+                id: grade.id || `${course.id}_${grade.itemid || grade.iteminstance}`,
+                courseId: course.id,
+                courseName: course.fullname || course.shortname,
+                courseImage: getBestCourseImage(course),
+                itemName: itemName,
+                itemType: itemType,
+                grade: gradeValue,
+                maxGrade: maxGrade,
+                percentage: gradeValue ? Math.round((gradeValue / maxGrade) * 100) : 0,
+                feedback: feedback,
+                timeModified: new Date(timeModified * 1000),
+                grader: grader,
+                isPassed: gradeValue && maxGrade ? (gradeValue / maxGrade) >= 0.6 : false,
+                letterGrade: getLetterGrade(gradeValue, maxGrade),
+                category: category,
+                weight: weight,
+                // Additional IOMAD specific fields
+                rawGrade: grade.rawgrade || gradeValue,
+                finalGrade: grade.finalgrade || gradeValue,
+                gradeDate: grade.gradedate ? new Date(grade.gradedate * 1000) : new Date(),
+                gradeStatus: grade.status || 'graded',
+                gradeScale: grade.gradescale || null,
+                gradeItemId: grade.itemid || grade.iteminstance,
+                gradeItemModule: grade.itemmodule || itemType,
+                gradeItemInstance: grade.iteminstance || grade.itemid
+              });
+            });
+          }
+        } catch (error) {
+          console.warn(`⚠️ Could not fetch grades for course ${course.id}:`, error);
+        }
+      }
+      }
+      
+      // Calculate grade statistics
+      const statistics = calculateGradeStatistics(allGrades);
+      setGradeStatistics(statistics);
+      
+      console.log(`✅ Fetched ${allGrades.length} real grades from IOMAD`);
+      return allGrades;
+    } catch (error) {
+      console.error('❌ Error fetching real grades:', error);
+      return [];
+    } finally {
+      setIsLoadingGrades(false);
+    }
+  };
+
+  // Helper function to get letter grade
+  const getLetterGrade = (grade: number, maxGrade: number): string => {
+    if (!grade || !maxGrade) return 'N/A';
+    const percentage = (grade / maxGrade) * 100;
+    
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 85) return 'A';
+    if (percentage >= 80) return 'A-';
+    if (percentage >= 75) return 'B+';
+    if (percentage >= 70) return 'B';
+    if (percentage >= 65) return 'B-';
+    if (percentage >= 60) return 'C+';
+    if (percentage >= 55) return 'C';
+    if (percentage >= 50) return 'C-';
+    if (percentage >= 45) return 'D+';
+    if (percentage >= 40) return 'D';
+    return 'F';
+  };
+
+  // Helper function to calculate grade statistics
+  const calculateGradeStatistics = (grades: any[]) => {
+    if (grades.length === 0) {
+      return {
+        totalGrades: 0,
+        averageGrade: 0,
+        averagePercentage: 0,
+        passedCount: 0,
+        failedCount: 0,
+        passRate: 0,
+        gradeDistribution: {},
+        courseStats: {}
+      };
+    }
+
+    const totalGrades = grades.length;
+    const totalPoints = grades.reduce((sum, grade) => sum + (grade.grade || 0), 0);
+    const totalMaxPoints = grades.reduce((sum, grade) => sum + (grade.maxGrade || 100), 0);
+    const averageGrade = totalMaxPoints > 0 ? totalPoints / totalMaxPoints : 0;
+    const averagePercentage = Math.round(averageGrade * 100);
+    
+    const passedCount = grades.filter(grade => grade.isPassed).length;
+    const failedCount = totalGrades - passedCount;
+    const passRate = Math.round((passedCount / totalGrades) * 100);
+
+    // Grade distribution
+    const gradeDistribution = grades.reduce((dist, grade) => {
+      const letter = grade.letterGrade;
+      dist[letter] = (dist[letter] || 0) + 1;
+      return dist;
+    }, {} as any);
+
+    // Course statistics
+    const courseStats = grades.reduce((stats, grade) => {
+      const courseId = grade.courseId;
+      if (!stats[courseId]) {
+        stats[courseId] = {
+          courseName: grade.courseName,
+          totalGrades: 0,
+          averageGrade: 0,
+          passedCount: 0,
+          grades: []
+        };
+      }
+      stats[courseId].totalGrades++;
+      stats[courseId].grades.push(grade);
+      if (grade.isPassed) stats[courseId].passedCount++;
+      return stats;
+    }, {} as any);
+
+    // Calculate course averages
+    Object.keys(courseStats).forEach(courseId => {
+      const course = courseStats[courseId];
+      const courseTotal = course.grades.reduce((sum: number, grade: any) => sum + (grade.grade || 0), 0);
+      const courseMax = course.grades.reduce((sum: number, grade: any) => sum + (grade.maxGrade || 100), 0);
+      course.averageGrade = courseMax > 0 ? Math.round((courseTotal / courseMax) * 100) : 0;
+    });
+
+    return {
+      totalGrades,
+      averageGrade: Math.round(averageGrade * 100),
+      averagePercentage,
+      passedCount,
+      failedCount,
+      passRate,
+      gradeDistribution,
+      courseStats
+    };
+  };
+
+  // Fetch real IOMAD competencies data - ONLY REAL DATA, NO FALLBACKS
+  const fetchRealCompetencies = async () => {
+    if (!currentUser?.id) return [];
+    
+    try {
+      setIsLoadingCompetencies(true);
+      console.log('🔄 Fetching ONLY real IOMAD competencies data (no fallbacks)...');
+      
+      // Try to get real competencies directly from Moodle API
+      let realCompetencies: any[] = [];
+      let realUserCompetencies: any[] = [];
+      
+      // Method 1: Try multiple competency API endpoints to get real data
+      console.log('🔍 Attempting to fetch real competencies using multiple API endpoints...');
+      
+      // Try different competency API functions
+      const competencyApiFunctions = [
+        { name: 'core_competency_list_competencies', params: { filters: JSON.stringify([{ column: 'competencyframeworkid', value: 1 }]) } },
+        { name: 'core_competency_search_competencies', params: { query: '' } },
+        { name: 'tool_lp_data_for_competencies_manage_page', params: { competencyframeworkid: 1, search: '' } }
+      ];
+      
+      // Try bulk competency APIs first
+      for (const apiFunction of competencyApiFunctions) {
+        try {
+          console.log(`🔍 Trying ${apiFunction.name}...`);
+          const response = await fetch('/api/moodle', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              wsfunction: apiFunction.name,
+              ...Object.fromEntries(Object.entries(apiFunction.params).map(([key, value]) => [key, String(value)]))
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data && (Array.isArray(data) || data.competencies)) {
+              const competencies = Array.isArray(data) ? data : data.competencies;
+              if (competencies && competencies.length > 0) {
+                console.log(`✅ Found ${competencies.length} competencies using ${apiFunction.name}`);
+                for (const comp of competencies) {
+                  if (comp.id && comp.shortname) {
+                    realCompetencies.push({
+                      id: comp.id,
+                      shortname: comp.shortname,
+                      name: comp.shortname,
+                      description: comp.description || comp.shortname,
+                      category: comp.competencyframeworkid ? `Framework ${comp.competencyframeworkid}` : 'General',
+                      level: 'intermediate',
+                      status: 'not_started',
+                      progress: 0,
+                      totalActivities: 0,
+                      completedActivities: 0,
+                      lastUpdated: new Date().toISOString(),
+                      nextSteps: [],
+                      frameworkId: comp.competencyframeworkid,
+                      grade: 0,
+                      proficiency: 0,
+                      timeCreated: comp.timecreated,
+                      timeModified: comp.timemodified,
+                      visible: comp.visible !== 0,
+                      courses: [],
+                      courseCount: 0,
+                      competencyCode: comp.idnumber || comp.shortname,
+                      scaleId: comp.scaleid,
+                      scaleConfiguration: comp.scaleconfiguration,
+                      parentId: comp.parentid,
+                      path: comp.path,
+                      sortOrder: comp.sortorder,
+                      userCompetencyId: null,
+                      userGrade: 0,
+                      userProficiency: 0,
+                      userStatus: 'not_started',
+                      userTimeCreated: null,
+                      userTimeModified: null,
+                      userUserId: null,
+                      userCompetencyIdValue: null,
+                      userGradeName: null,
+                      userProficiencyName: null
+                    });
+                  }
+                }
+                break; // If we found competencies, stop trying other bulk APIs
+              }
+            }
+          }
+        } catch (error) {
+          console.log(`⚠️ ${apiFunction.name} failed:`, error.message);
+        }
+      }
+      
+      // Method 2: If no bulk data found, try individual competency fetching
+      if (realCompetencies.length === 0) {
+        console.log('🔍 No bulk competencies found, trying individual competency fetching...');
+        for (let i = 1; i <= 20; i++) {
+          try {
+            // Direct API call to Moodle
+            const response = await fetch('/api/moodle', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({
+                wsfunction: 'core_competency_read_competency',
+                id: i.toString()
+              })
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data && data.id && data.shortname) {
+              console.log(`✅ Found real competency ${i}: ${data.shortname}`);
+              realCompetencies.push({
+                id: data.id,
+                shortname: data.shortname,
+                name: data.shortname,
+                description: data.description || data.shortname,
+                category: data.competencyframeworkid ? `Framework ${data.competencyframeworkid}` : 'General',
+                level: 'intermediate',
+                status: 'not_started',
+                progress: 0,
+                totalActivities: 0,
+                completedActivities: 0,
+                lastUpdated: new Date().toISOString(),
+                nextSteps: [],
+                frameworkId: data.competencyframeworkid,
+                grade: 0,
+                proficiency: 0,
+                timeCreated: data.timecreated,
+                timeModified: data.timemodified,
+                visible: data.visible !== 0,
+                courses: [],
+                courseCount: 0,
+                competencyCode: data.idnumber || data.shortname,
+                scaleId: data.scaleid,
+                scaleConfiguration: data.scaleconfiguration,
+                parentId: data.parentid,
+                path: data.path,
+                sortOrder: data.sortorder,
+                // User-specific data (will be filled if user competency found)
+                userCompetencyId: null,
+                userGrade: 0,
+                userProficiency: 0,
+                userStatus: 'not_started',
+                userTimeCreated: null,
+                userTimeModified: null,
+                userUserId: null,
+                userCompetencyIdValue: null,
+                userGradeName: null,
+                userProficiencyName: null
+              });
+            }
+          } catch (error) {
+            // Continue trying other competency IDs
+            if (i > 5 && realCompetencies.length === 0) {
+              console.log(`⚠️ No real competencies found after ${i} attempts`);
+              break;
+            }
+          }
+        }
+      }
+      
+      // Method 3: Try to get user competencies using core_competency_read_user_competency
+      if (realCompetencies.length > 0) {
+        console.log('🔍 Attempting to fetch real user competencies...');
+        for (const competency of realCompetencies) {
+          try {
+            const userResponse = await fetch('/api/moodle', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({
+                wsfunction: 'core_competency_read_user_competency',
+                userid: currentUser.id.toString(),
+                competencyid: competency.id.toString()
+              })
+            });
+            
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              if (userData && userData.id) {
+                console.log(`✅ Found real user competency for ${competency.name}`);
+                realUserCompetencies.push({
+                  id: userData.id,
+                  competencyid: competency.id,
+                  userid: currentUser.id.toString(),
+                  status: userData.status || 'not_started',
+                  grade: userData.grade || 0,
+                  proficiency: userData.proficiency || 0,
+                  timecreated: userData.timecreated,
+                  timemodified: userData.timemodified,
+                  gradename: userData.gradename,
+                  proficiencyname: userData.proficiencyname
+                });
+              }
+            }
+          } catch (error) {
+            // Continue with other competencies
+          }
+        }
+      }
+      
+      // Process and combine the real competency data
+      const processedCompetencies = realCompetencies.map((competency: any) => {
+        // Find user-specific data for this competency
+        const userCompetency = realUserCompetencies.find((uc: any) => 
+          uc.competencyid === competency.id
+        );
+        
+        // Update competency with user data if found
+        if (userCompetency) {
+          competency.userCompetencyId = userCompetency.id;
+          competency.userGrade = userCompetency.grade;
+          competency.userProficiency = userCompetency.proficiency;
+          competency.userStatus = userCompetency.status;
+          competency.userTimeCreated = userCompetency.timecreated;
+          competency.userTimeModified = userCompetency.timemodified;
+          competency.userUserId = userCompetency.userid;
+          competency.userCompetencyIdValue = userCompetency.competencyid;
+          competency.userGradeName = userCompetency.gradename;
+          competency.userProficiencyName = userCompetency.proficiencyname;
+          
+          // Update progress and status based on user data
+          competency.progress = userCompetency.proficiency || 0;
+          competency.status = userCompetency.status || 'not_started';
+        }
+        
+        return competency;
+      });
+
+      if (processedCompetencies.length > 0) {
+        console.log(`✅ Successfully fetched ${processedCompetencies.length} REAL competencies from IOMAD Moodle API`);
+        console.log(`📊 User competencies found: ${realUserCompetencies.length}`);
+        return processedCompetencies;
+      } else {
+        console.log('⚠️ No real competencies found in IOMAD Moodle system');
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching real competencies:', error);
+      return [];
+    } finally {
+      setIsLoadingCompetencies(false);
+    }
+  };
+
+  // Fetch real IOMAD badges data using specific Moodle badge APIs
+  const fetchRealBadges = async () => {
+    if (!currentUser?.id) return [];
+    
+    try {
+      setIsLoadingBadges(true);
+      console.log('🔄 Fetching ONLY real IOMAD badges data using specific Moodle APIs...');
+      console.log('🔍 Current user ID:', currentUser.id);
+
+      let realBadges: any[] = [];
+      let realUserBadges: any[] = [];
+
+      // Method 1: Get user badges using core_badges_get_user_badges (most comprehensive)
+      console.log('🔍 Method 1: Fetching user badges with core_badges_get_user_badges...');
+      try {
+        const response = await fetch('/api/moodle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            wsfunction: 'core_badges_get_user_badges',
+            userid: currentUser.id.toString(),
+            courseid: '0', // All courses
+            page: '0',
+            perpage: '50',
+            search: '',
+            onlypublic: '1'
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('📋 core_badges_get_user_badges response:', data);
+          
+          if (data && data.badges && Array.isArray(data.badges)) {
+            for (const badge of data.badges) {
+              if (badge.id && badge.name) {
+                realBadges.push({
+                  id: badge.id,
+                  name: badge.name,
+                  description: badge.description || 'No description available',
+                  image: badge.badgeurl || badge.image || '/default-badge.png',
+                  dateIssued: badge.dateissued ? new Date(badge.dateissued * 1000).toISOString() : null,
+                  issuer: badge.issuername || 'System',
+                  courseId: badge.courseid || null,
+                  courseName: badge.courseName || null,
+                  status: badge.status || 'active',
+                  badgeStatus: 'awarded',
+                  uniqueHash: badge.uniquehash || null,
+                  recipientId: badge.recipientid || currentUser.id,
+                  recipientName: badge.recipientfullname || currentUser.fullname,
+                  version: badge.version || '1.0',
+                  language: badge.language || 'en',
+                  visible: badge.visible !== 0,
+                  type: badge.type || 1,
+                  timeCreated: badge.timecreated ? new Date(badge.timecreated * 1000).toISOString() : null,
+                  timeModified: badge.timemodified ? new Date(badge.timemodified * 1000).toISOString() : null,
+                  // Additional fields from the API
+                  expiredate: badge.expiredate ? new Date(badge.expiredate * 1000).toISOString() : null,
+                  expireperiod: badge.expireperiod || null,
+                  message: badge.message || null,
+                  messagesubject: badge.messagesubject || null,
+                  attachment: badge.attachment || 0,
+                  notification: badge.notification || 0,
+                  nextcron: badge.nextcron || null,
+                  issuedid: badge.issuedid || null,
+                  dateexpire: badge.dateexpire ? new Date(badge.dateexpire * 1000).toISOString() : null,
+                  email: badge.email || null,
+                  imageauthorname: badge.imageauthorname || null,
+                  imageauthoremail: badge.imageauthoremail || null,
+                  imageauthorurl: badge.imageauthorurl || null,
+                  imagecaption: badge.imagecaption || null,
+                  endorsement: badge.endorsement || null,
+                  alignment: badge.alignment || [],
+                  relatedbadges: badge.relatedbadges || []
+                });
+              }
+            }
+            console.log(`✅ Found ${realBadges.length} user badges using core_badges_get_user_badges`);
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ core_badges_get_user_badges failed:', error);
+      }
+
+      // Method 2: Get individual badges using core_badges_get_badge
+      if (realBadges.length === 0) {
+        console.log('🔍 Method 2: Fetching individual badges with core_badges_get_badge...');
+        for (let i = 1; i <= 20; i++) {
+          try {
+            const response = await fetch('/api/moodle', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                wsfunction: 'core_badges_get_badge',
+                id: i.toString()
+              })
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              console.log(`📋 core_badges_get_badge (ID: ${i}) response:`, data);
+              
+              if (data && data.badge && data.badge.id) {
+                const badge = data.badge;
+                realBadges.push({
+                  id: badge.id,
+                  name: badge.name,
+                  description: badge.description || 'No description available',
+                  image: badge.image || '/default-badge.png',
+                  dateIssued: null,
+                  issuer: badge.issuer || 'System',
+                  courseId: null,
+                  courseName: null,
+                  status: 'active',
+                  badgeStatus: 'available',
+                  uniqueHash: null,
+                  recipientId: null,
+                  recipientName: null,
+                  version: '1.0',
+                  language: 'en',
+                  visible: true,
+                  type: 1,
+                  timeCreated: null,
+                  timeModified: null,
+                  // Additional fields from the API
+                  hostedUrl: badge.hostedUrl || null,
+                  criteriaUrl: badge.criteriaUrl || null,
+                  criteriaNarrative: badge.criteriaNarrative || null,
+                  alignment: badge.alignment || []
+                });
+                console.log(`✅ Found individual badge: ${badge.name}`);
+              }
+            }
+          } catch (error) {
+            // Continue trying other badge IDs
+            if (i > 10 && realBadges.length === 0) {
+              console.log(`⚠️ No badges found after trying ${i} badge IDs`);
+              break;
+            }
+          }
+        }
+      }
+
+      // Method 3: Try to get badges by course
+      if (realBadges.length === 0) {
+        console.log('🔍 Method 3: Fetching badges by course...');
+        try {
+          const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+          for (const course of userCourses.slice(0, 5)) { // Check first 5 courses
+            try {
+              const response = await fetch('/api/moodle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  wsfunction: 'core_badges_get_user_badges',
+                  userid: currentUser.id.toString(),
+                  courseid: course.id.toString(),
+                  page: '0',
+                  perpage: '20',
+                  search: '',
+                  onlypublic: '1'
+                })
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.badges && Array.isArray(data.badges)) {
+                  for (const badge of data.badges) {
+                    if (badge.id && badge.name) {
+                      realBadges.push({
+                        id: badge.id,
+                        name: badge.name,
+                        description: badge.description || 'No description available',
+                        image: badge.badgeurl || badge.image || '/default-badge.png',
+                        dateIssued: badge.dateissued ? new Date(badge.dateissued * 1000).toISOString() : null,
+                        issuer: badge.issuername || 'System',
+                        courseId: badge.courseid || course.id,
+                        courseName: badge.courseName || course.fullname,
+                        status: badge.status || 'active',
+                        badgeStatus: 'awarded',
+                        uniqueHash: badge.uniquehash || null,
+                        recipientId: badge.recipientid || currentUser.id,
+                        recipientName: badge.recipientfullname || currentUser.fullname,
+                        version: badge.version || '1.0',
+                        language: badge.language || 'en',
+                        visible: badge.visible !== 0,
+                        type: badge.type || 1,
+                        timeCreated: badge.timecreated ? new Date(badge.timecreated * 1000).toISOString() : null,
+                        timeModified: badge.timemodified ? new Date(badge.timemodified * 1000).toISOString() : null
+                      });
+                    }
+                  }
+                  console.log(`✅ Found ${data.badges.length} badges for course ${course.fullname}`);
+                }
+              }
+            } catch (error) {
+              console.log(`⚠️ Error fetching badges for course ${course.fullname}:`, error.message);
+            }
+          }
+        } catch (error) {
+          console.log('⚠️ Error in course badge search:', error.message);
+        }
+      }
+
+      // Method 4: Try to get badge data from course contents (fallback)
+      if (realBadges.length === 0) {
+        console.log('🔍 Method 4: Searching for badge modules in course contents...');
+        try {
+          const userCourses = await enhancedMoodleService.getUserCourses(currentUser.id.toString());
+          for (const course of userCourses.slice(0, 3)) { // Check first 3 courses
+            try {
+              const courseContents = await enhancedMoodleService.getCourseContents(course.id.toString());
+              for (const section of courseContents) {
+                if (section.modules && Array.isArray(section.modules)) {
+                  for (const module of section.modules) {
+                    if (module.modname === 'badge' || module.name?.toLowerCase().includes('badge')) {
+                      console.log(`🎯 Found potential badge module in course ${course.fullname}:`, module);
+                      realBadges.push({
+                        id: module.id,
+                        name: module.name || 'Course Badge',
+                        description: module.description || 'Complete this course to earn this badge',
+                        image: module.imageurl || '/default-badge.png',
+                        dateIssued: null,
+                        issuer: course.fullname || 'Course',
+                        courseId: course.id,
+                        courseName: course.fullname,
+                        status: 'active',
+                        badgeStatus: 'available',
+                        uniqueHash: null,
+                        recipientId: null,
+                        recipientName: null,
+                        version: '1.0',
+                        language: 'en',
+                        visible: module.visible !== 0,
+                        type: 1,
+                        timeCreated: null,
+                        timeModified: null
+                      });
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.log(`⚠️ Error checking course ${course.fullname} for badges:`, error.message);
+            }
+          }
+        } catch (error) {
+          console.log('⚠️ Error in course contents badge search:', error.message);
+        }
+      }
+
+      console.log(`📊 Final badge results: ${realBadges.length} badges found`);
+      if (realBadges.length === 0) {
+        console.log('❌ No real badge data found from any API endpoint');
+        console.log('💡 This could mean:');
+        console.log('   - Badge functionality is not enabled in your Moodle system');
+        console.log('   - No badges have been created yet');
+        console.log('   - Badge APIs are not available in your Moodle version');
+        console.log('   - You need to complete courses/activities to earn badges');
+        return [];
+      }
+
+      return realBadges;
+    } catch (error) {
+      console.error('❌ Error fetching real badges:', error);
+      return [];
+    } finally {
+      setIsLoadingBadges(false);
     }
   };
 
@@ -1732,14 +2949,20 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             const sectionActivities: any[] = [];
             let sectionCompletedCount = 0;
             let sectionTotalCount = 0;
+            let sectionInProgressCount = 0;
 
             // Process modules in this section
             section.modules.forEach((module: any, moduleIndex: number) => {
-              totalSections++;
               sectionTotalCount++;
-              if (module.completiondata?.state === 1) {
-                completedSections++;
+              
+              // Check completion status with more detailed tracking
+              const completionState = module.completiondata?.state;
+              const completionProgress = module.completiondata?.progress || 0;
+              
+              if (completionState === 1) {
                 sectionCompletedCount++;
+              } else if (completionState === 2 || completionProgress > 0) {
+                sectionInProgressCount++;
               }
 
               // Determine module type and icon
@@ -1770,8 +2993,9 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 id: module.id,
                 name: module.name,
                 type: moduleType,
-                status: module.completiondata?.state === 1 ? 'completed' : 
-                       module.completiondata?.state === 2 ? 'in_progress' : 'pending',
+                status: completionState === 1 ? 'completed' : 
+                       completionState === 2 || completionProgress > 0 ? 'in_progress' : 'pending',
+                progress: completionProgress,
                 order: moduleIndex + 1,
                 icon: moduleIcon,
                 modname: module.modname,
@@ -1780,13 +3004,20 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 completiondata: module.completiondata,
                 description: module.description || module.intro || `Complete this ${moduleType} to progress.`,
                 sectionName: section.name,
-                sectionId: section.id || sectionIndex
+                sectionId: section.id || sectionIndex,
+                duration: module.duration || 'No time limit',
+                difficulty: module.difficulty || 'Easy',
+                dueDate: module.dueDate,
+                points: module.points || 0,
+                lastAccessed: module.lastAccessed,
+                timeSpent: module.timeSpent || 0,
+                visible: module.visible !== 0
               };
 
               sectionActivities.push(activity);
             });
 
-            // Create section structure
+            // Create section structure with enhanced progress data
             const sectionProgress = sectionTotalCount > 0 ? Math.round((sectionCompletedCount / sectionTotalCount) * 100) : 0;
             const sectionData = {
               id: section.id || `section_${sectionIndex}`,
@@ -1797,16 +3028,36 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               activityCount: sectionActivities.length,
               completedActivities: sectionCompletedCount,
               totalActivities: sectionTotalCount,
+              inProgressActivities: sectionInProgressCount,
               progress: sectionProgress,
-              sectionNumber: sectionIndex + 1
+              sectionNumber: sectionIndex + 1,
+              lastAccessed: section.lastAccessed,
+              timeSpent: section.timeSpent || 0
             };
 
             courseSections.push(sectionData);
           }
         });
 
-        // Create course structure
-        const courseProgress = totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0;
+        // Calculate course progress based on activities, not sections
+        let totalCourseActivities = 0;
+        let completedCourseActivities = 0;
+        let inProgressCourseActivities = 0;
+        
+        courseSections.forEach(section => {
+          totalCourseActivities += section.totalActivities;
+          completedCourseActivities += section.completedActivities;
+          inProgressCourseActivities += section.inProgressActivities;
+          
+          // Count completed sections (sections with 100% progress)
+          if (section.progress === 100) {
+            completedSections++;
+          }
+          totalSections++;
+        });
+
+        // Create course structure with enhanced progress data
+        const courseProgress = totalCourseActivities > 0 ? Math.round((completedCourseActivities / totalCourseActivities) * 100) : 0;
         const courseData = {
           id: course.id,
           name: course.fullname || course.shortname,
@@ -1816,8 +3067,15 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           sectionCount: courseSections.length,
           completedSections: completedSections,
           totalSections: totalSections,
+          activityCount: totalCourseActivities,
+          completedActivities: completedCourseActivities,
+          inProgressActivities: inProgressCourseActivities,
           progress: courseProgress,
-          courseImage: course.courseimage || getCourseImageFallback(course.categoryname, course.fullname)
+          courseImage: getBestCourseImage(course),
+          categoryname: course.categoryname,
+          lastAccessed: (course as any).lastAccess ? new Date((course as any).lastAccess * 1000) : new Date(),
+          enrollmentDate: course.startdate ? new Date(course.startdate * 1000) : new Date(),
+          timeSpent: (course as any).timeSpent || 0
         };
 
         treeData.push(courseData);
@@ -2377,7 +3635,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         completedLessons: completedLessons.length,
         duration: course.duration || `${Math.floor(Math.random() * 8) + 4} weeks`,
         category: course.categoryname || course.category || 'General',
-        image: course.courseimage || course.image || getCourseImageFallback(course.categoryname, course.fullname),
+        image: getBestCourseImage(course),
       isActive: course.visible !== 0,
       lastAccessed: course.lastAccess ? new Date(course.lastAccess * 1000).toLocaleDateString() : 'Recently',
       difficulty: getCourseDifficulty(course.categoryname, course.fullname),
@@ -2407,9 +3665,27 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       isNew: false,
       dueDate: undefined,
       prerequisites: undefined,
-      image: getActivityImage(lesson.moduleType)
+      image: getBestLessonImage(lesson)
     }));
   }, [realLessons]);
+
+  const displaySections = useMemo(() => {
+    return realSections.map((section: any) => ({
+      id: section.id.toString(),
+      title: section.name,
+      courseId: section.courseId,
+      courseTitle: section.courseTitle,
+      summary: section.summary || '',
+      progress: section.progress || 0,
+      status: section.status || 'not-started',
+      totalModules: section.totalModules || 0,
+      completedModules: section.completedModules || 0,
+      image: section.image || getBestCourseImage({ fullname: section.courseTitle }),
+      lastAccessed: section.lastAccessed,
+      timeSpent: section.timeSpent || 0,
+      visible: section.visible !== false
+    }));
+  }, [realSections]);
 
   const displayActivities = useMemo(() => {
     console.log('🔄 G4G7 Dashboard: Transforming activities data...', realActivities.length, 'activities');
@@ -2941,6 +4217,28 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               </li>
               <li>
                 <button 
+                  onClick={() => handleTabChange('grades')}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                    activeTab === 'grades' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg' : 'text-gray-700 hover:bg-purple-100 hover:text-purple-700'
+                  }`}
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Grades</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => handleTabChange('badges')}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                    activeTab === 'badges' ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg' : 'text-gray-700 hover:bg-yellow-100 hover:text-yellow-700'
+                  }`}
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>Badges</span>
+                </button>
+              </li>
+              <li>
+                <button 
                   onClick={() => handleTabChange('schedule')}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
                     activeTab === 'schedule' ? 'bg-gray-200 text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
@@ -2948,6 +4246,17 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 >
                   <Calendar className="w-4 h-4" />
                   <span>Schedule</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => handleTabChange('settings')}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                    activeTab === 'settings' ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-lg' : 'text-gray-700 hover:bg-green-100 hover:text-green-700'
+                  }`}
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Settings</span>
                 </button>
               </li>
             </ul>
@@ -3075,49 +4384,20 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         </nav>
 
 
-        {/* User Profile Section */}
+        {/* Settings Section */}
         <div className="relative">
           <button
-            onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+            onClick={() => setShowSettingsModal(true)}
             className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-100 transition-colors w-full"
           >
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center">
+              <Settings className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-gray-900">{currentUser?.fullname || "Student"}</p>
-              <p className="text-xs text-gray-500">{currentUser?.email || "student@example.com"}</p>
+              <p className="text-sm font-medium text-gray-900">Settings</p>
+              <p className="text-xs text-gray-500">Manage your account</p>
             </div>
-            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Profile Dropdown */}
-          {showProfileDropdown && (
-            <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2 z-50">
-              <div className="space-y-1">
-                <button
-                  onClick={() => {
-                    setShowSettingsModal(true);
-                    setShowProfileDropdown(false);
-                  }}
-                  className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <Settings className="w-4 h-4" />
-                  <span>Settings & Profile</span>
                 </button>
-                <button
-                  onClick={() => {
-                    // Handle logout
-                    console.log('Logout clicked');
-                  }}
-                  className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Logout</span>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -3125,7 +4405,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
       <div className="lg:ml-64 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
 
-        {/* Header with Notifications */}
+        {/* Header with Notifications and Profile */}
         <div className="bg-white border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -3136,6 +4416,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 {activeTab === 'activities' && 'Activities'}
                 {activeTab === 'achievements' && 'Achievements'}
                 {activeTab === 'schedule' && 'Schedule'}
+                {activeTab === 'grades' && 'Grades & Performance'}
+                {activeTab === 'badges' && 'Badges & Achievements'}
                 {activeTab === 'tree-view' && 'Course Structure'}
                 {activeTab === 'competencies' && 'Competencies'}
                 {activeTab === 'scratch-editor' && 'Scratch Editor'}
@@ -3147,7 +4429,6 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
             
             <div className="flex items-center space-x-3">
-              
               {/* Refresh Button */}
               <button
                 onClick={refreshData}
@@ -3156,6 +4437,109 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               >
                 <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
+
+              {/* Notifications Dropdown */}
+              <div className="relative" ref={notificationDropdownRef}>
+                <button
+                  onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                  className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {notifications.filter(n => !n.isRead).length}
+                  </span>
+                </button>
+
+                {/* Notification Dropdown */}
+                {showNotificationDropdown && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+            </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 ${
+                            !notification.isRead ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className={`w-2 h-2 rounded-full mt-2 ${
+                              notification.type === 'assignment' ? 'bg-blue-500' :
+                              notification.type === 'course' ? 'bg-green-500' :
+                              'bg-yellow-500'
+                            }`}></div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                              <p className="text-xs text-gray-600 mt-1">{notification.message}</p>
+                              <p className="text-xs text-gray-400 mt-1">{notification.time}</p>
+          </div>
+                            {!notification.isRead && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="px-4 py-2 border-t border-gray-100">
+                      <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                        View All Notifications
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Profile Dropdown */}
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                  className="flex items-center space-x-2 hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-gray-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 hidden sm:inline">
+                    {currentUser?.fullname || currentUser?.username || 'Student'}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Profile Dropdown */}
+                {showProfileDropdown && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <p className="text-sm font-medium text-gray-900">
+                        {currentUser?.fullname || currentUser?.username || 'Student'}
+                      </p>
+                      <p className="text-xs text-gray-500">Student</p>
+                    </div>
+                    
+                        <button
+                          onClick={() => {
+                            setShowProfileDropdown(false);
+                            setActiveTab('settings');
+                          }}
+                          className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Settings className="w-4 h-4" />
+                          <span>Settings</span>
+                        </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowProfileDropdown(false);
+                        setShowLogoutDialog(true);
+                      }}
+                      className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3186,7 +4570,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
         {/* Tab Content */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6">
+          <div className="space-y-6 ml-8 mr-8">
         {/* Welcome Section */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
           <div className="flex items-center justify-between">
@@ -3224,7 +4608,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         </div>
 
         {/* Summary Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -3284,7 +4668,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             {renderSectionDetailView()}
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 ml-8 mr-8">
           {/* Left Column - Main Content */}
           <div className="lg:col-span-3 space-y-6">
             {/* My Courses Section */}
@@ -3336,7 +4720,11 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                           className="w-full h-32 object-cover"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.src = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop';
+                            target.src = getCourseImageFallback(course.category, course.title);
+                            console.log(`🖼️ Image failed to load for course ${course.title}, using fallback`);
+                          }}
+                          onLoad={() => {
+                            console.log(`🖼️ Image loaded successfully for course ${course.title}`);
                           }}
                         />
                         <div className="absolute top-3 right-3">
@@ -3440,16 +4828,16 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 {isLoading ? (
                   <div className="bg-gray-50 rounded-xl p-8 text-center">
                     <RefreshCw className="w-8 h-8 text-blue-500 mx-auto mb-4 animate-spin" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Lessons...</h3>
-                    <p className="text-gray-600">Fetching your lesson data from the server.</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Sections...</h3>
+                    <p className="text-gray-600">Fetching your course sections from the server.</p>
                   </div>
-                ) : displayLessons.length === 0 ? (
+                ) : displaySections.length === 0 ? (
                 <div className="bg-gray-50 rounded-xl p-8 text-center">
                   <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                     <Clock className="w-6 h-6 text-blue-600" />
                   </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Lessons Found</h3>
-                    <p className="text-gray-600 mb-4">Start a course to see your lessons here or there was an issue loading your lessons.</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Sections Found</h3>
+                    <p className="text-gray-600 mb-4">Start a course to see your sections here or there was an issue loading your sections.</p>
                     <button 
                       onClick={refreshData}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center space-x-2 mx-auto"
@@ -3460,29 +4848,33 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 </div>
                               ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {displayLessons.slice(0, 6).map((lesson) => (
+                   {displaySections.slice(0, 6).map((section) => (
                      <div 
-                       key={lesson.id} 
+                       key={section.id} 
                        className="group bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer hover:border-blue-200"
-                       onClick={() => handleLessonClick(lesson)}
+                       onClick={() => handleSectionClick(section)}
                      >
                       <div className="relative">
                         <img 
-                          src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
-                          alt={lesson.title}
+                          src={section.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+                          alt={section.title}
                           className="w-full h-40 object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = getBestCourseImage({ fullname: section.courseTitle });
+                            console.log(`🖼️ Image failed to load for section ${section.title}, using fallback`);
+                          }}
+                          onLoad={() => {
+                            console.log(`🖼️ Image loaded successfully for section ${section.title}`);
+                          }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                         <div className="absolute top-4 right-4">
                           <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg">
-                            {lesson.isNew ? (
-                              <Eye className="w-5 h-5 text-blue-600" />
-                            ) : (
-                              <Play className="w-5 h-5 text-blue-600" />
-                            )}
+                            <BookOpen className="w-5 h-5 text-blue-600" />
                           </div>
                         </div>
-                        {lesson.status === 'completed' && (
+                        {section.status === 'completed' && (
                           <div className="absolute top-4 left-4">
                             <div className="bg-green-500 text-white px-3 py-2 rounded-xl text-sm font-semibold flex items-center space-x-2 shadow-lg">
                               <Check className="w-4 h-4" />
@@ -3493,23 +4885,23 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                       </div>
                         
                       <div className="p-6">
-                        <h3 className="font-bold text-gray-900 mb-3 text-lg group-hover:text-blue-700 transition-colors line-clamp-2">{lesson.title}</h3>
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">{lesson.courseTitle}</p>
+                        <h3 className="font-bold text-gray-900 mb-3 text-lg group-hover:text-blue-700 transition-colors line-clamp-2">{section.title}</h3>
+                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">{section.courseTitle}</p>
                           
                         <div className="flex items-center space-x-2 mb-4">
-                          <Clock className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm text-gray-600 font-medium">{lesson.duration}</span>
+                          <BookOpen className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-600 font-medium">{section.completedModules}/{section.totalModules} modules</span>
                         </div>
                           
                         <div className="mb-6">
                           <div className="flex justify-between items-center mb-2">
                             <span className="text-sm font-semibold text-gray-700">Progress</span>
-                            <span className="text-sm font-bold text-gray-900">{lesson.progress}%</span>
+                            <span className="text-sm font-bold text-gray-900">{section.progress}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-3">
                             <div 
                               className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 shadow-sm"
-                              style={{ width: `${lesson.progress}%` }}
+                              style={{ width: `${section.progress}%` }}
                             ></div>
                           </div>
                         </div>
@@ -3518,10 +4910,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                           className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-xl"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleLessonClick(lesson);
+                            handleSectionClick(section);
                           }}
                         >
-                          {lesson.status === 'completed' ? 'Review Lesson' : lesson.status === 'in-progress' ? 'Continue Lesson' : 'Start Lesson'}
+                          {section.status === 'completed' ? 'Review Section' : section.status === 'in-progress' ? 'Continue Section' : 'Start Section'}
                         </button>
                       </div>
                     </div>
@@ -3750,28 +5142,6 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
-            {/* User Profile */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                  <User className="w-6 h-6 text-white" />
-                </div>
-            <div>
-                  <h3 className="font-semibold text-gray-900">{currentUser?.fullname || "Student"}</h3>
-                  <p className="text-blue-600 text-sm">Daily Rank →</p>
-              </div>
-              </div>
-                
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Today's Progress</span>
-                  <span className="text-sm font-medium text-gray-900">75%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full" style={{ width: '75%' }}></div>
-                </div>
-              </div>
-            </div>
 
             {/* Quick Stats */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -3948,7 +5318,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Courses Tab Content */}
           {activeTab === 'courses' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold text-gray-900">My Courses</h1>
                 <button
@@ -3985,7 +5355,11 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                           className="w-full h-32 object-cover"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.src = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop';
+                            target.src = getCourseImageFallback(course.category, course.title);
+                            console.log(`🖼️ Image failed to load for course ${course.title}, using fallback`);
+                          }}
+                          onLoad={() => {
+                            console.log(`🖼️ Image loaded successfully for course ${course.title}`);
                           }}
                         />
                         <div className="absolute top-3 right-3">
@@ -4032,9 +5406,9 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Lessons Tab Content */}
           {activeTab === 'lessons' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-gray-900">Current Lessons</h1>
+                <h1 className="text-3xl font-bold text-gray-900">Course Sections</h1>
                 <button
                   onClick={refreshData}
                   disabled={isLoading}
@@ -4046,43 +5420,47 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {displayLessons.map((lesson) => (
+                {displaySections.map((section) => (
                   <div 
-                    key={lesson.id} 
+                    key={section.id} 
                     className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md hover:scale-105 transition-all duration-300 cursor-pointer"
-                    onClick={() => handleLessonClick(lesson)}
+                    onClick={() => handleSectionClick(section)}
                   >
                     <div className="relative">
                       <img 
-                        src={lesson.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
-                        alt={lesson.title}
+                        src={section.image || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=200&fit=crop'} 
+                        alt={section.title}
                         className="w-full h-32 object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = getBestCourseImage({ fullname: section.courseTitle });
+                          console.log(`🖼️ Image failed to load for section ${section.title}, using fallback`);
+                        }}
+                        onLoad={() => {
+                          console.log(`🖼️ Image loaded successfully for section ${section.title}`);
+                        }}
                       />
                       <div className="absolute top-3 right-3">
                         <div className="bg-white/20 backdrop-blur-sm p-1 rounded-full">
-                          {lesson.isNew ? (
-                            <Eye className="w-4 h-4 text-white" />
-                          ) : (
-                            <Play className="w-4 h-4 text-white" />
-                          )}
+                          <BookOpen className="w-4 h-4 text-white" />
                         </div>
                       </div>
                     </div>
                     
                     <div className="p-4">
-                      <h3 className="font-semibold text-gray-900 mb-2">{lesson.title}</h3>
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{lesson.courseTitle}</p>
+                      <h3 className="font-semibold text-gray-900 mb-2">{section.title}</h3>
+                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{section.courseTitle}</p>
                       
                       <div className="flex items-center space-x-2 mb-3">
-                        <Clock className="w-3 h-3 text-gray-500" />
-                        <span className="text-sm text-gray-500">{lesson.duration}</span>
+                        <BookOpen className="w-3 h-3 text-gray-500" />
+                        <span className="text-sm text-gray-500">{section.completedModules}/{section.totalModules} modules</span>
                       </div>
                       
                       <div className="mb-3">
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
                             className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${lesson.progress}%` }}
+                            style={{ width: `${section.progress}%` }}
                           ></div>
                         </div>
                       </div>
@@ -4091,10 +5469,10 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleLessonClick(lesson);
+                          handleSectionClick(section);
                         }}
                       >
-                        {lesson.status === 'completed' ? 'Review Lesson' : lesson.status === 'in-progress' ? 'Continue Lesson' : 'Start Lesson'}
+                        {section.status === 'completed' ? 'Review Section' : section.status === 'in-progress' ? 'Continue Section' : 'Start Section'}
                       </button>
                     </div>
                   </div>
@@ -4103,80 +5481,106 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
           )}
 
-          {/* Activities Tab Content - Real Activities Only */}
+          {/* Activities Tab Content - Enhanced UI with Light Colors */}
           {activeTab === 'activities' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Course Section Activities</h1>
-                  <p className="text-gray-600 mt-1">View and access all activities from your course sections</p>
+            <div className="space-y-6 ml-8 mr-8">
+              {/* Enhanced Header with Light Colors */}
+              <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-200 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-100 to-blue-100 rounded-xl flex items-center justify-center shadow-lg">
+                      <Activity className="w-6 h-6 text-cyan-600" />
+                    </div>
+                    <div>
+                      <h1 className="text-3xl font-bold text-cyan-800">Course Section Activities</h1>
+                      <p className="text-cyan-600 mt-1">View and access all activities from your course sections</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={refreshData}
+                    disabled={isLoadingResourceActivities}
+                    className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoadingResourceActivities ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
                 </div>
-                <button
-                  onClick={refreshData}
-                  disabled={isLoadingResourceActivities}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50 flex items-center space-x-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isLoadingResourceActivities ? 'animate-spin' : ''}`} />
-                  <span>Refresh</span>
-                </button>
               </div>
               
               {isLoadingResourceActivities ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                  <span className="ml-3 text-gray-600">Loading activities...</span>
+                <div className="bg-white rounded-2xl shadow-lg border border-cyan-200 p-12">
+                  <div className="flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+                      <h3 className="text-lg font-semibold text-cyan-800 mb-2">Loading Activities</h3>
+                      <p className="text-cyan-600">Fetching your course activities and resources...</p>
+                    </div>
+                  </div>
                 </div>
               ) : resourceActivities.length > 0 ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      Found {resourceActivities.length} Activities
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      These are all the activities, resources, and materials from your course sections
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-2">
+              <div className="bg-white rounded-2xl shadow-lg border border-cyan-200 overflow-hidden">
+                  {/* Enhanced Activities Header */}
+                  <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b border-cyan-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-2xl font-bold text-cyan-800 mb-2">
+                          Found {resourceActivities.length} Activities
+                        </h3>
+                        <p className="text-cyan-600">
+                          These are all the activities, resources, and materials from your course sections
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-3xl font-bold text-cyan-600">{resourceActivities.length}</div>
+                        <div className="text-sm text-cyan-500">Total Activities</div>
+                      </div>
+                    </div>
+                    
+                    {/* Enhanced Activity Type Statistics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                       {Object.entries(
                         resourceActivities.reduce((acc, activity) => {
                           acc[activity.type] = (acc[activity.type] || 0) + 1;
                           return acc;
                         }, {} as Record<string, number>)
                       ).map(([type, count]) => (
-                        <span key={type} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                          {type}: {count}
-                        </span>
+                        <div key={type} className="bg-white/60 backdrop-blur-sm border border-cyan-200 rounded-xl p-3 text-center hover:bg-white/80 transition-all duration-200">
+                          <div className="text-lg font-bold text-cyan-700">{count as number}</div>
+                          <div className="text-xs text-cyan-600 font-medium">{type}</div>
+                        </div>
                       ))}
                     </div>
                   </div>
                   
-                <div className="space-y-4">
-                    {resourceActivities.map((activity) => (
+                {/* Enhanced Activities List */}
+                <div className="p-6 space-y-4">
+                    {resourceActivities.map((activity, index) => (
                     <div 
                       key={activity.id} 
-                      className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 cursor-pointer"
+                      className="group bg-gradient-to-r from-white to-cyan-50/30 border border-cyan-100 rounded-2xl p-6 hover:shadow-lg hover:shadow-cyan-100/50 hover:border-cyan-200 transition-all duration-300 cursor-pointer transform hover:scale-[1.01]"
                       onClick={() => handleActivityClick(activity)}
                     >
                       <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                            activity.type === 'Quiz' ? 'bg-purple-50' :
-                            activity.type === 'Assignment' ? 'bg-orange-50' :
-                            activity.type === 'Lesson' ? 'bg-blue-50' :
-                            activity.type === 'Discussion' ? 'bg-green-50' :
-                            activity.type === 'SCORM' ? 'bg-indigo-50' :
-                            activity.type === 'Workshop' ? 'bg-pink-50' :
-                            activity.type === 'Resource' ? 'bg-yellow-50' :
-                            activity.type === 'URL Link' ? 'bg-cyan-50' :
-                            activity.type === 'Page' ? 'bg-teal-50' :
-                            activity.type === 'Book' ? 'bg-amber-50' :
-                            activity.type === 'Folder' ? 'bg-slate-50' :
-                            activity.type === 'Glossary' ? 'bg-violet-50' :
-                            activity.type === 'Wiki' ? 'bg-rose-50' :
-                            activity.type === 'Chat' ? 'bg-emerald-50' :
-                            activity.type === 'Survey' ? 'bg-lime-50' :
-                            activity.type === 'Database' ? 'bg-sky-50' :
-                            activity.type === 'Interactive Content' ? 'bg-fuchsia-50' :
-                            activity.type === 'External Tool' ? 'bg-stone-50' :
-                            'bg-gray-50'
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-all duration-300 ${
+                            activity.type === 'Quiz' ? 'bg-gradient-to-br from-purple-100 to-purple-200' :
+                            activity.type === 'Assignment' ? 'bg-gradient-to-br from-orange-100 to-orange-200' :
+                            activity.type === 'Lesson' ? 'bg-gradient-to-br from-blue-100 to-blue-200' :
+                            activity.type === 'Discussion' ? 'bg-gradient-to-br from-green-100 to-green-200' :
+                            activity.type === 'SCORM' ? 'bg-gradient-to-br from-indigo-100 to-indigo-200' :
+                            activity.type === 'Workshop' ? 'bg-gradient-to-br from-pink-100 to-pink-200' :
+                            activity.type === 'Resource' ? 'bg-gradient-to-br from-yellow-100 to-yellow-200' :
+                            activity.type === 'URL Link' ? 'bg-gradient-to-br from-cyan-100 to-cyan-200' :
+                            activity.type === 'Page' ? 'bg-gradient-to-br from-teal-100 to-teal-200' :
+                            activity.type === 'Book' ? 'bg-gradient-to-br from-amber-100 to-amber-200' :
+                            activity.type === 'Folder' ? 'bg-gradient-to-br from-slate-100 to-slate-200' :
+                            activity.type === 'Glossary' ? 'bg-gradient-to-br from-violet-100 to-violet-200' :
+                            activity.type === 'Wiki' ? 'bg-gradient-to-br from-rose-100 to-rose-200' :
+                            activity.type === 'Chat' ? 'bg-gradient-to-br from-emerald-100 to-emerald-200' :
+                            activity.type === 'Survey' ? 'bg-gradient-to-br from-lime-100 to-lime-200' :
+                            activity.type === 'Database' ? 'bg-gradient-to-br from-sky-100 to-sky-200' :
+                            activity.type === 'Interactive Content' ? 'bg-gradient-to-br from-fuchsia-100 to-fuchsia-200' :
+                            activity.type === 'External Tool' ? 'bg-gradient-to-br from-stone-100 to-stone-200' :
+                            'bg-gradient-to-br from-gray-100 to-gray-200'
                           }`}>
                             {React.createElement(activity.icon, { 
                               className: `w-6 h-6 ${
@@ -4204,61 +5608,64 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         </div>
                         
                         <div className="flex-1">
-                            <h3 className="font-medium text-gray-900 mb-1">{activity.name}</h3>
-                            <p className="text-sm text-gray-500 mb-2">{activity.courseName}</p>
-                          <div className="flex items-center space-x-4">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                activity.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                activity.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-gray-100 text-gray-800'
+                            <h3 className="font-bold text-cyan-800 text-lg mb-2 group-hover:text-cyan-900 transition-colors">{activity.name}</h3>
+                            <p className="text-sm text-cyan-600 mb-3 font-medium">{activity.courseName}</p>
+                          <div className="flex flex-wrap items-center gap-3 mb-3">
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                                activity.status === 'completed' ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border border-green-300' :
+                                activity.status === 'in_progress' ? 'bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 border border-yellow-300' :
+                                'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 border border-gray-300'
                               }`}>
                               {activity.status}
                             </span>
-                              <span className="text-sm text-gray-500">{activity.type}</span>
+                              <span className="px-3 py-1 bg-cyan-100 text-cyan-700 text-xs font-medium rounded-full border border-cyan-200">{activity.type}</span>
                               {activity.grade > 0 && (
-                                <span className="text-sm text-gray-500">
+                                <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full border border-blue-200">
                                   Grade: {activity.grade}/{activity.maxGrade}
                             </span>
                               )}
                               {activity.attempts > 0 && (
-                                <span className="text-sm text-gray-500">
+                                <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full border border-purple-200">
                                   Attempts: {activity.attempts}/{activity.maxAttempts}
                                 </span>
                               )}
                               {activity.fileSize > 0 && (
-                                <span className="text-sm text-gray-500">
+                                <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full border border-orange-200">
                                   Size: {(activity.fileSize / 1024 / 1024).toFixed(1)} MB
                                 </span>
                               )}
                               {activity.isResource && (
-                                <span className="text-sm text-blue-600 font-medium">Resource</span>
+                                <span className="px-3 py-1 bg-cyan-100 text-cyan-700 text-xs font-semibold rounded-full border border-cyan-200">Resource</span>
                               )}
                               {activity.isInteractive && (
-                                <span className="text-sm text-green-600 font-medium">Interactive</span>
+                                <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full border border-green-200">Interactive</span>
                               )}
                           </div>
                             {activity.description && (
-                              <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                              <p className="text-sm text-cyan-700 mt-2 line-clamp-2 leading-relaxed">
                                 {activity.description}
                               </p>
                             )}
                             {activity.dueDate && (
-                              <p className="text-xs text-red-600 mt-1">
-                                Due: {activity.dueDate.toLocaleDateString()}
-                              </p>
+                              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-xs text-red-700 font-medium flex items-center">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  Due: {activity.dueDate.toLocaleDateString()}
+                                </p>
+                              </div>
                             )}
                         </div>
                       </div>
                       
-                      <div className="text-right">
-                          <div className="text-sm text-gray-500 mb-1">
+                      <div className="text-right flex flex-col items-end space-y-3">
+                          <div className="bg-cyan-100 text-cyan-700 px-3 py-1 rounded-full text-xs font-medium border border-cyan-200">
                             {activity.sectionName}
                           </div>
                         <button 
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              activity.status === 'completed' ? 'bg-green-500 hover:bg-green-600 text-white' :
-                              activity.status === 'in_progress' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' :
-                              'bg-blue-500 hover:bg-blue-600 text-white'
+                            className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl ${
+                              activity.status === 'completed' ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white' :
+                              activity.status === 'in_progress' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white' :
+                              'bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white'
                             }`}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -4281,12 +5688,20 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                 </div>
               </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-                  <Activity className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Activities Available</h3>
-                  <p className="text-gray-600">
-                    You don't have any activities available at the moment.
+                <div className="bg-white rounded-2xl shadow-lg border border-cyan-200 p-12 text-center">
+                  <div className="w-20 h-20 bg-gradient-to-br from-cyan-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Activity className="w-10 h-10 text-cyan-500" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-cyan-800 mb-3">No Activities Available</h3>
+                  <p className="text-cyan-600 mb-6 max-w-md mx-auto">
+                    You don't have any activities available at the moment. Check back later or contact your instructor.
                   </p>
+                  <button
+                    onClick={refreshData}
+                    className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                  >
+                    Refresh Activities
+                  </button>
                 </div>
               )}
             </div>
@@ -4294,7 +5709,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Other tabs content can be added here */}
           {activeTab === 'achievements' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <h1 className="text-3xl font-bold text-gray-900">Achievements</h1>
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
                 <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
@@ -4305,7 +5720,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
           )}
 
           {activeTab === 'schedule' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <div className="flex items-center justify-between">
               <h1 className="text-3xl font-bold text-gray-900">Schedule</h1>
                 <div className="flex items-center space-x-4">
@@ -4487,17 +5902,272 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
           )}
 
-          {activeTab === 'tree-view' && (
-            <div className="space-y-6">
-              <h1 className="text-3xl font-bold text-gray-900">Course Tree View</h1>
+          {/* Grades Section */}
+          {activeTab === 'grades' && (
+            <div className="space-y-6 ml-8 mr-8">
+              {/* Grades Header */}
+              <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold mb-2">Grades & Performance</h2>
+                    <p className="text-purple-100">Track your academic progress and achievements</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-white/20 rounded-lg px-3 py-2">
+                      <span className="text-sm font-medium">{gradesData.length} Grades</span>
+                    </div>
+                    <button
+                      onClick={refreshData}
+                      disabled={isLoadingGrades}
+                      className="bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-5 h-5 ${isLoadingGrades ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Loading State */}
+              {isLoadingGrades ? (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Grades</h3>
+                  <p className="text-gray-600">Fetching your academic performance data...</p>
+                </div>
+              ) : gradesData.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Grade Statistics */}
+                  {gradeStatistics && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600">Average Grade</p>
+                            <p className="text-2xl font-bold text-purple-600">{gradeStatistics.averagePercentage}%</p>
+                          </div>
+                          <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <TrendingUp className="w-6 h-6 text-purple-600" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600">Pass Rate</p>
+                            <p className="text-2xl font-bold text-green-600">{gradeStatistics.passRate}%</p>
+                          </div>
+                          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                            <CheckCircle className="w-6 h-6 text-green-600" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600">Total Grades</p>
+                            <p className="text-2xl font-bold text-blue-600">{gradeStatistics.totalGrades}</p>
+                          </div>
+                          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <Award className="w-6 h-6 text-blue-600" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-600">Passed</p>
+                            <p className="text-2xl font-bold text-emerald-600">{gradeStatistics.passedCount}</p>
+                          </div>
+                          <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                            <CheckCircle className="w-6 h-6 text-emerald-600" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Grade Distribution Chart */}
+                  {gradeStatistics && Object.keys(gradeStatistics.gradeDistribution).length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Grade Distribution</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        {Object.entries(gradeStatistics.gradeDistribution).map(([grade, count]) => (
+                          <div key={grade} className="text-center">
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-lg mx-auto mb-2 ${
+                              grade === 'A+' || grade === 'A' ? 'bg-green-500' :
+                              grade === 'A-' || grade === 'B+' ? 'bg-blue-500' :
+                              grade === 'B' || grade === 'B-' ? 'bg-yellow-500' :
+                              grade === 'C+' || grade === 'C' ? 'bg-orange-500' :
+                              'bg-red-500'
+                            }`}>
+                              {grade}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900">{count as number}</p>
+                            <p className="text-xs text-gray-500">grades</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Course Performance */}
+                  {gradeStatistics && Object.keys(gradeStatistics.courseStats).length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Performance</h3>
+                      <div className="space-y-4">
+                        {Object.entries(gradeStatistics.courseStats).map(([courseId, course]: [string, any]) => (
+                          <div key={courseId} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-medium text-gray-900">{course.courseName}</h4>
+                              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                <span>{course.averageGrade}% Average</span>
+                                <span>{course.passedCount}/{course.totalGrades} Passed</span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
+                                style={{ width: `${course.averageGrade}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Individual Grades */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">All Grades</h3>
+                    <div className="space-y-4">
+                      {gradesData.map((grade) => (
+                        <div key={grade.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden">
+                                <img 
+                                  src={grade.courseImage} 
+                                  alt={grade.courseName}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.src = getCourseImageFallback(grade.courseName, grade.courseName);
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <h4 className="font-medium text-gray-900">{grade.itemName}</h4>
+                                <p className="text-sm text-gray-600">{grade.courseName}</p>
+                                <p className="text-xs text-gray-500">{grade.itemType} • {grade.timeModified.toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`text-2xl font-bold ${
+                                grade.percentage >= 90 ? 'text-green-600' :
+                                grade.percentage >= 80 ? 'text-blue-600' :
+                                grade.percentage >= 70 ? 'text-yellow-600' :
+                                grade.percentage >= 60 ? 'text-orange-600' :
+                                'text-red-600'
+                              }`}>
+                                {grade.percentage}%
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {grade.grade}/{grade.maxGrade} • {grade.letterGrade}
+                              </div>
+                              <div className={`text-xs font-medium ${
+                                grade.isPassed ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {grade.isPassed ? 'Passed' : 'Failed'}
+                              </div>
+                            </div>
+                          </div>
+                          {grade.feedback && (
+                            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                              <p className="text-sm text-gray-700">{grade.feedback}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Award className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Grades Available</h3>
+                  <p className="text-gray-600 mb-4">You don't have any grades yet. Complete some assignments to see your progress here.</p>
+                  <button
+                    onClick={refreshData}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Refresh Grades
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'tree-view' && (
+            <div className="space-y-6 ml-8 mr-8">
+              {/* Enhanced Header */}
+              <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <BarChart3 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h1 className="text-3xl font-bold">Course Structure</h1>
+                      <p className="text-blue-100">Explore your learning path with interactive tree view</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-white/20 rounded-lg px-3 py-2">
+                      <span className="text-sm font-medium">{treeViewData.length} Courses</span>
+                    </div>
+                    <button
+                      onClick={refreshData}
+                      disabled={isLoadingTreeView}
+                      className="bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-5 h-5 ${isLoadingTreeView ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Enhanced Tree View Container */}
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                 {isLoadingTreeView ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    <span className="ml-3 text-gray-600">Loading course structure...</span>
+                  <div className="flex items-center justify-center py-16">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Course Structure</h3>
+                      <p className="text-gray-600">Fetching your courses and activities...</p>
+                    </div>
                   </div>
                 ) : treeViewData.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="p-6">
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-semibold text-gray-900">Your Learning Path</h2>
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <div className="w-3 h-3 bg-pink-400 rounded-full"></div>
+                          <span>Courses</span>
+                          <div className="w-3 h-3 bg-green-400 rounded-full ml-4"></div>
+                          <span>Sections</span>
+                          <div className="w-3 h-3 bg-blue-400 rounded-full ml-4"></div>
+                          <span>Activities</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-6">
                     {treeViewData.map((course, courseIndex) => (
                       <CourseTreeItem 
                         key={course.id} 
@@ -4507,12 +6177,23 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                         onStartActivity={handleStartActivityModal}
                       />
                     ))}
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Courses Available</h3>
-                    <p className="text-gray-600">You don't have any courses assigned yet.</p>
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <BarChart3 className="w-10 h-10 text-gray-400" />
+                    </div>
+                    <h3 className="text-2xl font-semibold text-gray-900 mb-3">No Courses Available</h3>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                      You don't have any courses assigned yet. Contact your instructor to get started with your learning journey.
+                    </p>
+                    <button
+                      onClick={refreshData}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                    >
+                      Refresh Courses
+                    </button>
                   </div>
                 )}
               </div>
@@ -4522,7 +6203,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Scratch Editor Tab Content */}
           {activeTab === 'scratch-editor' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold text-gray-900">Scratch Editor</h1>
                 <div className="flex items-center space-x-2">
@@ -4543,7 +6224,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Code Editor Tab Content */}
           {activeTab === 'code-editor' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold text-gray-900">Code Editor</h1>
                 <div className="flex items-center space-x-2">
@@ -4582,7 +6263,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* E-books Tab Content */}
           {activeTab === 'ebooks' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <h1 className="text-3xl font-bold text-gray-900">E-books</h1>
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
                 <BookOpen className="w-16 h-16 text-blue-500 mx-auto mb-4" />
@@ -4611,7 +6292,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Ask Teacher Tab Content */}
           {activeTab === 'ask-teacher' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <h1 className="text-3xl font-bold text-gray-900">Ask Teacher</h1>
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
                 <div className="text-center mb-6">
@@ -4653,7 +6334,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Share with Class Tab Content */}
           {activeTab === 'share-class' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
               <h1 className="text-3xl font-bold text-gray-900">Share with Class</h1>
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
                 <div className="text-center mb-6">
@@ -4708,60 +6389,793 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
 
           {/* Competencies Tab Content */}
           {activeTab === 'competencies' && (
-            <div className="space-y-6">
+            <div className="space-y-6 ml-8 mr-8">
+              {/* Competencies Header */}
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl p-6 text-white">
               <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-gray-900">Competencies</h1>
+                  <div>
+                    <h2 className="text-2xl font-bold mb-2">Learning Competencies</h2>
+                    <p className="text-blue-100">Track your progress across different learning competencies and skills</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-white/20 rounded-lg px-3 py-2">
+                      <span className="text-sm font-medium">{competencies.length} Competencies</span>
+                    </div>
                 <button
-                  onClick={() => {
-                    // Fetch competencies data
-                    console.log('Fetching competencies...');
-                  }}
+                      onClick={refreshData}
                   disabled={isLoadingCompetencies}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50 flex items-center space-x-2"
+                      className="bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-colors disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-4 h-4 ${isLoadingCompetencies ? 'animate-spin' : ''}`} />
-                  <span>Refresh</span>
+                      <RefreshCw className={`w-5 h-5 ${isLoadingCompetencies ? 'animate-spin' : ''}`} />
                 </button>
+                  </div>
+                </div>
               </div>
               
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-                <div className="text-center mb-6">
-                  <Target className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Learning Competencies</h3>
-                  <p className="text-gray-600">Track your progress across different learning competencies.</p>
+              {/* Loading State */}
+              {isLoadingCompetencies ? (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Competencies</h3>
+                  <p className="text-gray-600">Fetching your competency progress data...</p>
+                </div>
+              ) : competencies.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Competency Statistics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Total Competencies</p>
+                          <p className="text-2xl font-bold text-blue-600">{competencies.length}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Target className="w-6 h-6 text-blue-600" />
+                        </div>
+                      </div>
                 </div>
                 
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Completed</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {competencies.filter(c => c.status === 'completed' || c.progress === 100).length}
+                          </p>
+                        </div>
+                        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="w-6 h-6 text-green-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">In Progress</p>
+                          <p className="text-2xl font-bold text-yellow-600">
+                            {competencies.filter(c => c.status === 'in_progress' || (c.progress > 0 && c.progress < 100)).length}
+                          </p>
+                        </div>
+                        <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                          <Clock className="w-6 h-6 text-yellow-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Average Progress</p>
+                          <p className="text-2xl font-bold text-purple-600">
+                            {competencies.length > 0 ? Math.round(competencies.reduce((sum, c) => sum + c.progress, 0) / competencies.length) : 0}%
+                          </p>
+                        </div>
+                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <TrendingUp className="w-6 h-6 text-purple-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Competency Categories */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Competency Categories</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-900">Problem Solving</h4>
-                      <span className="text-sm text-gray-500">75%</span>
+                      {Array.from(new Set(competencies.map(c => c.category))).map((category) => {
+                        const categoryCompetencies = competencies.filter(c => c.category === category);
+                        const categoryProgress = categoryCompetencies.length > 0 
+                          ? Math.round(categoryCompetencies.reduce((sum, c) => sum + c.progress, 0) / categoryCompetencies.length)
+                          : 0;
+                        
+                        return (
+                          <div key={category} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-medium text-gray-900">{category}</h4>
+                              <span className="text-sm text-gray-600">{categoryCompetencies.length} competencies</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: '75%' }}></div>
+                            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                              <div 
+                                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-500"
+                                style={{ width: `${categoryProgress}%` }}
+                              ></div>
+                            </div>
+                            <p className="text-sm text-gray-600">{categoryProgress}% average progress</p>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-900">Critical Thinking</h4>
-                      <span className="text-sm text-gray-500">60%</span>
+                  {/* Individual Competencies */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">All Competencies</h3>
+                    <div className="space-y-4">
+                      {competencies.map((competency) => (
+                        <div key={competency.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg flex items-center justify-center">
+                                <Target className="w-5 h-5 text-blue-600" />
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-green-500 h-2 rounded-full" style={{ width: '60%' }}></div>
+                              <div>
+                                <h4 className="font-medium text-gray-900">{competency.name}</h4>
+                                <p className="text-sm text-gray-600">{competency.category}</p>
+                                <p className="text-xs text-gray-500">
+                                  {competency.completedActivities}/{competency.totalActivities} activities completed
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`text-2xl font-bold ${
+                                competency.progress >= 90 ? 'text-green-600' :
+                                competency.progress >= 70 ? 'text-blue-600' :
+                                competency.progress >= 50 ? 'text-yellow-600' :
+                                'text-red-600'
+                              }`}>
+                                {competency.progress}%
+                              </div>
+                              <div className={`text-xs font-medium ${
+                                competency.status === 'completed' ? 'text-green-600' :
+                                competency.status === 'in_progress' ? 'text-blue-600' :
+                                'text-gray-600'
+                              }`}>
+                                {competency.status === 'completed' ? 'Completed' :
+                                 competency.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+                              </div>
                     </div>
                   </div>
                   
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-900">Creativity</h4>
-                      <span className="text-sm text-gray-500">85%</span>
+                          <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-500 ${
+                                competency.progress >= 90 ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                                competency.progress >= 70 ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
+                                competency.progress >= 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                                'bg-gradient-to-r from-red-500 to-red-600'
+                              }`}
+                              style={{ width: `${competency.progress}%` }}
+                            ></div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-purple-500 h-2 rounded-full" style={{ width: '85%' }}></div>
+                          
+                          {competency.description && (
+                            <p className="text-sm text-gray-700 mb-2">{competency.description}</p>
+                          )}
+                          
+                          {competency.courseCount > 0 && (
+                            <div className="flex items-center space-x-2 text-xs text-gray-500">
+                              <BookOpen className="w-3 h-3" />
+                              <span>{competency.courseCount} related courses</span>
+                    </div>
+                          )}
+                  </div>
+                      ))}
+                </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Competencies Available</h3>
+                  <p className="text-gray-600 mb-4">You don't have any competencies assigned yet. Contact your instructor to get started.</p>
+                  <button
+                    onClick={refreshData}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Refresh Competencies
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Badges Tab Content */}
+          {activeTab === 'badges' && (
+            <div className="space-y-6 ml-8 mr-8">
+              {/* Badges Header */}
+              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold mb-2">Badges & Achievements</h2>
+                    <p className="text-yellow-100">Track your achievements and earned badges from courses and activities</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-white/20 rounded-lg px-3 py-2">
+                      <span className="text-sm font-medium">{badges.length} Badges</span>
+                    </div>
+                    <button
+                      onClick={refreshData}
+                      disabled={isLoadingBadges}
+                      className="bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-5 h-5 ${isLoadingBadges ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        console.log('🔍 Running badge diagnostic...');
+                        try {
+                          const response = await fetch('/api/moodle', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: new URLSearchParams({
+                              wsfunction: 'core_webservice_get_site_info'
+                            })
+                          });
+                          const data = await response.json();
+                          console.log('📋 Full site info:', data);
+                          console.log('🔍 Badge-related functions:', data.functions ? Object.keys(data.functions).filter(f => f.toLowerCase().includes('badge')) : 'No functions');
+                        } catch (error) {
+                          console.error('❌ Diagnostic failed:', error);
+                        }
+                      }}
+                      className="bg-white/20 hover:bg-white/30 rounded-lg p-2 transition-colors"
+                      title="Run Badge Diagnostic"
+                    >
+                      🔍
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Loading State */}
+              {isLoadingBadges ? (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Badges</h3>
+                  <p className="text-gray-600">Fetching your badge achievements data...</p>
+                </div>
+              ) : badges.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Badge Statistics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Total Badges</p>
+                          <p className="text-2xl font-bold text-yellow-600">{badges.length}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                          <Trophy className="w-6 h-6 text-yellow-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Awarded</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {badges.filter(b => b.isAwarded).length}
+                          </p>
+                        </div>
+                        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                          <CheckCircle className="w-6 h-6 text-green-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Available</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {badges.filter(b => !b.isAwarded).length}
+                          </p>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Clock className="w-6 h-6 text-blue-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Completion Rate</p>
+                          <p className="text-2xl font-bold text-purple-600">
+                            {badges.length > 0 ? Math.round((badges.filter(b => b.isAwarded).length / badges.length) * 100) : 0}%
+                          </p>
+                        </div>
+                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <TrendingUp className="w-6 h-6 text-purple-600" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Awarded Badges */}
+                  {badges.filter(b => b.isAwarded).length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">🏆 Awarded Badges</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {badges.filter(b => b.isAwarded).map((badge) => (
+                          <div key={badge.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div className="flex items-center space-x-4 mb-3">
+                              <div className="w-16 h-16 bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg flex items-center justify-center">
+                                {badge.imageurl ? (
+                                  <img 
+                                    src={badge.imageurl} 
+                                    alt={badge.name}
+                                    className="w-12 h-12 rounded-lg object-cover"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                      target.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                ) : null}
+                                <Trophy className={`w-8 h-8 text-yellow-600 ${badge.imageurl ? 'hidden' : ''}`} />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-900">{badge.name}</h4>
+                                <p className="text-sm text-gray-600">{badge.issuer}</p>
+                                {badge.awardedDate && (
+                                  <p className="text-xs text-gray-500">
+                                    Awarded: {new Date(badge.awardedDate * 1000).toLocaleDateString()}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            {badge.description && (
+                              <p className="text-sm text-gray-700 mb-3">{badge.description}</p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Awarded
+                              </span>
+                              {badge.courseid > 0 && (
+                                <span className="text-xs text-gray-500">Course Badge</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Available Badges */}
+                  {badges.filter(b => !b.isAwarded).length > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Available Badges</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {badges.filter(b => !b.isAwarded).map((badge) => (
+                          <div key={badge.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow opacity-75">
+                            <div className="flex items-center space-x-4 mb-3">
+                              <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+                                {badge.imageurl ? (
+                                  <img 
+                                    src={badge.imageurl} 
+                                    alt={badge.name}
+                                    className="w-12 h-12 rounded-lg object-cover grayscale"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                      target.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                ) : null}
+                                <Trophy className={`w-8 h-8 text-gray-400 ${badge.imageurl ? 'hidden' : ''}`} />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-900">{badge.name}</h4>
+                                <p className="text-sm text-gray-600">{badge.issuer}</p>
+                                {badge.criteria && (
+                                  <p className="text-xs text-gray-500">Criteria: {badge.criteria}</p>
+                                )}
+                              </div>
+                            </div>
+                            {badge.description && (
+                              <p className="text-sm text-gray-700 mb-3">{badge.description}</p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Available
+                              </span>
+                              {badge.courseid > 0 && (
+                                <span className="text-xs text-gray-500">Course Badge</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* All Badges List */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">All Badges</h3>
+                    <div className="space-y-4">
+                      {badges.map((badge) => (
+                        <div key={badge.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                                badge.isAwarded 
+                                  ? 'bg-gradient-to-br from-yellow-100 to-orange-100' 
+                                  : 'bg-gradient-to-br from-gray-100 to-gray-200'
+                              }`}>
+                                {badge.imageurl ? (
+                                  <img 
+                                    src={badge.imageurl} 
+                                    alt={badge.name}
+                                    className={`w-8 h-8 rounded-lg object-cover ${!badge.isAwarded ? 'grayscale' : ''}`}
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                      target.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                ) : null}
+                                <Trophy className={`w-6 h-6 ${badge.isAwarded ? 'text-yellow-600' : 'text-gray-400'} ${badge.imageurl ? 'hidden' : ''}`} />
+                              </div>
+                              <div>
+                                <h4 className="font-medium text-gray-900">{badge.name}</h4>
+                                <p className="text-sm text-gray-600">{badge.issuer}</p>
+                                {badge.description && (
+                                  <p className="text-xs text-gray-500 mt-1">{badge.description}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                badge.isAwarded 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {badge.isAwarded ? (
+                                  <>
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Awarded
+                                  </>
+                                ) : (
+                                  <>
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    Available
+                                  </>
+                                )}
+                              </div>
+                              {badge.awardedDate && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {new Date(badge.awardedDate * 1000).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trophy className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Badges Found</h3>
+                  <div className="text-gray-600 mb-6 space-y-2">
+                    <p>This could mean:</p>
+                    <ul className="text-sm text-left max-w-md mx-auto space-y-1">
+                      <li>• Badge functionality is not enabled in your Moodle system</li>
+                      <li>• No badges have been created yet</li>
+                      <li>• Badge APIs are not available in your Moodle version</li>
+                      <li>• You need to complete courses/activities to earn badges</li>
+                    </ul>
+                    <p className="text-xs text-gray-500 mt-4">
+                      Check the browser console for detailed diagnostic information.
+                    </p>
+                  </div>
+                  <div className="flex justify-center space-x-3">
+                    <button
+                      onClick={refreshData}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Refresh Badges
+                    </button>
+                    <button
+                      onClick={async () => {
+                        console.log('🔍 Running badge diagnostic...');
+                        try {
+                          const response = await fetch('/api/moodle', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: new URLSearchParams({
+                              wsfunction: 'core_webservice_get_site_info'
+                            })
+                          });
+                          const data = await response.json();
+                          console.log('📋 Full site info:', data);
+                          console.log('🔍 Badge-related functions:', data.functions ? Object.keys(data.functions).filter(f => f.toLowerCase().includes('badge')) : 'No functions');
+                          alert('Check browser console for diagnostic results');
+                        } catch (error) {
+                          console.error('❌ Diagnostic failed:', error);
+                          alert('Diagnostic failed - check console for details');
+                        }
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Run Diagnostic
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Settings Section */}
+          {activeTab === 'settings' && (
+            <div className="space-y-6 ml-8 mr-8">
+              {/* Settings Header */}
+              <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl p-6 text-white">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <Settings className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Settings & Profile</h2>
+                    <p className="text-blue-100">Manage your account and preferences</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Information */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Profile Information</h3>
+                {isLoadingProfile ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                    <span className="ml-2 text-gray-600">Loading profile...</span>
+                  </div>
+                ) : userProfile ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          value={userProfile.fullname}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input
+                          type="email"
+                          value={userProfile.email}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <input
+                          type="text"
+                          value={userProfile.username}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <input
+                          type="text"
+                          value={`${userProfile.city}, ${userProfile.country}`}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                        <input
+                          type="text"
+                          value={userProfile.timezone}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Member Since</label>
+                        <input
+                          type="text"
+                          value={userProfile.joinDate.toLocaleDateString()}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <User className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600">Unable to load profile information</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Learning Statistics */}
+              {userProfile && (
+                <div className="bg-blue-50 rounded-2xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Learning Statistics</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">{userProfile.totalCourses}</div>
+                      <div className="text-sm text-gray-600">Total Courses</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">{userProfile.completedCourses}</div>
+                      <div className="text-sm text-gray-600">Completed</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {userProfile.totalCourses > 0 ? Math.round((userProfile.completedCourses / userProfile.totalCourses) * 100) : 0}%
+                      </div>
+                      <div className="text-sm text-gray-600">Completion Rate</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Preferences */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Preferences</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-900">Email Notifications</label>
+                      <p className="text-xs text-gray-600">Receive email updates about your courses</p>
+                    </div>
+                    <button
+                      onClick={() => setUserPreferences(prev => ({ ...prev, emailUpdates: !prev.emailUpdates }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        userPreferences.emailUpdates ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          userPreferences.emailUpdates ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-900">Push Notifications</label>
+                      <p className="text-xs text-gray-600">Receive notifications for important updates</p>
+                    </div>
+                    <button
+                      onClick={() => setUserPreferences(prev => ({ ...prev, notifications: !prev.notifications }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        userPreferences.notifications ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          userPreferences.notifications ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-900">Dark Mode</label>
+                      <p className="text-xs text-gray-600">Switch to dark theme</p>
+                    </div>
+                    <button
+                      onClick={() => setUserPreferences(prev => ({ ...prev, darkMode: !prev.darkMode }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        userPreferences.darkMode ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          userPreferences.darkMode ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Language and Timezone */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Language & Region</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                    <select
+                      value={userPreferences.language}
+                      onChange={(e) => setUserPreferences(prev => ({ ...prev, language: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="en">English</option>
+                      <option value="es">Spanish</option>
+                      <option value="fr">French</option>
+                      <option value="de">German</option>
+                      <option value="ar">Arabic</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                    <select
+                      value={userPreferences.timezone}
+                      onChange={(e) => setUserPreferences(prev => ({ ...prev, timezone: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="UTC">UTC</option>
+                      <option value="America/New_York">Eastern Time</option>
+                      <option value="America/Chicago">Central Time</option>
+                      <option value="America/Denver">Mountain Time</option>
+                      <option value="America/Los_Angeles">Pacific Time</option>
+                      <option value="Europe/London">London</option>
+                      <option value="Europe/Paris">Paris</option>
+                      <option value="Asia/Tokyo">Tokyo</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Actions */}
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Actions</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-900">Sign Out</label>
+                      <p className="text-xs text-gray-600">Sign out of your account</p>
+                    </div>
+                    <button
+                      onClick={() => setShowLogoutDialog(true)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Changes Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    // Save preferences
+                    console.log('Saving preferences:', userPreferences);
+                    // You can add API call here to save preferences
+                  }}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  Save Changes
+                </button>
               </div>
             </div>
           )}
@@ -5482,6 +7896,29 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
                     </div>
                   </div>
                 </div>
+
+                {/* Account Actions */}
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Actions</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium text-gray-900">Sign Out</label>
+                        <p className="text-xs text-gray-600">Sign out of your account</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowSettingsModal(false);
+                          setShowLogoutDialog(true);
+                        }}
+                        className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Modal Footer */}
@@ -5508,6 +7945,14 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
           </div>
         )}
+
+        {/* Logout Dialog */}
+        <LogoutDialog
+          isOpen={showLogoutDialog}
+          onClose={() => setShowLogoutDialog(false)}
+          onConfirm={handleLogout}
+          userName={currentUser?.fullname || currentUser?.username || 'Student'}
+        />
       </div>
     </div>
   );

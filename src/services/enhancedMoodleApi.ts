@@ -177,14 +177,253 @@ export const enhancedMoodleService = {
 
       if (response.data && Array.isArray(response.data)) {
         console.log(`✅ Found ${response.data.length} courses for user ${userId}`);
-        setCachedData(cacheKey, response.data);
-        return response.data;
+        
+        // Fetch course details with images for each course
+        const coursesWithImages = await Promise.all(
+          response.data.map(async (course: any) => {
+            try {
+              const courseDetails = await this.getCourseDetailsWithImages(course.id.toString());
+              return {
+                ...course,
+                courseimage: courseDetails.courseimage,
+                imageurl: courseDetails.imageurl,
+                overviewfiles: courseDetails.overviewfiles
+              };
+            } catch (error) {
+              console.warn(`⚠️ Could not fetch images for course ${course.id}:`, error);
+              return course;
+            }
+          })
+        );
+        
+        setCachedData(cacheKey, coursesWithImages);
+        return coursesWithImages;
       } else {
         console.warn('⚠️ No courses found or invalid response format');
         return [];
       }
     } catch (error) {
       console.error('❌ Error fetching user courses:', error);
+      return [];
+    }
+  },
+
+  // Get course details with images
+  async getCourseDetailsWithImages(courseId: string): Promise<any> {
+    const cacheKey = `course_details_${courseId}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) return cached;
+
+    try {
+      console.log('🖼️ Fetching course details with images for:', courseId);
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'core_course_get_courses_by_field',
+        field: 'id',
+        value: courseId
+      }));
+
+      if (response.data && response.data.courses && response.data.courses.length > 0) {
+        const course = response.data.courses[0];
+        console.log(`✅ Found course details for course ${courseId}`);
+        
+        // Extract image information
+        const courseDetails = {
+          courseimage: course.courseimage || null,
+          imageurl: course.imageurl || null,
+          overviewfiles: course.overviewfiles || []
+        };
+        
+        setCachedData(cacheKey, courseDetails);
+        return courseDetails;
+      } else {
+        console.warn(`⚠️ No course details found for course ${courseId}`);
+        return { courseimage: null, imageurl: null, overviewfiles: [] };
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching course details for ${courseId}:`, error);
+      return { courseimage: null, imageurl: null, overviewfiles: [] };
+    }
+  },
+
+  // Get lesson details with images
+  async getLessonDetails(lessonId: string): Promise<any> {
+    const cacheKey = `lesson_details_${lessonId}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) return cached;
+
+    try {
+      console.log('🖼️ Fetching lesson details with images for:', lessonId);
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'mod_lesson_get_lessons_by_courses',
+        courseids: [lessonId] // This might need to be adjusted based on actual API
+      }));
+
+      if (response.data && response.data.lessons && response.data.lessons.length > 0) {
+        const lesson = response.data.lessons[0];
+        console.log(`✅ Found lesson details for lesson ${lessonId}`);
+        
+        // Extract image information
+        const lessonDetails = {
+          imageurl: lesson.imageurl || null,
+          overviewfiles: lesson.overviewfiles || [],
+          intro: lesson.intro || null,
+          introfiles: lesson.introfiles || []
+        };
+        
+        setCachedData(cacheKey, lessonDetails);
+        return lessonDetails;
+      } else {
+        console.warn(`⚠️ No lesson details found for lesson ${lessonId}`);
+        return { imageurl: null, overviewfiles: [], intro: null, introfiles: [] };
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching lesson details for ${lessonId}:`, error);
+      return { imageurl: null, overviewfiles: [], intro: null, introfiles: [] };
+    }
+  },
+
+  // Get course grades for a user
+  async getCourseGrades(courseId: string, userId: string): Promise<any[]> {
+    const cacheKey = `grades_${courseId}_${userId}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) return cached;
+
+    try {
+      console.log('📊 Fetching course grades for:', courseId, 'user:', userId);
+      
+      // Try multiple grade API endpoints for IOMAD compatibility
+      let grades: any[] = [];
+      
+      // Method 1: Try core_grade_get_grades (most common)
+      try {
+        const response1 = await enhancedMoodleApi.post('', new URLSearchParams({
+          wsfunction: 'core_grade_get_grades',
+          courseid: courseId,
+          userid: userId
+        }));
+
+        if (response1.data && response1.data.grades && response1.data.grades.length > 0) {
+          grades = response1.data.grades;
+          console.log(`✅ Found ${grades.length} grades using core_grade_get_grades`);
+        }
+      } catch (error) {
+        console.warn('⚠️ core_grade_get_grades failed, trying alternative method');
+      }
+
+      // Method 2: Try gradereport_user_get_grade_items if first method failed
+      if (grades.length === 0) {
+        try {
+          const response2 = await enhancedMoodleApi.post('', new URLSearchParams({
+            wsfunction: 'gradereport_user_get_grade_items',
+            courseid: courseId,
+            userid: userId
+          }));
+
+          if (response2.data && response2.data.usergrades && response2.data.usergrades.length > 0) {
+            const userGrade = response2.data.usergrades[0];
+            grades = userGrade.gradeitems || [];
+            console.log(`✅ Found ${grades.length} grades using gradereport_user_get_grade_items`);
+          }
+        } catch (error) {
+          console.warn('⚠️ gradereport_user_get_grade_items failed, trying alternative method');
+        }
+      }
+
+      // Method 3: Try core_grades_get_grades if previous methods failed
+      if (grades.length === 0) {
+        try {
+          const response3 = await enhancedMoodleApi.post('', new URLSearchParams({
+            wsfunction: 'core_grades_get_grades',
+            courseid: courseId,
+            userid: userId
+          }));
+
+          if (response3.data && response3.data.grades && response3.data.grades.length > 0) {
+            grades = response3.data.grades;
+            console.log(`✅ Found ${grades.length} grades using core_grades_get_grades`);
+          }
+        } catch (error) {
+          console.warn('⚠️ core_grades_get_grades failed');
+        }
+      }
+
+      // Method 4: Try to get grades from course contents (fallback)
+      if (grades.length === 0) {
+        try {
+          const contentsResponse = await enhancedMoodleApi.post('', new URLSearchParams({
+            wsfunction: 'core_course_get_contents',
+            courseid: courseId
+          }));
+
+          if (contentsResponse.data && Array.isArray(contentsResponse.data)) {
+            const allGrades: any[] = [];
+            
+            contentsResponse.data.forEach((section: any) => {
+              if (section.modules && Array.isArray(section.modules)) {
+                section.modules.forEach((module: any) => {
+                  if (module.completiondata) {
+                    allGrades.push({
+                      id: module.id,
+                      itemname: module.name,
+                      itemtype: module.modname,
+                      grade: module.completiondata?.progress || 0,
+                      grademax: 100,
+                      feedback: module.completiondata?.feedback || '',
+                      timemodified: module.completiondata?.timemodified || Date.now() / 1000,
+                      grader: 'System',
+                      category: section.name || 'General'
+                    });
+                  }
+                });
+              }
+            });
+            
+            grades = allGrades;
+            console.log(`✅ Found ${grades.length} grades from course contents completion data`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to get grades from course contents');
+        }
+      }
+
+      if (grades.length > 0) {
+        setCachedData(cacheKey, grades);
+        return grades;
+      } else {
+        console.warn(`⚠️ No grades found for course ${courseId} using any method`);
+        return [];
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching grades for course ${courseId}:`, error);
+      return [];
+    }
+  },
+
+  // Get all user grades across all courses (IOMAD specific)
+  async getAllUserGrades(userId: string): Promise<any[]> {
+    const cacheKey = `all_grades_${userId}`;
+    const cached = getCachedData(cacheKey);
+    if (cached) return cached;
+
+    try {
+      console.log('📊 Fetching all user grades for:', userId);
+      
+      // Try to get all grades at once
+      const response = await enhancedMoodleApi.post('', new URLSearchParams({
+        wsfunction: 'core_grades_get_grades',
+        userid: userId
+      }));
+
+      if (response.data && response.data.grades && response.data.grades.length > 0) {
+        console.log(`✅ Found ${response.data.grades.length} total grades for user ${userId}`);
+        setCachedData(cacheKey, response.data.grades);
+        return response.data.grades;
+      } else {
+        console.warn(`⚠️ No grades found for user ${userId}`);
+        return [];
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching all grades for user ${userId}:`, error);
       return [];
     }
   },
