@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { Skeleton } from '../../../components/ui/skeleton';
-import DashboardLayout from '../../../components/DashboardLayout';
+import G8PlusLayout from '../../../components/G8PlusLayout';
 
 interface Stats {
   enrolledCourses: number;
@@ -211,8 +211,8 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
   };
 
   return (
-    <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
-      <div className="space-y-3">
+    <G8PlusLayout userName={currentUser?.fullname || "Student"}>
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
@@ -649,7 +649,7 @@ const G8PlusDashboard: React.FC<G8PlusDashboardProps> = ({
         </div>
       </div>
       </div>
-    </DashboardLayout>
+    </G8PlusLayout>
   );
 };
 
