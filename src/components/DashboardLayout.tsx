@@ -552,7 +552,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
       </div>
 
       {/* Main Content - offset by sidebar width on desktop, full width on mobile */}
-      <div className="lg:ml-64">
+      <div className="lg:ml-28">
         {/* Fixed Top Bar */}
         <header className="fixed top-0 left-0 lg:left-64 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
           <div className="px-4 lg:px-6 py-2">
@@ -576,10 +576,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
                   </span>
                 </button>
 
-                <button className="bg-blue-600 text-white px-3 lg:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">New Report</span>
-                </button>
+                
 
                 <div className="relative" ref={profileDropdownRef}>
                   <button
