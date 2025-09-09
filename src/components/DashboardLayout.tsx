@@ -54,8 +54,72 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Main Content - full width since no sidebar */}
-      <div className="w-full">
+      {/* Fixed Sidebar - Hidden on mobile */}
+      <div className="fixed top-0 left-0 z-30 w-64 h-full bg-white shadow-lg overflow-y-auto hidden lg:block scrollbar-hide">
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <img src={logo} alt="kodeit" className="w-8 h-8" />
+              <span className="text-lg font-semibold text-gray-800">kodeit</span>
+            </div>
+            {/* Subtle loading indicator for cohort settings */}
+            {userRole === 'student' && isLoadingCohortSettings && (
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-gray-500">Loading...</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="p-3 space-y-4 pb-16">
+          {navigationItems.map((section, sectionIndex) => (
+            <div key={sectionIndex} className="transition-all duration-300 ease-in-out">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-colors duration-200">
+                {section.title}
+              </h3>
+              <ul className="space-y-0.5">
+                {section.items.map((item, itemIndex) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  const isQuickAction = section.title === 'QUICK ACTIONS';
+                  
+                  return (
+                    <li key={itemIndex} className="transition-all duration-200 ease-in-out">
+                      <button
+                        onClick={() => {
+                          console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
+                          navigate(item.path);
+                        }}
+                        className={`w-full flex items-start space-x-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-[1.02] ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-sm'
+                        } ${isQuickAction ? 'bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100' : ''}`}
+                      >
+                        <div className={`p-2 rounded-lg ${isQuickAction ? 'bg-white shadow-sm' : ''}`}>
+                          <Icon className={`w-4 h-4 transition-transform duration-200 ${isQuickAction ? 'text-purple-600' : ''}`} />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="font-semibold transition-colors duration-200">{item.name}</div>
+                          {isQuickAction && item.description && (
+                            <div className="text-xs text-gray-500 mt-0.5 leading-tight">{item.description}</div>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      {/* Main Content - offset by sidebar width on desktop, full width on mobile */}
+      <div className="lg:ml-64 lg:pl-4">
 
         {/* Fixed Top Bar */}
         <header className="fixed top-0 left-0 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
@@ -131,8 +195,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           </div>
         </header>
 
-        {/* Main Content Area - with proper top padding */}
-        <main className="bg-gray-50 min-h-screen pt-16 px-2 lg:px-4">
+        {/* Main Content Area - with proper top padding and sidebar spacing */}
+        <main className="bg-gray-50 min-h-screen pt-16 px-4 lg:px-8">
           <div className="w-full">
             {children}
           </div>
