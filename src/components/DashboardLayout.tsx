@@ -24,7 +24,8 @@ import {
   Settings as SettingsIcon,
   Play,
   Code,
-  Map
+  Map,
+  Share2
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import LogoutDialog from './ui/logout-dialog';
@@ -47,6 +48,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const [cohortNavigationSettings, setCohortNavigationSettings] = useState<any>(null);
   const [studentCohort, setStudentCohort] = useState<any>(null);
   const [isLoadingCohortSettings, setIsLoadingCohortSettings] = useState(false);
+  const [hasLoadedCohortSettings, setHasLoadedCohortSettings] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debug logging
@@ -54,9 +56,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   console.log('DashboardLayout - userName:', userName);
   console.log('DashboardLayout - current location:', location.pathname);
 
-  // Fetch student cohort and navigation settings
+  // Fetch student cohort and navigation settings - optimized for fast loading
   useEffect(() => {
     if (userRole === 'student' && currentUser?.id) {
+      // Load default settings immediately, then fetch cohort-specific settings in background
+      const defaultSettings = moodleService.getDefaultNavigationSettings();
+      setCohortNavigationSettings(defaultSettings);
+      
+      // Fetch cohort-specific settings in background without blocking UI
       fetchStudentCohortAndSettings();
     }
   }, [userRole, currentUser?.id]);
@@ -64,9 +71,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   const fetchStudentCohortAndSettings = async () => {
     try {
       setIsLoadingCohortSettings(true);
-      console.log('🎓 Fetching student cohort and navigation settings...');
+      console.log('🎓 Fetching student cohort and navigation settings in background...');
       console.log('👤 Current user ID:', currentUser.id);
-      console.log('👤 Current user object:', currentUser);
       
       // Get student's cohort
       const cohort = await moodleService.getStudentCohort(currentUser.id.toString());
@@ -80,7 +86,14 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
         // Get navigation settings for this cohort
         const settings = await moodleService.getCohortNavigationSettingsFromStorage(cohort.id.toString());
         console.log('⚙️ Cohort navigation settings loaded:', settings);
-        setCohortNavigationSettings(settings);
+        
+        // Only update if settings are different from default to avoid unnecessary re-renders
+        if (settings && JSON.stringify(settings) !== JSON.stringify(moodleService.getDefaultNavigationSettings())) {
+          setCohortNavigationSettings(settings);
+          console.log('✅ Updated navigation with cohort-specific settings');
+        } else {
+          console.log('ℹ️ Using default settings (no cohort-specific overrides)');
+        }
         
         // Debug: Check backend API directly
         try {
@@ -92,20 +105,15 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           console.log('🔍 Backend API check failed:', error);
         }
       } else {
-        console.warn('⚠️ No cohort found for student, using default settings');
-        // Use default settings if no cohort found
-        const defaultSettings = moodleService.getDefaultNavigationSettings();
-        console.log('⚙️ Using default navigation settings:', defaultSettings);
-        setCohortNavigationSettings(defaultSettings);
+        console.warn('⚠️ No cohort found for student, keeping default settings');
       }
     } catch (error) {
       console.error('❌ Error fetching cohort settings:', error);
-      // Fallback to default settings
-      const defaultSettings = moodleService.getDefaultNavigationSettings();
-      console.log('⚙️ Fallback to default settings:', defaultSettings);
-      setCohortNavigationSettings(defaultSettings);
+      // Keep default settings that were already loaded
+      console.log('ℹ️ Keeping default settings due to error');
     } finally {
       setIsLoadingCohortSettings(false);
+      setHasLoadedCohortSettings(true);
     }
   };
 
@@ -203,19 +211,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
     }
 
     if (userRole === 'student') {
-      // Show loading state while fetching cohort settings
-      if (isLoadingCohortSettings) {
-        return [
-          {
-            title: 'LOADING',
-            items: [
-              { name: 'Loading navigation...', icon: LayoutDashboard, path: `/dashboard/${userRole}` }
-            ]
-          }
-        ];
-      }
-      
-      // Use cohort-based navigation settings if available
+      // Always show navigation immediately - no more blocking loading state
+      // Use cohort-based navigation settings if available, otherwise use default
       if (cohortNavigationSettings) {
         const studentItems = [
           ...baseItems
@@ -269,18 +266,56 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           });
         }
 
-        // Add EMULATORS section if any emulator items are enabled
-        const emulatorItems = [];
+        // Add QUICK ACTIONS section with emulator items
+        const quickActionItems = [];
         if (cohortNavigationSettings.emulators['Code Editor']) {
-          emulatorItems.push({ name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' });
+          quickActionItems.push({ 
+            name: 'Code Emulators', 
+            icon: Code, 
+            path: '/dashboard/student/code-editor',
+            description: 'Practice coding in virtual environment'
+          });
         }
         if (cohortNavigationSettings.emulators['Scratch Editor']) {
-          emulatorItems.push({ name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' });
+          quickActionItems.push({ 
+            name: 'Scratch Editor', 
+            icon: Play, 
+            path: '/dashboard/student/scratch-editor',
+            description: 'Create interactive stories and games'
+          });
         }
-        if (emulatorItems.length > 0) {
+        // Add other quick actions
+        quickActionItems.push(
+          { 
+            name: 'E-books', 
+            icon: BookOpen, 
+            path: '/dashboard/student/ebooks',
+            description: 'Access digital learning materials'
+          },
+          { 
+            name: 'Ask Teacher', 
+            icon: MessageSquare, 
+            path: '/dashboard/student/ask-teacher',
+            description: 'Get help from your instructor'
+          },
+          { 
+            name: 'KODEIT AI Buddy', 
+            icon: Users, 
+            path: '/dashboard/student/ai-buddy',
+            description: 'Get instant coding help'
+          },
+          { 
+            name: 'Share with Class', 
+            icon: Share2, 
+            path: '/dashboard/student/share',
+            description: 'Collaborate with classmates'
+          }
+        );
+        
+        if (quickActionItems.length > 0) {
           studentItems.push({
-            title: 'EMULATORS',
-            items: emulatorItems
+            title: 'QUICK ACTIONS',
+            items: quickActionItems
           });
         }
 
@@ -325,10 +360,44 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           ]
         },
         {
-          title: 'EMULATORS',
+          title: 'QUICK ACTIONS',
           items: [
-            { name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' },
-            { name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' },
+            { 
+              name: 'Code Emulators', 
+              icon: Code, 
+              path: '/dashboard/student/code-editor',
+              description: 'Practice coding in virtual environment'
+            },
+            { 
+              name: 'Scratch Editor', 
+              icon: Play, 
+              path: '/dashboard/student/scratch-editor',
+              description: 'Create interactive stories and games'
+            },
+            { 
+              name: 'E-books', 
+              icon: BookOpen, 
+              path: '/dashboard/student/ebooks',
+              description: 'Access digital learning materials'
+            },
+            { 
+              name: 'Ask Teacher', 
+              icon: MessageSquare, 
+              path: '/dashboard/student/ask-teacher',
+              description: 'Get help from your instructor'
+            },
+            { 
+              name: 'KODEIT AI Buddy', 
+              icon: Users, 
+              path: '/dashboard/student/ai-buddy',
+              description: 'Get instant coding help'
+            },
+            { 
+              name: 'Share with Class', 
+              icon: Share2, 
+              path: '/dashboard/student/share',
+              description: 'Collaborate with classmates'
+            }
           ]
         },
         {
@@ -378,38 +447,56 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
       <div className="fixed top-0 left-0 z-30 w-64 h-full bg-white shadow-lg overflow-y-auto hidden lg:block scrollbar-hide">
         {/* Logo */}
         <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <img src={logo} alt="kodeit" className="w-8 h-8" />
-            <span className="text-lg font-semibold text-gray-800">kodeit</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <img src={logo} alt="kodeit" className="w-8 h-8" />
+              <span className="text-lg font-semibold text-gray-800">kodeit</span>
+            </div>
+            {/* Subtle loading indicator for cohort settings */}
+            {userRole === 'student' && isLoadingCohortSettings && (
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-gray-500">Loading...</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Navigation */}
         <nav className="p-3 space-y-4 pb-16">
           {navigationItems.map((section, sectionIndex) => (
-            <div key={sectionIndex}>
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <div key={sectionIndex} className="transition-all duration-300 ease-in-out">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-colors duration-200">
                 {section.title}
               </h3>
               <ul className="space-y-0.5">
                 {section.items.map((item, itemIndex) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
+                  const isQuickAction = section.title === 'QUICK ACTIONS';
+                  
                   return (
-                    <li key={itemIndex}>
+                    <li key={itemIndex} className="transition-all duration-200 ease-in-out">
                       <button
                         onClick={() => {
                           console.log('DashboardLayout - Navigation clicked:', item.name, 'Path:', item.path);
                           navigate(item.path);
                         }}
-                        className={`w-full flex items-center space-x-2 px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        className={`w-full flex items-start space-x-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-[1.02] ${
                           isActive
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-sm'
+                        } ${isQuickAction ? 'bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100' : ''}`}
                       >
-                        <Icon className="w-4 h-4" />
-                        <span>{item.name}</span>
+                        <div className={`p-2 rounded-lg ${isQuickAction ? 'bg-white shadow-sm' : ''}`}>
+                          <Icon className={`w-4 h-4 transition-transform duration-200 ${isQuickAction ? 'text-purple-600' : ''}`} />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="font-semibold transition-colors duration-200">{item.name}</div>
+                          {isQuickAction && item.description && (
+                            <div className="text-xs text-gray-500 mt-0.5 leading-tight">{item.description}</div>
+                          )}
+                        </div>
                       </button>
                     </li>
                   );
@@ -421,7 +508,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
       </div>
 
       {/* Main Content - offset by sidebar width on desktop, full width on mobile */}
-      <div className="lg:ml-64 min-h-screen">
+
+      <div className="lg:ml-64">
         {/* Fixed Top Bar */}
         <header className="fixed top-0 left-0 right-0 z-20 bg-white shadow-sm border-b border-gray-200">
           <div className="px-4 lg:px-6 py-2">

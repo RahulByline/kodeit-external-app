@@ -8,6 +8,27 @@ const API_BASE_URL = 'https://kodeit.legatoserver.com/webservice/rest/server.php
 
 const API_TOKEN = import.meta.env.VITE_MOODLE_TOKEN || '2eabaa23e0cf9a5442be25613c41abf5';
 
+// Simple in-memory cache for performance optimization
+const cache = {
+  studentCohorts: new Map<string, { data: any; timestamp: number }>(),
+  cohortSettings: new Map<string, { data: any; timestamp: number }>(),
+  defaultSettings: null as any,
+  CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
+};
+
+// Cache helper functions
+const getCachedData = (cacheMap: Map<string, { data: any; timestamp: number }>, key: string) => {
+  const cached = cacheMap.get(key);
+  if (cached && Date.now() - cached.timestamp < cache.CACHE_DURATION) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (cacheMap: Map<string, { data: any; timestamp: number }>, key: string, data: any) => {
+  cacheMap.set(key, { data, timestamp: Date.now() });
+};
+
 
 
 // Type definitions
@@ -9054,79 +9075,60 @@ export const moodleService = {
 
 
   getDefaultNavigationSettings() {
+    // Return cached default settings if available
+    if (cache.defaultSettings) {
+      return cache.defaultSettings;
+    }
 
-    return {
-
+    const defaultSettings = {
       dashboard: {
-
         Dashboard: true,
-
         Community: true,
-
         Enrollments: true
-
       },
-
       courses: {
-
         'My Courses': true,
-
         'Current Lessons': true,
-
         'Activities': true,
-
         Assignments: true,
-
         Assessments: true
-
       },
-
       progress: {
-
         'My Grades': true,
-
         'Progress Tracking': true
-
       },
-
       resources: {
-
         Calendar: true,
-
         Messages: true
-
       },
-
       emulators: {
-
         'Code Editor': true,
-
         'Scratch Editor': true
-
       },
-
       settings: {
-
         'Profile Settings': true
-
       }
-
     };
 
+    // Cache the default settings
+    cache.defaultSettings = defaultSettings;
+    return defaultSettings;
   },
 
 
 
   async getStudentCohort(userId: string) {
+    // Check cache first
+    const cachedCohort = getCachedData(cache.studentCohorts, userId);
+    if (cachedCohort) {
+      console.log('🎓 Using cached student cohort for user:', userId);
+      return cachedCohort;
+    }
 
     try {
-
       console.log('🎓 Fetching student cohort for user:', userId);
-
       
-
       // First, get all cohorts
-
       const cohortsResponse = await moodleApi.get('', {
 
         params: {
@@ -9183,6 +9185,8 @@ export const moodleService = {
 
               console.log('✅ Student found in cohort:', cohort.name);
 
+              // Cache the cohort data
+              setCachedData(cache.studentCohorts, userId, cohort);
               return cohort;
 
             }
@@ -9203,6 +9207,8 @@ export const moodleService = {
 
       console.warn('⚠️ No cohort found for user, using default');
 
+      // Cache null result to avoid repeated API calls
+      setCachedData(cache.studentCohorts, userId, null);
       return null;
 
     } catch (error) {
@@ -9286,25 +9292,32 @@ export const moodleService = {
 
 
   async getCohortNavigationSettingsFromStorage(cohortId: string) {
-
-    try {
-
-      // Since we're using only Moodle API, return default settings
-
-      // In a real implementation, you could store these in Moodle's custom fields or user preferences
-
-      console.log('✅ Using default navigation settings from storage for cohort:', cohortId);
-
-      return this.getDefaultNavigationSettings();
-
-    } catch (error) {
-
-      console.error('❌ Error reading cohort navigation settings:', error);
-
-      return this.getDefaultNavigationSettings();
-
+    // Check cache first
+    const cachedSettings = getCachedData(cache.cohortSettings, cohortId);
+    if (cachedSettings) {
+      console.log('✅ Using cached navigation settings for cohort:', cohortId);
+      return cachedSettings;
     }
 
+    try {
+      // Since we're using only Moodle API, return default settings
+      // In a real implementation, you could store these in Moodle's custom fields or user preferences
+      console.log('✅ Using default navigation settings from storage for cohort:', cohortId);
+
+      const defaultSettings = this.getDefaultNavigationSettings();
+      
+      // Cache the settings
+      setCachedData(cache.cohortSettings, cohortId, defaultSettings);
+      return defaultSettings;
+
+    } catch (error) {
+      console.error('❌ Error reading cohort navigation settings:', error);
+      
+      const defaultSettings = this.getDefaultNavigationSettings();
+      // Cache even on error to avoid repeated failures
+      setCachedData(cache.cohortSettings, cohortId, defaultSettings);
+      return defaultSettings;
+    }
   },
 
 
