@@ -38,7 +38,7 @@ import {
   Headphones,
   FileImage
 } from 'lucide-react';
-import DashboardLayout from '../../components/DashboardLayout';
+import G8PlusLayout from '../../components/G8PlusLayout';
 import { useAuth } from '../../context/AuthContext';
 
 interface Course {
@@ -337,17 +337,17 @@ const Enrollments: React.FC = () => {
 
   if (loading) {
     return (
-      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+      <G8PlusLayout userName={currentUser?.fullname || "Student"}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      </DashboardLayout>
+      </G8PlusLayout>
     );
   }
 
   return (
     <div className='bg-gradient-to-br from-gray-50 via-blue-100 to-indigo-100'>
-      <DashboardLayout userRole="student" userName={currentUser?.fullname || "Student"}>
+      <G8PlusLayout userName={currentUser?.fullname || "Student"}>
         <div className="min-h-screen py-4">
           <div className=" mx-auto space-y-6">
             {/* Enhanced Header */}
@@ -694,7 +694,7 @@ const Enrollments: React.FC = () => {
             )}
           </div>
         </div>
-      </DashboardLayout>
+      </G8PlusLayout>
     </div>
   );
 };
