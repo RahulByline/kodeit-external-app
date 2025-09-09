@@ -3182,10 +3182,8 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
         )}
 
         {/* Tab Content */}
-        <div className="p-4 lg:p-6">
-          {/* Dashboard Tab Content */}
-          {activeTab === 'dashboard' && (
-            <div className="space-y-6">
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
         {/* Welcome Section */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
           <div className="flex items-center justify-between">
@@ -4764,8 +4762,6 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
               </div>
             </div>
           )}
-        </div>
-      </div>
 
       {/* Lesson Details Modal */}
         {isLessonModalOpen && selectedLesson && (
@@ -5509,6 +5505,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
           </div>
         )}
+      </div>
     </div>
   );
 });
