@@ -3122,7 +3122,9 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
       </div>
 
       {/* Main Content */}
+
       <div className="lg:ml-64 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+
         {/* Header with Notifications */}
         <div className="bg-white border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-between">
@@ -3157,6 +3159,7 @@ const G4G7Dashboard: React.FC<G4G7DashboardProps> = React.memo(({
             </div>
           </div>
         </div>
+
 
         {/* Server Error Banner */}
         {isServerOffline && (
