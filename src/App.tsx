@@ -108,6 +108,15 @@ const StudentProgress = lazy(() => import("./pages/student/Progress"));
 const StudentCommunity = lazy(() => import("./pages/student/Community"));
 const StudentEnrollments = lazy(() => import("./pages/student/Enrollments"));
 
+// G1-G3 Dashboard - lazy loaded
+const G1G3Dashboard = lazy(() => import("./pages/student/dashboards/G1G3Dashboard"));
+
+// Student Dashboard Router - handles cohort-based routing
+const StudentDashboardRouter = lazy(() => import("./components/StudentDashboardRouter"));
+
+// G4-G7 Dashboard - lazy loaded
+const G4G7Dashboard = lazy(() => import("./pages/student/dashboards/G4G7Dashboard"));
+
 // G4 specific student pages - lazy loaded
 const G4Courses = lazy(() => import("./pages/student/dashboards/G4TOG7/g4Courses"));
 const G4CurrentLessons = lazy(() => import("./pages/student/dashboards/G4TOG7/g4CurrentLessons"));
@@ -237,7 +246,22 @@ const App = () => {
                 <Route path="/dashboard/student" element={
                   <ProtectedRoute requiredRole="student">
                     <Suspense fallback={<LoadingSpinner />}>
-                      <StudentDashboard />
+                      <StudentDashboardRouter />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                {/* Specific Dashboard Routes - for direct access */}
+                <Route path="/dashboard/student/g1-g3" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G1G3Dashboard />
+                    </Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard/student/g4-g7" element={
+                  <ProtectedRoute requiredRole="student">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <G4G7Dashboard />
                     </Suspense>
                   </ProtectedRoute>
                 } />
