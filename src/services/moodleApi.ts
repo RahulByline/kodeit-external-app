@@ -16243,6 +16243,41 @@ export const moodleService = {
     }
   },
 
+  // ========================================
+  // MODULE COMPETENCY FUNCTIONS
+  // ========================================
+
+  /**
+   * List competencies mapped to a specific course module
+   * @param cmid - Course module ID
+   * @returns Promise<Array<{competency: any, coursemodulecompetency: any}>>
+   */
+  async listCourseModuleCompetencies(cmid: string) {
+    try {
+      console.log(`🔍 Fetching competencies for course module ${cmid}...`);
+      
+      const response = await axios.get(`${API_BASE_URL}`, {
+        params: {
+          wstoken: API_TOKEN,
+          wsfunction: 'core_competency_list_course_module_competencies',
+          moodlewsrestformat: 'json',
+          cmid: cmid
+        }
+      });
+
+      if (response.data && Array.isArray(response.data)) {
+        console.log(`✅ Found ${response.data.length} competencies for course module ${cmid}`);
+        return response.data;
+      } else {
+        console.log(`⚠️ No competencies found for course module ${cmid}`);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching course module competencies:', error.response?.data || error.message);
+      return [];
+    }
+  }
+
 
 };
 

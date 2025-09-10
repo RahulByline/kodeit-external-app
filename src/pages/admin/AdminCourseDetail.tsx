@@ -34,7 +34,8 @@ import {
   FolderOpen,
   Maximize2,
   Minimize2,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -311,6 +312,12 @@ const AdminCourseDetail: React.FC<AdminCourseDetailProps> = ({ courseId, onBack 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [scormLoading, setScormLoading] = useState(false);
   const [scormError, setScormError] = useState('');
+
+  // Module competency states
+  const [showModuleCompetencies, setShowModuleCompetencies] = useState(false);
+  const [selectedModule, setSelectedModule] = useState<CourseModule | null>(null);
+  const [moduleCompetencies, setModuleCompetencies] = useState<Array<{competency: any, coursemodulecompetency: any}>>([]);
+  const [loadingModuleCompetencies, setLoadingModuleCompetencies] = useState(false);
 
   useEffect(() => {
     if (courseId) {
@@ -616,6 +623,35 @@ const AdminCourseDetail: React.FC<AdminCourseDetailProps> = ({ courseId, onBack 
     setIsFullscreen(false);
     setScormLoading(false);
     setScormError('');
+  };
+
+  // NEW: Handle viewing module competencies
+  const handleViewModuleCompetencies = async (module: CourseModule) => {
+    try {
+      console.log(`🔍 Fetching competencies for module: ${module.name} (ID: ${module.id})`);
+      setLoadingModuleCompetencies(true);
+      setSelectedModule(module);
+      
+      // Fetch competencies for this module
+      const competencies = await competencyService.getCourseModuleCompetencies(module.id.toString());
+      setModuleCompetencies(competencies);
+      setShowModuleCompetencies(true);
+      
+      console.log(`✅ Found ${competencies.length} competencies for module: ${module.name}`);
+    } catch (error) {
+      console.error('❌ Error fetching module competencies:', error);
+      setError('Failed to load module competencies. Please try again.');
+    } finally {
+      setLoadingModuleCompetencies(false);
+    }
+  };
+
+  // NEW: Close module competencies modal
+  const closeModuleCompetencies = () => {
+    setShowModuleCompetencies(false);
+    setSelectedModule(null);
+    setModuleCompetencies([]);
+    setLoadingModuleCompetencies(false);
   };
 
   // NEW: Toggle fullscreen mode
@@ -1220,6 +1256,15 @@ const AdminCourseDetail: React.FC<AdminCourseDetailProps> = ({ courseId, onBack 
                                             <Eye className="w-4 h-4" />
                                           </Button>
                                         )}
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          className="text-purple-600 hover:text-purple-700"
+                                          onClick={() => handleViewModuleCompetencies(module)}
+                                          title="View Module Competencies"
+                                        >
+                                          <Award className="w-4 h-4" />
+                                        </Button>
                                         <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-700">
                                           <Edit className="w-4 h-4" />
                                         </Button>
@@ -1658,6 +1703,123 @@ const AdminCourseDetail: React.FC<AdminCourseDetailProps> = ({ courseId, onBack 
               title={scormActivityName}
               onClose={closeScormViewer}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Module Competencies Modal */}
+      {showModuleCompetencies && selectedModule && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                    <Award className="w-6 h-6 text-purple-600 mr-2" />
+                    Module Competencies
+                  </h2>
+                  <p className="text-gray-600 mt-1">
+                    Competencies mapped to: <span className="font-medium">{selectedModule.name}</span>
+                  </p>
+                  <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                    <span>Module ID: {selectedModule.id}</span>
+                    <span>Type: {selectedModule.modplural}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={closeModuleCompetencies}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {loadingModuleCompetencies ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="animate-spin h-6 w-6 text-purple-600" />
+                    <span className="text-gray-600">Loading module competencies...</span>
+                  </div>
+                </div>
+              ) : moduleCompetencies.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Mapped Competencies ({moduleCompetencies.length})
+                    </h3>
+                    <Badge className="bg-purple-100 text-purple-700">
+                      {moduleCompetencies.length} competencies
+                    </Badge>
+                  </div>
+                  
+                  <div className="grid gap-4">
+                    {moduleCompetencies.map((item, index) => (
+                      <div key={item.competency.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Target className="w-4 h-4 text-blue-600" />
+                              <h4 className="font-medium text-gray-900">{item.competency.shortname}</h4>
+                              <Badge className="bg-blue-100 text-blue-700 text-xs">
+                                ID: {item.competency.id}
+                              </Badge>
+                            </div>
+                            
+                            <p className="text-sm text-gray-600 mb-3">
+                              {item.competency.description.replace(/<[^>]*>/g, '')}
+                            </p>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                              <div>
+                                <span className="text-gray-500">ID Number:</span>
+                                <p className="font-medium">{item.competency.idnumber}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Framework ID:</span>
+                                <p className="font-medium">{item.competency.competencyframeworkid}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Sort Order:</span>
+                                <p className="font-medium">{item.coursemodulecompetency.sortorder}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Rule Outcome:</span>
+                                <p className="font-medium">{item.coursemodulecompetency.ruleoutcome}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2 ml-4">
+                            <Badge className="bg-green-100 text-green-700">
+                              Mapped
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Award className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Competencies Mapped</h3>
+                  <p className="text-gray-600">
+                    This module doesn't have any competencies mapped to it yet.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={closeModuleCompetencies}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

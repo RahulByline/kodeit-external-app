@@ -1107,6 +1107,35 @@ export const competencyService = {
       console.error(`❌ Error fetching competencies for course ${courseId}:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Get competencies mapped to a specific course module
+   * @param cmid - Course module ID
+   * @returns Promise<Array<{competency: Competency, coursemodulecompetency: any}>>
+   */
+  async getCourseModuleCompetencies(cmid: string): Promise<Array<{competency: Competency, coursemodulecompetency: any}>> {
+    try {
+      console.log(`🔍 Fetching competencies for course module ${cmid}...`);
+      
+      const apiParams = {
+        wsfunction: 'core_competency_list_course_module_competencies',
+        cmid: cmid
+      };
+
+      const response = await makeApiCall(apiParams);
+      
+      if (response && Array.isArray(response)) {
+        console.log(`✅ Found ${response.length} competencies for course module ${cmid}`);
+        return response;
+      } else {
+        console.log(`⚠️ No competencies found for course module ${cmid}`);
+        return [];
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching competencies for course module ${cmid}:`, error);
+      throw error;
+    }
   }
 };
 
