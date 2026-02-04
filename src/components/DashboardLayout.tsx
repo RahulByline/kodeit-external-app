@@ -29,6 +29,8 @@ import {
 import logo from '../assets/logo.png';
 import LogoutDialog from './ui/logout-dialog';
 import { authService } from '../services/authService';
+import { moodleService } from '../services/moodleApi';
+import { useAuth } from '../context/AuthContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -39,14 +41,73 @@ interface DashboardLayoutProps {
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, userName }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { currentUser } = useAuth();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [cohortNavigationSettings, setCohortNavigationSettings] = useState<any>(null);
+  const [studentCohort, setStudentCohort] = useState<any>(null);
+  const [isLoadingCohortSettings, setIsLoadingCohortSettings] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Debug logging
   console.log('DashboardLayout - userRole:', userRole);
   console.log('DashboardLayout - userName:', userName);
   console.log('DashboardLayout - current location:', location.pathname);
+
+  // Fetch student cohort and navigation settings
+  useEffect(() => {
+    if (userRole === 'student' && currentUser?.id) {
+      fetchStudentCohortAndSettings();
+    }
+  }, [userRole, currentUser?.id]);
+
+  const fetchStudentCohortAndSettings = async () => {
+    try {
+      setIsLoadingCohortSettings(true);
+      console.log('🎓 Fetching student cohort and navigation settings...');
+      console.log('👤 Current user ID:', currentUser.id);
+      console.log('👤 Current user object:', currentUser);
+      
+      // Get student's cohort
+      const cohort = await moodleService.getStudentCohort(currentUser.id.toString());
+      console.log('🎓 Student cohort:', cohort);
+      setStudentCohort(cohort);
+      
+      if (cohort) {
+        console.log('🎓 Cohort ID:', cohort.id);
+        console.log('🎓 Cohort name:', cohort.name);
+        
+        // Get navigation settings for this cohort
+        const settings = await moodleService.getCohortNavigationSettingsFromStorage(cohort.id.toString());
+        console.log('⚙️ Cohort navigation settings loaded:', settings);
+        setCohortNavigationSettings(settings);
+        
+        // Debug: Check backend API directly
+        try {
+          const apiResponse = await fetch(`http://localhost:5000/api/cohort-settings/${cohort.id}`);
+          const apiData = await apiResponse.json();
+          console.log('🔍 Backend API check for cohort:', cohort.id);
+          console.log('🔍 Backend API response:', apiData);
+        } catch (error) {
+          console.log('🔍 Backend API check failed:', error);
+        }
+      } else {
+        console.warn('⚠️ No cohort found for student, using default settings');
+        // Use default settings if no cohort found
+        const defaultSettings = moodleService.getDefaultNavigationSettings();
+        console.log('⚙️ Using default navigation settings:', defaultSettings);
+        setCohortNavigationSettings(defaultSettings);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching cohort settings:', error);
+      // Fallback to default settings
+      const defaultSettings = moodleService.getDefaultNavigationSettings();
+      console.log('⚙️ Fallback to default settings:', defaultSettings);
+      setCohortNavigationSettings(defaultSettings);
+    } finally {
+      setIsLoadingCohortSettings(false);
+    }
+  };
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -100,6 +161,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
           items: [
             { name: 'System Settings', icon: Settings, path: '/dashboard/admin/settings' },
             { name: 'User Management', icon: Users, path: '/dashboard/admin/users' },
+            { name: 'Cohort Navigation', icon: Users, path: '/dashboard/admin/cohort-navigation' },
           ]
         }
       ];
@@ -185,6 +247,103 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
     }
 
     if (userRole === 'student') {
+      // Show loading state while fetching cohort settings
+      if (isLoadingCohortSettings) {
+        return [
+          {
+            title: 'LOADING',
+            items: [
+              { name: 'Loading navigation...', icon: LayoutDashboard, path: `/dashboard/${userRole}` }
+            ]
+          }
+        ];
+      }
+      
+      // Use cohort-based navigation settings if available
+      if (cohortNavigationSettings) {
+        const studentItems = [
+          ...baseItems
+        ];
+
+        // Add COURSES section if any course items are enabled
+        const courseItems = [];
+        if (cohortNavigationSettings.courses['My Courses']) {
+          courseItems.push({ name: 'My Courses', icon: BookOpen, path: '/dashboard/student/courses' });
+        }
+        if (cohortNavigationSettings.courses.Assignments) {
+          courseItems.push({ name: 'Assignments', icon: FileText, path: '/dashboard/student/assignments' });
+        }
+        if (cohortNavigationSettings.courses.Assessments) {
+          courseItems.push({ name: 'Assessments', icon: FileText, path: '/dashboard/student/assessments' });
+        }
+        if (courseItems.length > 0) {
+          studentItems.push({
+            title: 'COURSES',
+            items: courseItems
+          });
+        }
+
+        // Add PROGRESS section if any progress items are enabled
+        const progressItems = [];
+        if (cohortNavigationSettings.progress['My Grades']) {
+          progressItems.push({ name: 'My Grades', icon: BarChart3, path: '/dashboard/student/grades' });
+        }
+        if (cohortNavigationSettings.progress['Progress Tracking']) {
+          progressItems.push({ name: 'Progress Tracking', icon: TrendingUp, path: '/dashboard/student/progress' });
+        }
+        if (progressItems.length > 0) {
+          studentItems.push({
+            title: 'PROGRESS',
+            items: progressItems
+          });
+        }
+
+        // Add RESOURCES section if any resource items are enabled
+        const resourceItems = [];
+        if (cohortNavigationSettings.resources.Calendar) {
+          resourceItems.push({ name: 'Calendar', icon: Calendar, path: '/dashboard/student/calendar' });
+        }
+        if (cohortNavigationSettings.resources.Messages) {
+          resourceItems.push({ name: 'Messages', icon: MessageSquare, path: '/dashboard/student/messages' });
+        }
+        if (resourceItems.length > 0) {
+          studentItems.push({
+            title: 'RESOURCES',
+            items: resourceItems
+          });
+        }
+
+        // Add EMULATORS section if any emulator items are enabled
+        const emulatorItems = [];
+        if (cohortNavigationSettings.emulators['Code Editor']) {
+          emulatorItems.push({ name: 'Code Editor', icon: Code, path: '/dashboard/student/code-editor' });
+        }
+        if (cohortNavigationSettings.emulators['Scratch Editor']) {
+          emulatorItems.push({ name: 'Scratch Editor', icon: Play, path: '/dashboard/student/scratch-editor' });
+        }
+        if (emulatorItems.length > 0) {
+          studentItems.push({
+            title: 'EMULATORS',
+            items: emulatorItems
+          });
+        }
+
+        // Add SETTINGS section if settings are enabled
+        const settingsItems = [];
+        if (cohortNavigationSettings.settings['Profile Settings']) {
+          settingsItems.push({ name: 'Profile Settings', icon: Settings, path: '/dashboard/student/settings' });
+        }
+        if (settingsItems.length > 0) {
+          studentItems.push({
+            title: 'SETTINGS',
+            items: settingsItems
+          });
+        }
+
+        return studentItems;
+      }
+
+      // Fallback to default student navigation
       return [
         ...baseItems,
         {
@@ -229,6 +388,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, userRole, u
   };
 
   const navigationItems = getNavigationItems();
+  console.log('🧭 Generated navigation items:', navigationItems);
+  console.log('⚙️ Current cohort navigation settings:', cohortNavigationSettings);
 
   const handleLogout = async () => {
     try {
